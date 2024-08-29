@@ -46,6 +46,14 @@ pub const Lexer = struct {
         l.readPosition += 1;
     }
 
+    fn peekChar(l: *Lexer) u8 {
+        if (l.readPosition >= l.input.len) {
+            return 0;
+        } else {
+            return l.input[l.readPosition];
+        }
+    }
+
     pub fn NextToken(l: *Lexer, allocator: Allocator, key_words: *const Keywords) !Token {
 
         var read_next_char = true; 
@@ -58,10 +66,28 @@ pub const Lexer = struct {
 
         const chars = [1]u8{ l.ch };
         switch (l.ch) {
-            '=' => { return try Token.init(allocator, Token.Kind.Assign, &chars); },
+            '=' => { 
+                if (l.peekChar() == '=') {
+                    const ch = l.ch;
+                    l.readChar();
+                    const eq_str = [2]u8{ ch, l.ch};
+                    return try Token.init(allocator, Token.Kind.Eq, &eq_str);
+                } else {
+                    return try Token.init(allocator, Token.Kind.Assign, &chars); 
+                }
+            },
             '+' => { return try Token.init(allocator, Token.Kind.Plus, &chars); },
             '-' => { return try Token.init(allocator, Token.Kind.Minus, &chars); },
-            '!' => { return try Token.init(allocator, Token.Kind.Bang, &chars); },
+            '!' => { 
+                if (l.peekChar() == '=') {
+                    const ch = l.ch;
+                    l.readChar();
+                    const neq_str = [2]u8{ ch, l.ch };
+                    return try Token.init(allocator, Token.Kind.Neq, &neq_str);
+                } else {
+                    return try Token.init(allocator, Token.Kind.Bang, &chars); 
+                }
+            },
             '/' => { return try Token.init(allocator, Token.Kind.Slash, &chars); },
             '*' => { return try Token.init(allocator, Token.Kind.Asterisk, &chars); },
             '<' => { return try Token.init(allocator, Token.Kind.Lt, &chars); },
@@ -155,6 +181,9 @@ test "next token" {
         \\} else {
         \\  return false;
         \\}
+        \\
+        \\10 == 10;
+        \\10 != 9;
     ;
 
     var l = Lexer.new(input);
@@ -227,6 +256,14 @@ test "next token" {
         try Token.init(allocator, Token.Kind.False, "false"),
         try Token.init(allocator, Token.Kind.Semicolon, ";"),
         try Token.init(allocator, Token.Kind.Rbrace, "}"),
+        try Token.init(allocator, Token.Kind.Int, "10"),
+        try Token.init(allocator, Token.Kind.Eq, "=="),
+        try Token.init(allocator, Token.Kind.Int, "10"),
+        try Token.init(allocator, Token.Kind.Semicolon, ";"),
+        try Token.init(allocator, Token.Kind.Int, "10"),
+        try Token.init(allocator, Token.Kind.Neq, "!="),
+        try Token.init(allocator, Token.Kind.Int, "9"),
+        try Token.init(allocator, Token.Kind.Semicolon, ";"),
 
         try Token.init(allocator, Token.Kind.Eof, ""),
     };

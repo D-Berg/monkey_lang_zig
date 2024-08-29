@@ -40,6 +40,8 @@ pub const Token = struct {
         Lt, // <
         Gt, // >
 
+        Eq, // ==
+        Neq, // !=
 
         // Delimiters
         Comma,
