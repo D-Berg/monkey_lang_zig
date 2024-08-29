@@ -141,6 +141,8 @@ test "next token" {
         \\};
         \\
         \\let result = add(five, ten);
+        \\!-/*;
+        \\5 < 10 > 5;
     ;
 
     var l = Lexer.new(input);
