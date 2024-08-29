@@ -25,12 +25,23 @@ pub const Token = struct {
         Illegal,
         Eof,
         
-        Ident,
-        Int,
+        // Identifiers + literals
+        Ident, // add, foobar, x, y
+        Int, // 12221378
 
-        Assign,
-        Plus,
+        // operators
+        Assign, // = 
+        Plus, // +
+        Minus,
+        Bang, // !
+        Asterisk, // *
+        Slash, // /
 
+        Lt, // <
+        Gt, // >
+
+
+        // Delimiters
         Comma,
         Semicolon,
 
@@ -39,8 +50,10 @@ pub const Token = struct {
         Lbrace,
         Rbrace,
 
+        // Keywords
         Function,
         Let,
+
     };
 };
 

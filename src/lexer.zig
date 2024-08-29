@@ -59,13 +59,19 @@ pub const Lexer = struct {
         const chars = [1]u8{ l.ch };
         switch (l.ch) {
             '=' => { return try Token.init(allocator, Token.Kind.Assign, &chars); },
+            '+' => { return try Token.init(allocator, Token.Kind.Plus, &chars); },
+            '-' => { return try Token.init(allocator, Token.Kind.Minus, &chars); },
+            '!' => { return try Token.init(allocator, Token.Kind.Bang, &chars); },
+            '/' => { return try Token.init(allocator, Token.Kind.Slash, &chars); },
+            '*' => { return try Token.init(allocator, Token.Kind.Asterisk, &chars); },
+            '<' => { return try Token.init(allocator, Token.Kind.Lt, &chars); },
+            '>' => { return try Token.init(allocator, Token.Kind.Gt, &chars); },
             ';' => { return try Token.init(allocator, Token.Kind.Semicolon, &chars); },
+            ',' => { return try Token.init(allocator, Token.Kind.Comma, &chars); },
             '(' => { return try Token.init(allocator, Token.Kind.Lparen, &chars); },
             ')' => { return try Token.init(allocator, Token.Kind.Rparen, &chars); },
             '{' => { return try Token.init(allocator, Token.Kind.Lbrace, &chars); },
             '}' => { return try Token.init(allocator, Token.Kind.Rbrace, &chars); },
-            '+' => { return try Token.init(allocator, Token.Kind.Plus, &chars); },
-            ',' => { return try Token.init(allocator, Token.Kind.Comma, &chars); },
             0 => { return try Token.init(allocator, Token.Kind.Eof, ""); },
             else => {
                 if (isLetter(l.ch)) {
@@ -141,7 +147,7 @@ test "next token" {
         \\};
         \\
         \\let result = add(five, ten);
-        \\!-/*;
+        \\!-/*5;
         \\5 < 10 > 5;
     ;
 
@@ -183,6 +189,18 @@ test "next token" {
         try Token.init(allocator, Token.Kind.Comma, ","),
         try Token.init(allocator, Token.Kind.Ident, "ten"),
         try Token.init(allocator, Token.Kind.Rparen, ")"),
+        try Token.init(allocator, Token.Kind.Semicolon, ";"),
+        try Token.init(allocator, Token.Kind.Bang, "!"),
+        try Token.init(allocator, Token.Kind.Minus, "-"),
+        try Token.init(allocator, Token.Kind.Slash, "/"),
+        try Token.init(allocator, Token.Kind.Asterisk, "*"),
+        try Token.init(allocator, Token.Kind.Int, "5"),
+        try Token.init(allocator, Token.Kind.Semicolon, ";"),
+        try Token.init(allocator, Token.Kind.Int, "5"),
+        try Token.init(allocator, Token.Kind.Lt, "<"),
+        try Token.init(allocator, Token.Kind.Int, "10"),
+        try Token.init(allocator, Token.Kind.Gt, ">"),
+        try Token.init(allocator, Token.Kind.Int, "5"),
         try Token.init(allocator, Token.Kind.Semicolon, ";"),
         try Token.init(allocator, Token.Kind.Eof, ""),
     };
