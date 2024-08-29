@@ -81,6 +81,8 @@ pub const Lexer = struct {
                     return try Token.init(allocator, token_kind, identifer_str);
 
                 } if (isDigit(l.ch)) {
+                    read_next_char = false;
+
                     const start = l.position;
                     l.readNumber();
                     const end = l.position;
