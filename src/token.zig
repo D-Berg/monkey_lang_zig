@@ -53,7 +53,11 @@ pub const Token = struct {
         // Keywords
         Function,
         Let,
-
+        True,
+        False,
+        If,
+        Else,
+        Return,
     };
 };
 
@@ -67,6 +71,11 @@ pub const Keywords = struct {
         var words = std.StringHashMap(Token.Kind).init(allocator);
         try words.put("let", Token.Kind.Let);
         try words.put("fn", Token.Kind.Function);
+        try words.put("true", Token.Kind.True);
+        try words.put("false", Token.Kind.False);
+        try words.put("if", Token.Kind.If);
+        try words.put("else", Token.Kind.Else);
+        try words.put("return", Token.Kind.Return);
 
         return .{
             .words = words,

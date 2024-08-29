@@ -149,9 +149,17 @@ test "next token" {
         \\let result = add(five, ten);
         \\!-/*5;
         \\5 < 10 > 5;
+        \\
+        \\if (5 < 10) {
+        \\  return true;
+        \\} else {
+        \\  return false;
+        \\}
     ;
 
     var l = Lexer.new(input);
+
+    var passed_tests: u32 = 0;
 
     const token_tests = [_]Token {
         try Token.init(allocator, Token.Kind.Let, "let"),
@@ -202,8 +210,28 @@ test "next token" {
         try Token.init(allocator, Token.Kind.Gt, ">"),
         try Token.init(allocator, Token.Kind.Int, "5"),
         try Token.init(allocator, Token.Kind.Semicolon, ";"),
+        try Token.init(allocator, Token.Kind.If, "if"),
+        try Token.init(allocator, Token.Kind.Lparen, "("),
+        try Token.init(allocator, Token.Kind.Int, "5"),
+        try Token.init(allocator, Token.Kind.Lt, "<"),
+        try Token.init(allocator, Token.Kind.Int, "10"),
+        try Token.init(allocator, Token.Kind.Rparen, ")"),
+        try Token.init(allocator, Token.Kind.Lbrace, "{"),
+        try Token.init(allocator, Token.Kind.Return, "return"),
+        try Token.init(allocator, Token.Kind.True, "true"),
+        try Token.init(allocator, Token.Kind.Semicolon, ";"),
+        try Token.init(allocator, Token.Kind.Rbrace, "}"),
+        try Token.init(allocator, Token.Kind.Else, "else"),
+        try Token.init(allocator, Token.Kind.Lbrace, "{"),
+        try Token.init(allocator, Token.Kind.Return, "return"),
+        try Token.init(allocator, Token.Kind.False, "false"),
+        try Token.init(allocator, Token.Kind.Semicolon, ";"),
+        try Token.init(allocator, Token.Kind.Rbrace, "}"),
+
         try Token.init(allocator, Token.Kind.Eof, ""),
     };
+
+    const n_tests = token_tests.len;
 
     defer {
         for (token_tests) |token| {
@@ -214,8 +242,8 @@ test "next token" {
     for (token_tests, 0..) |expected_token, i| {
 
         const tok = l.NextToken(allocator, &key_words) catch |err| {
-            print("token test {}: Failed with Error: {}.\n", .{
-                i, err
+            print("token test {}/{}: Failed with Error: {}.\n", .{
+                i, n_tests, err
             });
             return err;
         };
@@ -224,8 +252,8 @@ test "next token" {
 
         expect(tok.kind == expected_token.kind) catch |err| {
 
-            print("token test {}: Failed, tokenKind wrong. expected={}, got={}.\n", .{
-                i, expected_token.kind, tok.kind
+            print("token test {}/{}: Failed, tokenKind wrong. expected={}, got={}.\n", .{
+                i, n_tests, expected_token.kind, tok.kind
             });
 
             print("Token: kind = {}, .literal = '{s}'\n", .{
@@ -237,8 +265,8 @@ test "next token" {
 
         expectEqualSlices(u8, expected_token.literal, tok.literal) catch |err| {
 
-            print("token tests {}: Failed, literal wrong, expected='{s}', got='{s}'.\n", .{
-                i, expected_token.literal, tok.literal
+            print("token tests {}/{}: Failed, literal wrong, expected='{s}', got='{s}'.\n", .{
+                i, n_tests, expected_token.literal, tok.literal
 
             });
 
@@ -246,11 +274,11 @@ test "next token" {
 
         };
 
-        print("\u{001b}[31mtoken test {}: succeded\u{001b}[0m, kind={}, literal='{s}'\n", .{
-            i, tok.kind,  tok.literal
-        });
-
-
+        passed_tests += 1;
 
     }
+
+    print("\u{001b}[32mtoken test {}/{}: succeded\u{001b}[0m\n", .{
+        passed_tests, n_tests
+    });
 }
