@@ -18,6 +18,7 @@ pub fn main() !void {
 
     try stdout.print("Hello! This is the monkey programming language!\n", .{});
     try stdout.print("Feel free to type in commands\n", .{});
+    try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
     try repl.start();
 
