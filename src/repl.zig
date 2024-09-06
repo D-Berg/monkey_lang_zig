@@ -29,10 +29,7 @@ pub fn start(allocator: Allocator) !void {
         var tok = try lex.NextToken();
         
         while (tok.kind != Token.Kind.Eof) : (tok = try lex.NextToken()) {
-
             std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.literal});
-            defer tok.deinit();
-
         }
     }
 

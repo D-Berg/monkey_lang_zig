@@ -4,24 +4,29 @@ const Allocator = std.mem.Allocator;
 
 const Token = @This();
 
-allocator: Allocator,
+// allocator: Allocator,
 kind: Kind,
-literal: []const u8, 
+literal: [32:0]u8, // literal can be at most 32 bytes
+literal_len: usize,
     
-pub fn init(allocator: Allocator, kind: Token.Kind, chars: []const u8) !Token {
+pub fn init(kind: Token.Kind, chars: []const u8) Token {
+    var literal: [32:0]u8 = undefined;
 
-    const str = try allocator.dupe(u8, chars);
+    for (0..literal.len) |i| {
+        literal[i] = 0;
+    }
 
+    for (0..chars.len) |i| {
+        literal[i] = chars[i];
+    }
+    
     return .{
-        .allocator = allocator,
         .kind = kind, 
-        .literal = str
+        .literal = literal,
+        .literal_len = chars.len
     };
 }
 
-pub fn deinit(t: *const Token) void {
-    t.allocator.free(t.literal);
-}
 
 pub const Kind = enum {
     Illegal,
@@ -92,3 +97,4 @@ pub const Keywords = struct {
 
     }
 };
+

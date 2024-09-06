@@ -60,7 +60,7 @@ fn peekChar(l: *Lexer) u8 {
     }
 }
 
-pub fn NextToken(l: *Lexer) !Token {
+pub fn NextToken(l: *Lexer) Token {
 
     var read_next_char = true; 
 
@@ -77,34 +77,34 @@ pub fn NextToken(l: *Lexer) !Token {
                 const ch = l.ch;
                 l.readChar();
                 const eq_str = [2]u8{ ch, l.ch};
-                return try Token.init(l.allocator, Token.Kind.Eq, &eq_str);
+                return Token.init(Token.Kind.Eq, &eq_str);
             } else {
-                return try Token.init(l.allocator, Token.Kind.Assign, &chars); 
+                return Token.init(Token.Kind.Assign, &chars); 
             }
         },
-        '+' => { return try Token.init(l.allocator, Token.Kind.Plus, &chars); },
-        '-' => { return try Token.init(l.allocator, Token.Kind.Minus, &chars); },
+        '+' => { return Token.init(Token.Kind.Plus, &chars); },
+        '-' => { return Token.init(Token.Kind.Minus, &chars); },
         '!' => { 
             if (l.peekChar() == '=') {
                 const ch = l.ch;
                 l.readChar();
                 const neq_str = [2]u8{ ch, l.ch };
-                return try Token.init(l.allocator, Token.Kind.Neq, &neq_str);
+                return Token.init(Token.Kind.Neq, &neq_str);
             } else {
-                return try Token.init(l.allocator, Token.Kind.Bang, &chars); 
+                return Token.init(Token.Kind.Bang, &chars); 
             }
         },
-        '/' => { return try Token.init(l.allocator, Token.Kind.Slash, &chars); },
-        '*' => { return try Token.init(l.allocator, Token.Kind.Asterisk, &chars); },
-        '<' => { return try Token.init(l.allocator, Token.Kind.Lt, &chars); },
-        '>' => { return try Token.init(l.allocator, Token.Kind.Gt, &chars); },
-        ';' => { return try Token.init(l.allocator, Token.Kind.Semicolon, &chars); },
-        ',' => { return try Token.init(l.allocator, Token.Kind.Comma, &chars); },
-        '(' => { return try Token.init(l.allocator, Token.Kind.Lparen, &chars); },
-        ')' => { return try Token.init(l.allocator, Token.Kind.Rparen, &chars); },
-        '{' => { return try Token.init(l.allocator, Token.Kind.Lbrace, &chars); },
-        '}' => { return try Token.init(l.allocator, Token.Kind.Rbrace, &chars); },
-        0 => { return try Token.init(l.allocator, Token.Kind.Eof, ""); },
+        '/' => { return Token.init(Token.Kind.Slash, &chars); },
+        '*' => { return Token.init(Token.Kind.Asterisk, &chars); },
+        '<' => { return Token.init(Token.Kind.Lt, &chars); },
+        '>' => { return Token.init(Token.Kind.Gt, &chars); },
+        ';' => { return Token.init(Token.Kind.Semicolon, &chars); },
+        ',' => { return Token.init(Token.Kind.Comma, &chars); },
+        '(' => { return Token.init(Token.Kind.Lparen, &chars); },
+        ')' => { return Token.init(Token.Kind.Rparen, &chars); },
+        '{' => { return Token.init(Token.Kind.Lbrace, &chars); },
+        '}' => { return Token.init(Token.Kind.Rbrace, &chars); },
+        0 => { return Token.init(Token.Kind.Eof, ""); },
         else => {
             if (isLetter(l.ch)) {
 
@@ -116,7 +116,7 @@ pub fn NextToken(l: *Lexer) !Token {
                 const identifer_str = l.input[start..end];
                 const token_kind = l.key_words.words.get(identifer_str) orelse Token.Kind.Ident;
 
-                return try Token.init(l.allocator, token_kind, identifer_str);
+                return Token.init(token_kind, identifer_str);
 
             } if (isDigit(l.ch)) {
                 read_next_char = false;
@@ -126,10 +126,10 @@ pub fn NextToken(l: *Lexer) !Token {
                 const end = l.position;
 
                 const number_str = l.input[start..end];
-                return try Token.init(l.allocator, Token.Kind.Int, number_str);
+                return Token.init(Token.Kind.Int, number_str);
 
             } else {
-                return try Token.init(l.allocator, Token.Kind.Illegal, &chars);
+                return Token.init(Token.Kind.Illegal, &chars);
             }
         }
     }
@@ -194,101 +194,89 @@ test "next token" {
     var passed_tests: u32 = 0;
 
     const token_tests = [_]Token {
-        try Token.init(allocator, Token.Kind.Let, "let"),
-        try Token.init(allocator, Token.Kind.Ident, "five"),
-        try Token.init(allocator, Token.Kind.Assign, "="),
-        try Token.init(allocator, Token.Kind.Int, "5"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Let, "let"),
-        try Token.init(allocator, Token.Kind.Ident, "ten"),
-        try Token.init(allocator, Token.Kind.Assign, "="),
-        try Token.init(allocator, Token.Kind.Int, "10"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Let, "let"),
-        try Token.init(allocator, Token.Kind.Ident, "add"),
-        try Token.init(allocator, Token.Kind.Assign, "="),
-        try Token.init(allocator, Token.Kind.Function, "fn"),
-        try Token.init(allocator, Token.Kind.Lparen, "("),
-        try Token.init(allocator, Token.Kind.Ident, "x"),
-        try Token.init(allocator, Token.Kind.Comma, ","),
-        try Token.init(allocator, Token.Kind.Ident, "y"),
-        try Token.init(allocator, Token.Kind.Rparen, ")"),
-        try Token.init(allocator, Token.Kind.Lbrace, "{"),
-        try Token.init(allocator, Token.Kind.Ident, "x"),
-        try Token.init(allocator, Token.Kind.Plus, "+"),
-        try Token.init(allocator, Token.Kind.Ident, "y"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Rbrace, "}"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Let, "let"),
-        try Token.init(allocator, Token.Kind.Ident, "result"),
-        try Token.init(allocator, Token.Kind.Assign, "="),
-        try Token.init(allocator, Token.Kind.Ident, "add"),
-        try Token.init(allocator, Token.Kind.Lparen, "("),
-        try Token.init(allocator, Token.Kind.Ident, "five"),
-        try Token.init(allocator, Token.Kind.Comma, ","),
-        try Token.init(allocator, Token.Kind.Ident, "ten"),
-        try Token.init(allocator, Token.Kind.Rparen, ")"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Bang, "!"),
-        try Token.init(allocator, Token.Kind.Minus, "-"),
-        try Token.init(allocator, Token.Kind.Slash, "/"),
-        try Token.init(allocator, Token.Kind.Asterisk, "*"),
-        try Token.init(allocator, Token.Kind.Int, "5"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Int, "5"),
-        try Token.init(allocator, Token.Kind.Lt, "<"),
-        try Token.init(allocator, Token.Kind.Int, "10"),
-        try Token.init(allocator, Token.Kind.Gt, ">"),
-        try Token.init(allocator, Token.Kind.Int, "5"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.If, "if"),
-        try Token.init(allocator, Token.Kind.Lparen, "("),
-        try Token.init(allocator, Token.Kind.Int, "5"),
-        try Token.init(allocator, Token.Kind.Lt, "<"),
-        try Token.init(allocator, Token.Kind.Int, "10"),
-        try Token.init(allocator, Token.Kind.Rparen, ")"),
-        try Token.init(allocator, Token.Kind.Lbrace, "{"),
-        try Token.init(allocator, Token.Kind.Return, "return"),
-        try Token.init(allocator, Token.Kind.True, "true"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Rbrace, "}"),
-        try Token.init(allocator, Token.Kind.Else, "else"),
-        try Token.init(allocator, Token.Kind.Lbrace, "{"),
-        try Token.init(allocator, Token.Kind.Return, "return"),
-        try Token.init(allocator, Token.Kind.False, "false"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Rbrace, "}"),
-        try Token.init(allocator, Token.Kind.Int, "10"),
-        try Token.init(allocator, Token.Kind.Eq, "=="),
-        try Token.init(allocator, Token.Kind.Int, "10"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
-        try Token.init(allocator, Token.Kind.Int, "10"),
-        try Token.init(allocator, Token.Kind.Neq, "!="),
-        try Token.init(allocator, Token.Kind.Int, "9"),
-        try Token.init(allocator, Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Let, "let"),
+        Token.init(Token.Kind.Ident, "five"),
+        Token.init(Token.Kind.Assign, "="),
+        Token.init(Token.Kind.Int, "5"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Let, "let"),
+        Token.init(Token.Kind.Ident, "ten"),
+        Token.init(Token.Kind.Assign, "="),
+        Token.init(Token.Kind.Int, "10"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Let, "let"),
+        Token.init(Token.Kind.Ident, "add"),
+        Token.init(Token.Kind.Assign, "="),
+        Token.init(Token.Kind.Function, "fn"),
+        Token.init(Token.Kind.Lparen, "("),
+        Token.init(Token.Kind.Ident, "x"),
+        Token.init(Token.Kind.Comma, ","),
+        Token.init(Token.Kind.Ident, "y"),
+        Token.init(Token.Kind.Rparen, ")"),
+        Token.init(Token.Kind.Lbrace, "{"),
+        Token.init(Token.Kind.Ident, "x"),
+        Token.init(Token.Kind.Plus, "+"),
+        Token.init(Token.Kind.Ident, "y"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Rbrace, "}"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Let, "let"),
+        Token.init(Token.Kind.Ident, "result"),
+        Token.init(Token.Kind.Assign, "="),
+        Token.init(Token.Kind.Ident, "add"),
+        Token.init(Token.Kind.Lparen, "("),
+        Token.init(Token.Kind.Ident, "five"),
+        Token.init(Token.Kind.Comma, ","),
+        Token.init(Token.Kind.Ident, "ten"),
+        Token.init(Token.Kind.Rparen, ")"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Bang, "!"),
+        Token.init(Token.Kind.Minus, "-"),
+        Token.init(Token.Kind.Slash, "/"),
+        Token.init(Token.Kind.Asterisk, "*"),
+        Token.init(Token.Kind.Int, "5"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Int, "5"),
+        Token.init(Token.Kind.Lt, "<"),
+        Token.init(Token.Kind.Int, "10"),
+        Token.init(Token.Kind.Gt, ">"),
+        Token.init(Token.Kind.Int, "5"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.If, "if"),
+        Token.init(Token.Kind.Lparen, "("),
+        Token.init(Token.Kind.Int, "5"),
+        Token.init(Token.Kind.Lt, "<"),
+        Token.init(Token.Kind.Int, "10"),
+        Token.init(Token.Kind.Rparen, ")"),
+        Token.init(Token.Kind.Lbrace, "{"),
+        Token.init(Token.Kind.Return, "return"),
+        Token.init(Token.Kind.True, "true"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Rbrace, "}"),
+        Token.init(Token.Kind.Else, "else"),
+        Token.init(Token.Kind.Lbrace, "{"),
+        Token.init(Token.Kind.Return, "return"),
+        Token.init(Token.Kind.False, "false"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Rbrace, "}"),
+        Token.init(Token.Kind.Int, "10"),
+        Token.init(Token.Kind.Eq, "=="),
+        Token.init(Token.Kind.Int, "10"),
+        Token.init(Token.Kind.Semicolon, ";"),
+        Token.init(Token.Kind.Int, "10"),
+        Token.init(Token.Kind.Neq, "!="),
+        Token.init(Token.Kind.Int, "9"),
+        Token.init(Token.Kind.Semicolon, ";"),
 
-        try Token.init(allocator, Token.Kind.Eof, ""),
+        Token.init(Token.Kind.Eof, ""),
     };
 
     const n_tests = token_tests.len;
 
-    defer {
-        for (token_tests) |token| {
-            token.deinit();
-        }
-    }
-
     for (token_tests, 0..) |expected_token, i| {
 
-        const tok = l.NextToken() catch |err| {
-            print("token test {}/{}: Failed with Error: {}.\n", .{
-                i, n_tests, err
-            });
-            return err;
-        };
-
-        defer allocator.free(tok.literal);
+        const tok = l.NextToken();
+        // print("{s}\n", .{&tok.literal});
 
         expect(tok.kind == expected_token.kind) catch |err| {
 
@@ -303,7 +291,7 @@ test "next token" {
             return err;
         };
 
-        expectEqualSlices(u8, expected_token.literal, tok.literal) catch |err| {
+        expectEqualSlices(u8, &expected_token.literal, &tok.literal) catch |err| {
 
             print("token tests {}/{}: Failed, literal wrong, expected='{s}', got='{s}'.\n", .{
                 i, n_tests, expected_token.literal, tok.literal

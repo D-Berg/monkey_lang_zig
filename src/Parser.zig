@@ -8,7 +8,7 @@ const Identifier = ast.Identifier;
 
 const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
-const expectEqualSlices = std.testing.expectEqualSlices;
+const expectEqualStrings = std.testing.expectEqualStrings;
 
 const print = std.debug.print;
 
@@ -18,27 +18,21 @@ lexer: *Lexer,
 current_token: Token,
 peek_token: Token,
 
-pub fn init(lexer: *Lexer) !Parser {
+pub fn init(lexer: *Lexer) Parser {
 
     return .{ 
         .lexer = lexer,
-        .current_token = try lexer.NextToken(),
-        .peek_token = try lexer.NextToken()
+        .current_token = lexer.NextToken(),
+        .peek_token = lexer.NextToken()
     };
 
 }
 
-pub fn deinit(parser: *Parser) void {
-    parser.current_token.deinit();
-    parser.peek_token.deinit();
-}
 
 fn nextToken(parser: *Parser) void {
-    // parser.current_token.deinit();
     parser.current_token = parser.peek_token;
-    parser.peek_token = parser.lexer.NextToken() catch {
-        @panic("nextToken failed");
-    };
+    parser.peek_token = parser.lexer.NextToken();
+
 }
 
 fn parseStatement(parser: *Parser) ?Statement {
@@ -61,7 +55,7 @@ fn parseLetStatement(parser: *Parser) ?Statement {
 
     statement.name = Identifier { 
         .token = parser.current_token, 
-        .value = parser.current_token.literal // do I need to mem copy?
+        .value = &parser.current_token.literal // do I need to mem copy?
     }; // TODO: possible mem leak
 
     if (!parser.expectPeek(Token.Kind.Assign)) return null;
@@ -112,10 +106,6 @@ pub fn ParseProgram(parser: *Parser, allocator: Allocator) !Program {
 }
 
 
-
-
-
-
 test "LetStatements" {
 
     const allocator = std.testing.allocator;
@@ -129,8 +119,7 @@ test "LetStatements" {
     var lexer = try Lexer.init(allocator, input);
     defer lexer.deinit();
 
-    var parser = try Parser.init(&lexer);
-    defer parser.deinit();
+    var parser = Parser.init(&lexer);
 
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
@@ -140,22 +129,18 @@ test "LetStatements" {
         return err;
     };
 
-    const expected_identiefer = [3][]const u8 {
+    const expected_identiefers = [3][]const u8 {
         "x", "y", "foobar"
     };
 
-    _ = expected_identiefer;
 
     for (0..3) |i| {
-        
-        expectEqualSlices(
-            u8,
-            program.statements.items[i].token.literal, 
-            "let"
-        ) catch |err| {
-            print("token literal is let", .{});
-            return err;
-        };
+        var statement = program.statements.items[i];
+        try expectEqualStrings(statement.TokenLiteral(), "let");
+
+        try expectEqualStrings(statement.name.?.TokenLiteral(), expected_identiefers[i]);
+
+        print("name: {s}\n", .{statement.name.?.TokenLiteral()});
 
 
     }

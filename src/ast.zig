@@ -17,7 +17,7 @@ pub const Statement = struct {
     // fn statementNode(ls: *LetStatement) void {},
     
     pub fn TokenLiteral(ls: *Statement) []const u8 {
-        return ls.token.literal;
+        return ls.token.literal[0..ls.token.literal_len];
     }
     
     const Kind = enum {
@@ -36,8 +36,8 @@ pub const Identifier = struct {
     
     // fn expressionNode(ident: *Identifier) void {},
     
-    fn TokenLiteral(ident: *Identifier) []const u8 {
-        return ident.token.literal;
+    pub fn TokenLiteral(ident: *Identifier) []const u8 {
+        return ident.token.literal[0..ident.token.literal_len];
     }
 };
 
