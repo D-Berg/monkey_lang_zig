@@ -5,6 +5,7 @@ const ast = @import("ast.zig");
 const Program = ast.Program;
 const Statement = ast.Statement;
 const Identifier = ast.Identifier;
+const ArrayList = std.ArrayList;
 
 const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
@@ -14,18 +15,34 @@ const print = std.debug.print;
 
 const Parser = @This();
 
+allocator: Allocator,
 lexer: *Lexer,
 current_token: Token,
 peek_token: Token,
+errors: ArrayList([]const u8),
 
-pub fn init(lexer: *Lexer) Parser {
+
+pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
 
     return .{ 
+        .allocator = allocator,
         .lexer = lexer,
         .current_token = lexer.NextToken(),
-        .peek_token = lexer.NextToken()
+        .peek_token = lexer.NextToken(),
+        .errors = ArrayList([]const u8).init(allocator)
     };
 
+}
+
+pub fn deinit(parser: Parser) void {
+    for (parser.errors.items) |parse_err| {
+
+        parser.allocator.free(parse_err);
+
+    }
+
+    parser.errors.deinit();
+    
 }
 
 
@@ -81,6 +98,7 @@ fn expectPeek(parser: *Parser, kind: Token.Kind) bool {
         parser.nextToken();
         return true;
     } else {
+        parser.peekError(kind);
         return false;
     }
 
@@ -102,6 +120,19 @@ pub fn ParseProgram(parser: *Parser, allocator: Allocator) !Program {
     }
     
     return program;
+}
+
+fn peekError(parser: *Parser, kind: Token.Kind) void {
+    const msg = std.fmt.allocPrint(parser.allocator, "Expected next token to be {any}, got {any} instead", .{
+        kind, parser.peek_token.kind 
+    }) catch {
+        @panic("failed to create error msg");
+    };
+
+    parser.errors.append(msg) catch {
+        @panic("failed to allocate error msg");
+    };
+
 
 }
 
@@ -110,19 +141,37 @@ test "LetStatements" {
 
     const allocator = std.testing.allocator;
 
-    const input = 
+    const correct_input = 
         \\let x = 5;
         \\let y = 10;
         \\let foobar = 838383;
     ;
 
-    var lexer = try Lexer.init(allocator, input);
+    var lexer = try Lexer.init(allocator, correct_input);
     defer lexer.deinit();
 
-    var parser = Parser.init(&lexer);
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
 
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
+
+
+    expect(parser.errors.items.len == 0) catch |err| {
+
+        print("Encountered {} parsing errors\n", .{
+            parser.errors.items.len
+        });
+
+        for (parser.errors.items) |parse_err| {
+
+            print("parse error: {s}\n", .{parse_err});
+
+        }
+
+        return err;
+
+    };
 
     expect(program.statements.items.len == 3) catch |err| {
         print("Statements len is not 3: Failed with error", .{});
@@ -140,10 +189,35 @@ test "LetStatements" {
 
         try expectEqualStrings(statement.name.?.TokenLiteral(), expected_identiefers[i]);
 
-        print("name: {s}\n", .{statement.name.?.TokenLiteral()});
-
-
     }
+}
+
+test "error parsing" {
+
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let x 5;
+        \\let = 10;
+        \\let 838383;
+    ;
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+
+    expect(parser.errors.items.len == 3) catch |err| {
+
+        print("parser didnt find eny error", .{});
+        return err;
+
+    };
 
 
 }
