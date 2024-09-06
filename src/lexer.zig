@@ -10,28 +10,33 @@ const log = std.log;
 const expect = std.testing.expect;
 const expectEqualSlices = std.testing.expectEqualSlices;
 
-
-
 const TokenError = error {
     unsupported_char,
     no_next_token
 };
 
 pub const Lexer = struct {
+    allocator: Allocator,
     input: []const u8,
     position: usize = 0,
     readPosition: usize = 0,
     ch: u8 = 0,
+    key_words: Keywords,
 
-    pub fn new(input: []const u8) Lexer {
+    pub fn init(allocator: Allocator, input: []const u8) !Lexer {
         var l = Lexer {
-            .input = input
+            .allocator = allocator,
+            .input = input,
+            .key_words = try Keywords.init(allocator)
         };
 
         l.readChar();
 
-
         return l;
+    }
+
+    pub fn deinit(l: *Lexer) void {
+        l.key_words.deinit();
     }
 
     fn readChar(l: *Lexer) void {
@@ -54,7 +59,7 @@ pub const Lexer = struct {
         }
     }
 
-    pub fn NextToken(l: *Lexer, allocator: Allocator, key_words: *const Keywords) !Token {
+    pub fn NextToken(l: *Lexer) !Token {
 
         var read_next_char = true; 
 
@@ -71,34 +76,34 @@ pub const Lexer = struct {
                     const ch = l.ch;
                     l.readChar();
                     const eq_str = [2]u8{ ch, l.ch};
-                    return try Token.init(allocator, Token.Kind.Eq, &eq_str);
+                    return try Token.init(l.allocator, Token.Kind.Eq, &eq_str);
                 } else {
-                    return try Token.init(allocator, Token.Kind.Assign, &chars); 
+                    return try Token.init(l.allocator, Token.Kind.Assign, &chars); 
                 }
             },
-            '+' => { return try Token.init(allocator, Token.Kind.Plus, &chars); },
-            '-' => { return try Token.init(allocator, Token.Kind.Minus, &chars); },
+            '+' => { return try Token.init(l.allocator, Token.Kind.Plus, &chars); },
+            '-' => { return try Token.init(l.allocator, Token.Kind.Minus, &chars); },
             '!' => { 
                 if (l.peekChar() == '=') {
                     const ch = l.ch;
                     l.readChar();
                     const neq_str = [2]u8{ ch, l.ch };
-                    return try Token.init(allocator, Token.Kind.Neq, &neq_str);
+                    return try Token.init(l.allocator, Token.Kind.Neq, &neq_str);
                 } else {
-                    return try Token.init(allocator, Token.Kind.Bang, &chars); 
+                    return try Token.init(l.allocator, Token.Kind.Bang, &chars); 
                 }
             },
-            '/' => { return try Token.init(allocator, Token.Kind.Slash, &chars); },
-            '*' => { return try Token.init(allocator, Token.Kind.Asterisk, &chars); },
-            '<' => { return try Token.init(allocator, Token.Kind.Lt, &chars); },
-            '>' => { return try Token.init(allocator, Token.Kind.Gt, &chars); },
-            ';' => { return try Token.init(allocator, Token.Kind.Semicolon, &chars); },
-            ',' => { return try Token.init(allocator, Token.Kind.Comma, &chars); },
-            '(' => { return try Token.init(allocator, Token.Kind.Lparen, &chars); },
-            ')' => { return try Token.init(allocator, Token.Kind.Rparen, &chars); },
-            '{' => { return try Token.init(allocator, Token.Kind.Lbrace, &chars); },
-            '}' => { return try Token.init(allocator, Token.Kind.Rbrace, &chars); },
-            0 => { return try Token.init(allocator, Token.Kind.Eof, ""); },
+            '/' => { return try Token.init(l.allocator, Token.Kind.Slash, &chars); },
+            '*' => { return try Token.init(l.allocator, Token.Kind.Asterisk, &chars); },
+            '<' => { return try Token.init(l.allocator, Token.Kind.Lt, &chars); },
+            '>' => { return try Token.init(l.allocator, Token.Kind.Gt, &chars); },
+            ';' => { return try Token.init(l.allocator, Token.Kind.Semicolon, &chars); },
+            ',' => { return try Token.init(l.allocator, Token.Kind.Comma, &chars); },
+            '(' => { return try Token.init(l.allocator, Token.Kind.Lparen, &chars); },
+            ')' => { return try Token.init(l.allocator, Token.Kind.Rparen, &chars); },
+            '{' => { return try Token.init(l.allocator, Token.Kind.Lbrace, &chars); },
+            '}' => { return try Token.init(l.allocator, Token.Kind.Rbrace, &chars); },
+            0 => { return try Token.init(l.allocator, Token.Kind.Eof, ""); },
             else => {
                 if (isLetter(l.ch)) {
 
@@ -108,9 +113,9 @@ pub const Lexer = struct {
                     const end = l.position;
 
                     const identifer_str = l.input[start..end];
-                    const token_kind = key_words.words.get(identifer_str) orelse Token.Kind.Ident;
+                    const token_kind = l.key_words.words.get(identifer_str) orelse Token.Kind.Ident;
 
-                    return try Token.init(allocator, token_kind, identifer_str);
+                    return try Token.init(l.allocator, token_kind, identifer_str);
 
                 } if (isDigit(l.ch)) {
                     read_next_char = false;
@@ -120,10 +125,10 @@ pub const Lexer = struct {
                     const end = l.position;
 
                     const number_str = l.input[start..end];
-                    return try Token.init(allocator, Token.Kind.Int, number_str);
+                    return try Token.init(l.allocator, Token.Kind.Int, number_str);
 
                 } else {
-                    return try Token.init(allocator, Token.Kind.Illegal, &chars);
+                    return try Token.init(l.allocator, Token.Kind.Illegal, &chars);
                 }
             }
         }
@@ -161,9 +166,6 @@ fn isDigit(ch: u8) bool {
 test "next token" {
     const allocator = std.testing.allocator;
 
-    var key_words = try Keywords.init(allocator);
-    defer key_words.deinit();
-
     const input = 
         \\let five = 5;
         \\let ten = 10;
@@ -186,7 +188,8 @@ test "next token" {
         \\10 != 9;
     ;
 
-    var l = Lexer.new(input);
+    var l = try Lexer.init(allocator, input);
+    defer l.deinit();
 
     var passed_tests: u32 = 0;
 
@@ -278,7 +281,7 @@ test "next token" {
 
     for (token_tests, 0..) |expected_token, i| {
 
-        const tok = l.NextToken(allocator, &key_words) catch |err| {
+        const tok = l.NextToken() catch |err| {
             print("token test {}/{}: Failed with Error: {}.\n", .{
                 i, n_tests, err
             });

@@ -3,31 +3,37 @@ const Allocator = std.mem.Allocator;
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
 const Lexer = @import("lexer.zig").Lexer;
+const Token = @import("token.zig").Token;
 
 const prompt = ">> ";
 const buffer_size = 256;
 
-pub fn start() !void {
+pub fn start(allocator: Allocator) !void {
 
 
     var buffer: [buffer_size]u8 = undefined;
 
-    try stdout.print("{s}", .{prompt});
-    var line  = try stdin.readUntilDelimiter(&buffer,'\n'); // TODO: handle error better
-    std.debug.print("{s}\n", .{line});
 
-    while (!isExit(line)) {
-
-
-        // var lex = Lexer.new(&line);
-        // var tok = l.NextToken(allocator: Allocator, key_words: *const Keywords)
-        
-
+    while (true) {
 
         try stdout.print("{s}", .{prompt});
-        line = try stdin.readUntilDelimiter(&buffer,'\n'); // TODO: handle error better
-        std.debug.print("{s}\n", .{line});
 
+        const line = try stdin.readUntilDelimiter(&buffer,'\n'); // TODO: handle error better
+        
+        if (isExit(line)) break;
+
+
+        var lex = try Lexer.init(allocator, line);
+        defer lex.deinit();
+
+        var tok = try lex.NextToken();
+        
+        while (tok.kind != Token.Kind.Eof) : (tok = try lex.NextToken()) {
+
+            std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.literal});
+            defer tok.deinit();
+
+        }
     }
 
 }
