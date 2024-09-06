@@ -1,9 +1,9 @@
 const std = @import("std");
-const token_mod = @import("token.zig");
+const Token = @import("Token.zig");
 
 const Allocator = std.mem.Allocator;
-const Token = token_mod.Token;
-const Keywords = token_mod.Keywords;
+
+const Keywords = Token.Keywords;
 
 const print = std.debug.print;
 const log = std.log;
@@ -15,141 +15,141 @@ const TokenError = error {
     no_next_token
 };
 
-pub const Lexer = struct {
-    allocator: Allocator,
-    input: []const u8,
-    position: usize = 0,
-    readPosition: usize = 0,
-    ch: u8 = 0,
-    key_words: Keywords,
+const Lexer = @This();
 
-    pub fn init(allocator: Allocator, input: []const u8) !Lexer {
-        var l = Lexer {
-            .allocator = allocator,
-            .input = input,
-            .key_words = try Keywords.init(allocator)
-        };
+allocator: Allocator,
+input: []const u8,
+position: usize = 0,
+readPosition: usize = 0,
+ch: u8 = 0,
+key_words: Keywords,
 
-        l.readChar();
+pub fn init(allocator: Allocator, input: []const u8) !Lexer {
+    var l = Lexer {
+        .allocator = allocator,
+        .input = input,
+        .key_words = try Keywords.init(allocator)
+    };
 
-        return l;
+    l.readChar();
+
+    return l;
+}
+
+pub fn deinit(l: *Lexer) void {
+    l.key_words.deinit();
+}
+
+fn readChar(l: *Lexer) void {
+
+    if (l.readPosition >= l.input.len) {
+        l.ch = 0;
+    } else {
+        l.ch = l.input[l.readPosition];
     }
 
-    pub fn deinit(l: *Lexer) void {
-        l.key_words.deinit();
+    l.position = l.readPosition;
+    l.readPosition += 1;
+}
+
+fn peekChar(l: *Lexer) u8 {
+    if (l.readPosition >= l.input.len) {
+        return 0;
+    } else {
+        return l.input[l.readPosition];
+    }
+}
+
+pub fn NextToken(l: *Lexer) !Token {
+
+    var read_next_char = true; 
+
+    defer {
+        if (read_next_char) l.readChar();
     }
 
-    fn readChar(l: *Lexer) void {
+    l.skipWhiteSpace();
 
-        if (l.readPosition >= l.input.len) {
-            l.ch = 0;
-        } else {
-            l.ch = l.input[l.readPosition];
-        }
+    const chars = [1]u8{ l.ch };
+    switch (l.ch) {
+        '=' => { 
+            if (l.peekChar() == '=') {
+                const ch = l.ch;
+                l.readChar();
+                const eq_str = [2]u8{ ch, l.ch};
+                return try Token.init(l.allocator, Token.Kind.Eq, &eq_str);
+            } else {
+                return try Token.init(l.allocator, Token.Kind.Assign, &chars); 
+            }
+        },
+        '+' => { return try Token.init(l.allocator, Token.Kind.Plus, &chars); },
+        '-' => { return try Token.init(l.allocator, Token.Kind.Minus, &chars); },
+        '!' => { 
+            if (l.peekChar() == '=') {
+                const ch = l.ch;
+                l.readChar();
+                const neq_str = [2]u8{ ch, l.ch };
+                return try Token.init(l.allocator, Token.Kind.Neq, &neq_str);
+            } else {
+                return try Token.init(l.allocator, Token.Kind.Bang, &chars); 
+            }
+        },
+        '/' => { return try Token.init(l.allocator, Token.Kind.Slash, &chars); },
+        '*' => { return try Token.init(l.allocator, Token.Kind.Asterisk, &chars); },
+        '<' => { return try Token.init(l.allocator, Token.Kind.Lt, &chars); },
+        '>' => { return try Token.init(l.allocator, Token.Kind.Gt, &chars); },
+        ';' => { return try Token.init(l.allocator, Token.Kind.Semicolon, &chars); },
+        ',' => { return try Token.init(l.allocator, Token.Kind.Comma, &chars); },
+        '(' => { return try Token.init(l.allocator, Token.Kind.Lparen, &chars); },
+        ')' => { return try Token.init(l.allocator, Token.Kind.Rparen, &chars); },
+        '{' => { return try Token.init(l.allocator, Token.Kind.Lbrace, &chars); },
+        '}' => { return try Token.init(l.allocator, Token.Kind.Rbrace, &chars); },
+        0 => { return try Token.init(l.allocator, Token.Kind.Eof, ""); },
+        else => {
+            if (isLetter(l.ch)) {
 
-        l.position = l.readPosition;
-        l.readPosition += 1;
-    }
+                read_next_char = false;
+                const start = l.position;
+                l.readIdentifier();
+                const end = l.position;
 
-    fn peekChar(l: *Lexer) u8 {
-        if (l.readPosition >= l.input.len) {
-            return 0;
-        } else {
-            return l.input[l.readPosition];
-        }
-    }
+                const identifer_str = l.input[start..end];
+                const token_kind = l.key_words.words.get(identifer_str) orelse Token.Kind.Ident;
 
-    pub fn NextToken(l: *Lexer) !Token {
+                return try Token.init(l.allocator, token_kind, identifer_str);
 
-        var read_next_char = true; 
+            } if (isDigit(l.ch)) {
+                read_next_char = false;
 
-        defer {
-            if (read_next_char) l.readChar();
-        }
+                const start = l.position;
+                l.readNumber();
+                const end = l.position;
 
-        l.skipWhiteSpace();
+                const number_str = l.input[start..end];
+                return try Token.init(l.allocator, Token.Kind.Int, number_str);
 
-        const chars = [1]u8{ l.ch };
-        switch (l.ch) {
-            '=' => { 
-                if (l.peekChar() == '=') {
-                    const ch = l.ch;
-                    l.readChar();
-                    const eq_str = [2]u8{ ch, l.ch};
-                    return try Token.init(l.allocator, Token.Kind.Eq, &eq_str);
-                } else {
-                    return try Token.init(l.allocator, Token.Kind.Assign, &chars); 
-                }
-            },
-            '+' => { return try Token.init(l.allocator, Token.Kind.Plus, &chars); },
-            '-' => { return try Token.init(l.allocator, Token.Kind.Minus, &chars); },
-            '!' => { 
-                if (l.peekChar() == '=') {
-                    const ch = l.ch;
-                    l.readChar();
-                    const neq_str = [2]u8{ ch, l.ch };
-                    return try Token.init(l.allocator, Token.Kind.Neq, &neq_str);
-                } else {
-                    return try Token.init(l.allocator, Token.Kind.Bang, &chars); 
-                }
-            },
-            '/' => { return try Token.init(l.allocator, Token.Kind.Slash, &chars); },
-            '*' => { return try Token.init(l.allocator, Token.Kind.Asterisk, &chars); },
-            '<' => { return try Token.init(l.allocator, Token.Kind.Lt, &chars); },
-            '>' => { return try Token.init(l.allocator, Token.Kind.Gt, &chars); },
-            ';' => { return try Token.init(l.allocator, Token.Kind.Semicolon, &chars); },
-            ',' => { return try Token.init(l.allocator, Token.Kind.Comma, &chars); },
-            '(' => { return try Token.init(l.allocator, Token.Kind.Lparen, &chars); },
-            ')' => { return try Token.init(l.allocator, Token.Kind.Rparen, &chars); },
-            '{' => { return try Token.init(l.allocator, Token.Kind.Lbrace, &chars); },
-            '}' => { return try Token.init(l.allocator, Token.Kind.Rbrace, &chars); },
-            0 => { return try Token.init(l.allocator, Token.Kind.Eof, ""); },
-            else => {
-                if (isLetter(l.ch)) {
-
-                    read_next_char = false;
-                    const start = l.position;
-                    l.readIdentifier();
-                    const end = l.position;
-
-                    const identifer_str = l.input[start..end];
-                    const token_kind = l.key_words.words.get(identifer_str) orelse Token.Kind.Ident;
-
-                    return try Token.init(l.allocator, token_kind, identifer_str);
-
-                } if (isDigit(l.ch)) {
-                    read_next_char = false;
-
-                    const start = l.position;
-                    l.readNumber();
-                    const end = l.position;
-
-                    const number_str = l.input[start..end];
-                    return try Token.init(l.allocator, Token.Kind.Int, number_str);
-
-                } else {
-                    return try Token.init(l.allocator, Token.Kind.Illegal, &chars);
-                }
+            } else {
+                return try Token.init(l.allocator, Token.Kind.Illegal, &chars);
             }
         }
-
     }
 
-    fn readIdentifier(l: *Lexer) void {
-        while (isLetter(l.ch)) l.readChar();
-    }
+}
 
-    fn readNumber(l: *Lexer) void {
-        while (isDigit(l.ch)) l.readChar();
+fn readIdentifier(l: *Lexer) void {
+    while (isLetter(l.ch)) l.readChar();
+}
 
-    }
+fn readNumber(l: *Lexer) void {
+    while (isDigit(l.ch)) l.readChar();
 
-    fn skipWhiteSpace(l: *Lexer) void {
-        while (l.ch == ' ' or l.ch == '\t' or l.ch == '\n' or l.ch == '\r') {
-            l.readChar();
-        }
+}
+
+fn skipWhiteSpace(l: *Lexer) void {
+    while (l.ch == ' ' or l.ch == '\t' or l.ch == '\n' or l.ch == '\r') {
+        l.readChar();
     }
-};
+}
 
 fn isLetter(ch: u8) bool {
 

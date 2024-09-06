@@ -1,6 +1,4 @@
 const std = @import("std");
-const Token = @import("token.zig").Token;
-const lexer = @import("lexer.zig");
 const repl = @import("repl.zig");
 
 const print = std.debug.print;
@@ -21,8 +19,6 @@ pub fn main() !void {
     try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
     try repl.start(allocator);
-
-
 }
 
 

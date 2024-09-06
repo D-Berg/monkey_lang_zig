@@ -2,66 +2,66 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-pub const Token = struct {
-    allocator: Allocator,
-    kind: Kind,
-    literal: []const u8, 
+const Token = @This();
+
+allocator: Allocator,
+kind: Kind,
+literal: []const u8, 
     
-    pub fn init(allocator: Allocator, kind: Token.Kind, chars: []const u8) !Token {
+pub fn init(allocator: Allocator, kind: Token.Kind, chars: []const u8) !Token {
 
-        const str = try allocator.dupe(u8, chars);
+    const str = try allocator.dupe(u8, chars);
 
-        return .{
-            .allocator = allocator,
-            .kind = kind, 
-            .literal = str
-        };
-    }
-
-    pub fn deinit(t: *const Token) void {
-        t.allocator.free(t.literal);
-    }
-
-    pub const Kind = enum {
-        Illegal,
-        Eof,
-        
-        // Identifiers + literals
-        Ident, // add, foobar, x, y
-        Int, // 12221378
-
-        // operators
-        Assign, // = 
-        Plus, // +
-        Minus,
-        Bang, // !
-        Asterisk, // *
-        Slash, // /
-
-        Lt, // <
-        Gt, // >
-
-        Eq, // ==
-        Neq, // !=
-
-        // Delimiters
-        Comma,
-        Semicolon,
-
-        Lparen,
-        Rparen,
-        Lbrace,
-        Rbrace,
-
-        // Keywords
-        Function,
-        Let,
-        True,
-        False,
-        If,
-        Else,
-        Return,
+    return .{
+        .allocator = allocator,
+        .kind = kind, 
+        .literal = str
     };
+}
+
+pub fn deinit(t: *const Token) void {
+    t.allocator.free(t.literal);
+}
+
+pub const Kind = enum {
+    Illegal,
+    Eof,
+    
+    // Identifiers + literals
+    Ident, // add, foobar, x, y
+    Int, // 12221378
+
+    // operators
+    Assign, // = 
+    Plus, // +
+    Minus,
+    Bang, // !
+    Asterisk, // *
+    Slash, // /
+
+    Lt, // <
+    Gt, // >
+
+    Eq, // ==
+    Neq, // !=
+
+    // Delimiters
+    Comma,
+    Semicolon,
+
+    Lparen,
+    Rparen,
+    Lbrace,
+    Rbrace,
+
+    // Keywords
+    Function,
+    Let,
+    True,
+    False,
+    If,
+    Else,
+    Return,
 };
 
 
@@ -91,8 +91,4 @@ pub const Keywords = struct {
         keywords.words.deinit();
 
     }
-
-
-
-    
 };

@@ -1,9 +1,11 @@
 const std = @import("std");
+const Lexer = @import("Lexer.zig");
+const Token = @import("Token.zig");
+
 const Allocator = std.mem.Allocator;
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
-const Lexer = @import("lexer.zig").Lexer;
-const Token = @import("token.zig").Token;
+
 
 const prompt = ">> ";
 const buffer_size = 256;
@@ -21,7 +23,6 @@ pub fn start(allocator: Allocator) !void {
         const line = try stdin.readUntilDelimiter(&buffer,'\n'); // TODO: handle error better
         
         if (isExit(line)) break;
-
 
         var lex = try Lexer.init(allocator, line);
         defer lex.deinit();
