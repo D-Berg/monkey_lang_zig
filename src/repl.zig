@@ -6,7 +6,6 @@ const Allocator = std.mem.Allocator;
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
 
-
 const prompt = ">> ";
 const buffer_size = 256;
 
