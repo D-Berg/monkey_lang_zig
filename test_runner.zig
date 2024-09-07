@@ -1,23 +1,51 @@
 const std = @import("std");
 const builtin = @import("builtin");
 // https://www.openmymind.net/Using-A-Custom-Test-Runner-In-Zig/
-//
+
 pub fn main() !void {
     const out = std.io.getStdOut().writer();
 
-    for (builtin.test_functions) |t| {
-        const name = extractName(t);
+    std.testing.allocator_instance = .{};
+    
+    var n_tests: u32= 0;
+    var passed_tests: u32 = 0;
+    var n_leaks: u32 = 0;
 
-        t.func() catch |err| {
-            try std.fmt.format(out, "{s} fail: {}\n", .{t.name, err});
-            continue;
-        };
-        try std.fmt.format(out, "{s:<20} passed\n", .{name});
+    for (builtin.test_functions, 0..) |t, i| {
+        if (i == 0) continue;
+
+        const name = extractName(t);
+        const file = extractFile(t);
+
+        const result = t.func();
+
+        const leaked = std.testing.allocator_instance.detectLeaks();
+
+        if (leaked) n_leaks += 1;
+        
+        if (result) {
+            passed_tests += 1;
+            try std.fmt.format(out, "{s:<10} | {s:<20} | passed | leaked: {}\n", .{file, name, leaked});
+        } else |err| {
+            try std.fmt.format(out, "{s:<10} | {s:<20} | failed | leaked: {} | error: {}\n", .{file, name, leaked, err});
+        }
+
+        n_tests += 1;
     }
+
+    try std.fmt.format(out, "passing: {}/{}, leaks: {}/{}\n", .{
+        passed_tests, n_tests, n_leaks, n_tests
+    });
+
+}
+
+fn extractFile(t: std.builtin.TestFn) []const u8 {
+    const marker = std.mem.lastIndexOf(u8, t.name, ".test.") orelse return t.name;
+    return t.name[0..marker];
+
 }
 
 fn extractName(t: std.builtin.TestFn) []const u8 {
     const marker = std.mem.lastIndexOf(u8, t.name, ".test.") orelse return t.name;
-
     return t.name[marker+6..];
 }
