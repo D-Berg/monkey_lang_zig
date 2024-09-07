@@ -5,21 +5,21 @@ const builtin = @import("builtin");
 pub fn main() !void {
     const out = std.io.getStdOut().writer();
 
-    std.testing.allocator_instance = .{};
     
     var n_tests: u32= 0;
     var passed_tests: u32 = 0;
     var n_leaks: u32 = 0;
     const passed = "\u{001b}[32mpassed\u{001b}[0m";
     const failed = "\u{001b}[31mfailed\u{001b}[0m";
+
     for (builtin.test_functions, 0..) |t, i| {
         if (i == 0) continue;
 
         const name = extractName(t);
         const file = extractFile(t);
 
+        std.testing.allocator_instance = .{};
         const result = t.func();
-
         const leaked = std.testing.allocator_instance.detectLeaks();
 
         if (leaked) n_leaks += 1;
