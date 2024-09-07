@@ -137,7 +137,7 @@ fn peekError(parser: *Parser, kind: Token.Kind) void {
 }
 
 
-test "LetStatements" {
+test "Let Statements" {
 
     const allocator = std.testing.allocator;
 
@@ -192,7 +192,7 @@ test "LetStatements" {
     }
 }
 
-test "error parsing" {
+test "Parsing Errors" {
 
     const allocator = std.testing.allocator;
 
@@ -213,10 +213,8 @@ test "error parsing" {
 
 
     expect(parser.errors.items.len == 3) catch |err| {
-
         print("parser didnt find eny error", .{});
         return err;
-
     };
 
 

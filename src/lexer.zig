@@ -163,7 +163,7 @@ fn isDigit(ch: u8) bool {
     return '0' <= ch and ch <= '9';
 }
 
-test "next token" {
+test "Create Tokens" {
     const allocator = std.testing.allocator;
 
     const input = 

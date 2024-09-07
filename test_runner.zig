@@ -10,7 +10,8 @@ pub fn main() !void {
     var n_tests: u32= 0;
     var passed_tests: u32 = 0;
     var n_leaks: u32 = 0;
-
+    const passed = "\u{001b}[32mpassed\u{001b}[0m";
+    const failed = "\u{001b}[31mfailed\u{001b}[0m";
     for (builtin.test_functions, 0..) |t, i| {
         if (i == 0) continue;
 
@@ -25,9 +26,13 @@ pub fn main() !void {
         
         if (result) {
             passed_tests += 1;
-            try std.fmt.format(out, "{s:<10} | {s:<20} | passed | leaked: {}\n", .{file, name, leaked});
+            try std.fmt.format(out, "{s:<10} | {s:<20} | {s} | leaked: {}\n", .{
+                file, name, passed, leaked
+            });
         } else |err| {
-            try std.fmt.format(out, "{s:<10} | {s:<20} | failed | leaked: {} | error: {}\n", .{file, name, leaked, err});
+            try std.fmt.format(out, "{s:<10} | {s:<20} | {s} | leaked: {} | error: {}\n", .{
+                file, name, failed, leaked, err
+            });
         }
 
         n_tests += 1;
