@@ -26,9 +26,9 @@ pub fn start(allocator: Allocator) !void {
         var lex = try Lexer.init(allocator, line);
         defer lex.deinit();
 
-        var tok = try lex.NextToken();
+        var tok = lex.NextToken();
         
-        while (tok.kind != Token.Kind.Eof) : (tok = try lex.NextToken()) {
+        while (tok.kind != Token.Kind.Eof) : (tok = lex.NextToken()) {
             std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.literal});
         }
     }
