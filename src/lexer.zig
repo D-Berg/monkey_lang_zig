@@ -306,7 +306,7 @@ test "next token" {
 
     }
 
-    print("\u{001b}[32mtoken test {}/{}: succeded\u{001b}[0m\n", .{
-        passed_tests, n_tests
-    });
+    // print("\u{001b}[32mtoken test {}/{}: succeded\u{001b}[0m\n", .{
+    //     passed_tests, n_tests
+    // });
 }

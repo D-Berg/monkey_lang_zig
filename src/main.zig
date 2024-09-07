@@ -23,4 +23,8 @@ pub fn main() !void {
 
 
 
+test "all" {
+    // https://ziggit.dev/t/how-do-i-get-zig-build-to-run-all-the-tests/4434
+    std.testing.refAllDecls(@This());
+}
 

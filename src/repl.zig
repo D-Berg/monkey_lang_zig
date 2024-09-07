@@ -1,6 +1,7 @@
 const std = @import("std");
 const Lexer = @import("Lexer.zig");
 const Token = @import("Token.zig");
+const Parser = @import("Parser.zig");
 
 const Allocator = std.mem.Allocator;
 const stdin = std.io.getStdIn().reader();
@@ -25,6 +26,10 @@ pub fn start(allocator: Allocator) !void {
 
         var lex = try Lexer.init(allocator, line);
         defer lex.deinit();
+
+        var parser = Parser.init(&lex, allocator);
+        parser.deinit();
+
 
         var tok = lex.NextToken();
         
