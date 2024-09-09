@@ -28,6 +28,10 @@ pub fn init(kind: Token.Kind, chars: []const u8) Token {
 }
 
 
+pub fn tokenLiteral(tok: *Token) []const u8 {
+    return tok.literal[0..tok.literal_len];
+}
+
 pub const Kind = enum {
     Illegal,
     Eof,

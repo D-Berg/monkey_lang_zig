@@ -21,6 +21,15 @@ current_token: Token,
 peek_token: Token,
 errors: ArrayList([]const u8),
 
+const Precedence = enum {
+    Lowest,
+    Equals,
+    LessGreater,
+    Sum,
+    Product,
+    Prefix,
+    Call,
+};
 
 pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
 
@@ -62,22 +71,19 @@ fn parseStatement(parser: *Parser) ?Statement {
             return parser.parseReturnStatement();
         },
         else => {
-            return null;
+            return parser.parseExpressionStatement();
         }
     }
 }
 
 fn parseLetStatement(parser: *Parser) ?Statement {
 
-    var statement = Statement { .token = parser.current_token };
+    var statement = Statement { .token = parser.current_token, .kind = .Let};
     // TODO: possible mem leak
 
     if (!parser.expectPeek(Token.Kind.Ident)) return null;
 
-    statement.name = Identifier { 
-        .token = parser.current_token, 
-        .value = &parser.current_token.literal // do I need to mem copy?
-    }; // TODO: possible mem leak
+    statement.identifier = parser.current_token;
 
     if (!parser.expectPeek(Token.Kind.Assign)) return null;
 
@@ -90,7 +96,7 @@ fn parseLetStatement(parser: *Parser) ?Statement {
 
 fn parseReturnStatement(parser: *Parser) ?Statement {
 
-    const stmt = Statement { .token = parser.current_token };
+    const stmt = Statement { .token = parser.current_token, .kind = .Return };
 
     parser.nextToken();
 
@@ -101,6 +107,45 @@ fn parseReturnStatement(parser: *Parser) ?Statement {
     return stmt;
 
 }
+
+fn parseExpressionStatement(parser: *Parser) ?Statement {
+
+    var stmt = Statement { 
+        .token = parser.current_token,
+        .kind = .Expression
+    };
+
+    stmt.expression = parser.parseExpression();
+
+    while (parser.peekTokenIs(Token.Kind.Semicolon)) {
+        parser.nextToken();
+    }
+
+    return stmt;
+
+}
+
+fn parseExpression(parser: *Parser) ?Token {
+
+    switch (parser.current_token.kind) {
+
+        Token.Kind.Ident => {
+            return parser.parseIdentifier();
+        },
+
+        else => {
+            return null;
+        }
+
+    }
+}
+
+fn parseIdentifier(parser: *Parser) Token {
+
+    return parser.current_token;
+
+}
+
 
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.current_token.kind == kind;
@@ -140,6 +185,12 @@ pub fn ParseProgram(parser: *Parser, allocator: Allocator) !Program {
     return program;
 }
 
+fn checkParseErrors(parser: *Parser) error{ParsingError}!void {
+
+    if (parser.errors.items.len > 0) return error.ParsingError;
+
+}
+
 fn peekError(parser: *Parser, kind: Token.Kind) void {
     const msg = std.fmt.allocPrint(parser.allocator, "Expected next token to be {any}, got {any} instead", .{
         kind, parser.peek_token.kind 
@@ -174,6 +225,7 @@ test "Let Statements" {
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
 
+    try parser.checkParseErrors();
 
     expect(parser.errors.items.len == 0) catch |err| {
 
@@ -201,14 +253,16 @@ test "Let Statements" {
     };
 
 
-    for (0..3) |i| {
-        var statement = program.statements.items[i];
-        try expectEqualStrings(statement.TokenLiteral(), "let");
+    for (program.statements.items, 0..) |*statement, i| {
+        try expect(statement.kind == .Let);
+        try expectEqualStrings(statement.tokenLiteral(), "let");
 
-        try expectEqualStrings(statement.name.?.TokenLiteral(), expected_identiefers[i]);
+        try expectEqualStrings(statement.identifier.?.tokenLiteral(), expected_identiefers[i]);
 
     }
 }
+
+
 
 test "Return Statements" {
     const allocator = std.testing.allocator;
@@ -228,13 +282,46 @@ test "Return Statements" {
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
 
+    try parser.checkParseErrors();
+
     try expect(program.statements.items.len == 3);
 
     for (program.statements.items) |*statement| {
-        try expectEqualStrings("return", statement.TokenLiteral());
+        try expect(statement.kind == .Return);
+        try expectEqualStrings("return", statement.tokenLiteral());
     }
 
 }
+
+test "Identifier Expression" {
+    const allocator = std.testing.allocator;
+
+    const input = "foobar;";
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    try parser.checkParseErrors();
+
+    try expect(program.statements.items.len == 1);
+
+    var stmt = program.statements.items[0];
+
+    try expect(stmt.kind == .Expression);
+
+    // try expectEqualStrings(ident.value.?)
+    
+    try expectEqualStrings("foobar", Statement.tokenLiteral(&stmt));
+
+    try expectEqualStrings("foobar", stmt.expression.?.tokenLiteral());
+}
+
 
 test "Parsing Errors" {
 
