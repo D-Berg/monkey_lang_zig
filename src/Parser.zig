@@ -25,7 +25,7 @@ errors: ArrayList([]const u8),
 pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
 
     return .{ 
-        .allocator = allocator,
+        .allocator = allocator, 
         .lexer = lexer,
         .current_token = lexer.NextToken(),
         .peek_token = lexer.NextToken(),
@@ -57,6 +57,10 @@ fn parseStatement(parser: *Parser) ?Statement {
         Token.Kind.Let => {
             return parser.parseLetStatement();
         },
+        Token.Kind.Return => {
+
+            return parser.parseReturnStatement();
+        },
         else => {
             return null;
         }
@@ -82,6 +86,20 @@ fn parseLetStatement(parser: *Parser) ?Statement {
     }
 
     return statement;
+}
+
+fn parseReturnStatement(parser: *Parser) ?Statement {
+
+    const stmt = Statement { .token = parser.current_token };
+
+    parser.nextToken();
+
+    while (!parser.curTokenIs(Token.Kind.Semicolon)) {
+        parser.nextToken();
+    }
+
+    return stmt;
+
 }
 
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
@@ -190,6 +208,32 @@ test "Let Statements" {
         try expectEqualStrings(statement.name.?.TokenLiteral(), expected_identiefers[i]);
 
     }
+}
+
+test "Return Statements" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\return 5;
+        \\return 10;
+        \\return 993322;
+    ;
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    try expect(program.statements.items.len == 3);
+
+    for (program.statements.items) |*statement| {
+        try expectEqualStrings("return", statement.TokenLiteral());
+    }
+
 }
 
 test "Parsing Errors" {
