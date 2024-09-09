@@ -22,6 +22,10 @@ current_token: Token,
 peek_token: Token,
 errors: ArrayList([]const u8),
 
+const ParseError = error {
+    WrongExpressionType
+};
+
 const Precedence = enum {
     Lowest,
     Equals,
@@ -126,16 +130,26 @@ fn parseExpressionStatement(parser: *Parser) ?Statement {
 
 }
 
+// TODO: Take in precedence arg
 fn parseExpression(parser: *Parser) ?Expression {
 
     switch (parser.current_token.kind) {
 
-        Token.Kind.Ident => {
+        .Ident => {
             return parser.parseIdentifier();
         },
 
-        Token.Kind.Int =>{
-            return parser.parseIntegerLiteral();
+        .Int =>{
+            return parser.parseIntegerLiteral() catch {
+                @panic("Failed to parse integer literal");
+            };
+        },
+        .Bang => {
+            return parser.parsePrefixExpression();
+        },
+
+        .Minus => {
+            return parser.parsePrefixExpression();
         },
 
         else => {
@@ -148,30 +162,46 @@ fn parseExpression(parser: *Parser) ?Expression {
 fn parseIdentifier(parser: *Parser) Expression {
 
     return Expression {
-        .token = parser.current_token,
-        .kind = .Identifier,
+        .identifier = .{
+            .token = parser.current_token,
+        }
     };
 
 }
 
-fn parseIntegerLiteral(parser: *Parser) Expression {
+fn parseIntegerLiteral(parser: *Parser) !Expression {
     
-    var stmt = Expression { 
-        .token = parser.current_token,
-        .kind = .IntegerLiteral,
+    const val = try std.fmt.parseInt(u32, parser.current_token.tokenLiteral(), 0);
+
+    
+    return Expression { 
+        .integer_literal = .{
+            .token = parser.current_token,
+            .value = val
+        }
     };
 
-    const maybe_val = std.fmt.parseInt(u32, stmt.token.tokenLiteral(), 0) catch null;
+}
 
-    if (maybe_val) |val| {
-        stmt.value = Expression.Value {.int_val = val};
-    } else {
-        parser.errors.append("Error: Couldnt parse integer") catch {
-            @panic("out of mem in append");
-        };
-    }
+fn parsePrefixExpression(parser: *Parser) Expression {
+    
+    const tok = parser.current_token;
 
-    return stmt;
+    parser.nextToken();
+
+    const expr_ptr = parser.allocator.create(Expression) catch {
+        @panic("Failed to create an expression pointer");
+    };
+    expr_ptr.* = parser.parseExpression().?;
+
+
+
+    return Expression {
+        .prefix_expression = .{ 
+            .token = tok,
+            .right = expr_ptr,
+        }
+    };
 
 }
 
@@ -348,9 +378,10 @@ test "Identifier Expression" {
     
     try expectEqualStrings("foobar", Statement.tokenLiteral(&stmt));
 
-    try expectEqualStrings("foobar", stmt.expression.?.token.tokenLiteral());
+    try expect(stmt.expression.? == .identifier);
 
-    try expect(stmt.expression.?.kind == .Identifier);
+    try expectEqualStrings("foobar", stmt.expression.?.identifier.token.tokenLiteral());
+
 }
 
 
@@ -378,10 +409,61 @@ test "Integer Literal Expression" {
 
     try expect(stmt.kind == .Expression);
 
-    try expect(stmt.expression.?.kind == .IntegerLiteral);
+    try expect(stmt.expression.? == .integer_literal);
 
-    switch (stmt.expression.?.value.?) {
-        .int_val => |val| try expect(val == input_int)
+    switch (stmt.expression.?) {
+        .integer_literal => |il| {
+            try expect(il.value == input_int);
+        }, 
+        else =>  {
+            return error.WrongExpressionType;
+        }
+    }
+
+}
+
+test "Prefix Expression" {
+    
+    const allocator = std.testing.allocator;
+
+    const input = [_][]const u8 {
+        "!5;",
+        "-15;"
+    };
+
+    const operators = [_][]const u8 {
+        "!",
+        "-"
+    };
+
+    const int_values = [_]u32 { 5, 15 };
+
+    for (0..2) |i| {
+
+        var lexer = try Lexer.init(allocator, input[i]);
+        defer lexer.deinit();
+
+        var parser = Parser.init(&lexer, allocator);
+        defer parser.deinit();
+
+        var program = try parser.ParseProgram(allocator);
+        defer program.deinit();
+
+        try parser.checkParseErrors();
+
+        try expect(program.statements.items.len == 1);
+
+        var stmt = program.statements.items[0];
+
+        try expect(stmt.kind == .Expression);
+
+        try expect(stmt.expression.? == .prefix_expression);
+
+        try expect(stmt.expression.?.prefix_expression.right.* == .integer_literal);
+
+        try expect(stmt.expression.?.prefix_expression.right.integer_literal.value == int_values[i]);
+
+        try expectEqualStrings(operators[i], Token.tokenLiteral(&stmt.expression.?.prefix_expression.token));
     }
 
 }

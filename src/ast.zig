@@ -28,38 +28,60 @@ pub const Statement = struct {
     };
 };
 
-pub const Expression = struct {
-    token: Token,
-    kind: Kind,
-    value: ?Value = null,
+pub const Expression = union(enum) {
+    identifier: Identifier,
+    integer_literal: IntegerLiteralExpression,
+    prefix_expression: PrefixExpression
     
-    const Kind = enum {
-        Identifier,
-        IntegerLiteral
-    };
-    
-    pub const Value = union(enum) {
-        int_val: u32,
-    };
 };
+
+pub const IntegerLiteralExpression = struct {
+    token: Token,
+    value: u32
+};
+
+pub const PrefixExpression = struct {
+    token: Token,
+    right: *Expression,
+};
+
 
 pub const Identifier = struct {
     token: Token,
 };
 
 pub const Program = struct {
+    allocator: Allocator,
     statements: ArrayList(Statement),
 
     pub fn init(allocator: Allocator) Program {
-
         return .{
+            .allocator = allocator,
             .statements = ArrayList(Statement).init(allocator),
         };
 
     }
 
     pub fn deinit(program: *Program) void {
+
+        for (program.statements.items) |stmt| {
+
+            if (stmt.kind == .Expression) {
+
+                if (stmt.expression) |expr| {
+                    switch (expr) {
+                        .prefix_expression => |pe| program.allocator.destroy(pe.right),
+                        else => continue
+                    }
+                }
+
+            }
+                
+
+        }
+
         program.statements.deinit();
+
     }
     
     fn TokenLiteral(program: *Program) []const u8 {

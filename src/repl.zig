@@ -30,11 +30,10 @@ pub fn start(allocator: Allocator) !void {
         var parser = Parser.init(&lex, allocator);
         parser.deinit();
 
-
         var tok = lex.NextToken();
-        
+
         while (tok.kind != Token.Kind.Eof) : (tok = lex.NextToken()) {
-            std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.literal});
+            std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.tokenLiteral()});
         }
     }
 
