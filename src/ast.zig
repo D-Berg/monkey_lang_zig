@@ -12,40 +12,40 @@ const Node = struct {
 pub const Statement = struct {
     token: Token,
     kind: Kind,
-    expression: ?Token = null,
-    identifier: ?Token = null,
+    expression: ?Expression = null,
+    identifier: ?Identifier = null,
     
     // fn statementNode(ls: *LetStatement) void {},
     
     pub fn tokenLiteral(stmt: *Statement) []const u8 {
-
         return stmt.token.tokenLiteral();
-        
     }
     
     const Kind = enum {
         Let,
         Return,
         Expression,
-        Identifier,
     };
-    
 };
 
-// pub const Expression = struct {
-//     token: Token,
-// };
-//
-// pub const Identifier = struct {
-//     token: Token, // token.Ident
-//     value: []const u8,
-//
-//     // fn expressionNode(ident: *Identifier) void {},
-//
-//     pub fn tokenliteral(ident: *identifier) []const u8 {
-//         return ident.token.literal[0..ident.token.literal_len];
-//     }
-// };
+pub const Expression = struct {
+    token: Token,
+    kind: Kind,
+    value: ?Value = null,
+    
+    const Kind = enum {
+        Identifier,
+        IntegerLiteral
+    };
+    
+    pub const Value = union(enum) {
+        int_val: u32,
+    };
+};
+
+pub const Identifier = struct {
+    token: Token,
+};
 
 pub const Program = struct {
     statements: ArrayList(Statement),

@@ -5,6 +5,7 @@ const ast = @import("ast.zig");
 const Program = ast.Program;
 const Statement = ast.Statement;
 const Identifier = ast.Identifier;
+const Expression = ast.Expression;
 const ArrayList = std.ArrayList;
 
 const Allocator = std.mem.Allocator;
@@ -83,7 +84,7 @@ fn parseLetStatement(parser: *Parser) ?Statement {
 
     if (!parser.expectPeek(Token.Kind.Ident)) return null;
 
-    statement.identifier = parser.current_token;
+    statement.identifier = Identifier { .token = parser.current_token };
 
     if (!parser.expectPeek(Token.Kind.Assign)) return null;
 
@@ -125,12 +126,16 @@ fn parseExpressionStatement(parser: *Parser) ?Statement {
 
 }
 
-fn parseExpression(parser: *Parser) ?Token {
+fn parseExpression(parser: *Parser) ?Expression {
 
     switch (parser.current_token.kind) {
 
         Token.Kind.Ident => {
             return parser.parseIdentifier();
+        },
+
+        Token.Kind.Int =>{
+            return parser.parseIntegerLiteral();
         },
 
         else => {
@@ -140,9 +145,33 @@ fn parseExpression(parser: *Parser) ?Token {
     }
 }
 
-fn parseIdentifier(parser: *Parser) Token {
+fn parseIdentifier(parser: *Parser) Expression {
 
-    return parser.current_token;
+    return Expression {
+        .token = parser.current_token,
+        .kind = .Identifier,
+    };
+
+}
+
+fn parseIntegerLiteral(parser: *Parser) Expression {
+    
+    var stmt = Expression { 
+        .token = parser.current_token,
+        .kind = .IntegerLiteral,
+    };
+
+    const maybe_val = std.fmt.parseInt(u32, stmt.token.tokenLiteral(), 0) catch null;
+
+    if (maybe_val) |val| {
+        stmt.value = Expression.Value {.int_val = val};
+    } else {
+        parser.errors.append("Error: Couldnt parse integer") catch {
+            @panic("out of mem in append");
+        };
+    }
+
+    return stmt;
 
 }
 
@@ -257,7 +286,7 @@ test "Let Statements" {
         try expect(statement.kind == .Let);
         try expectEqualStrings(statement.tokenLiteral(), "let");
 
-        try expectEqualStrings(statement.identifier.?.tokenLiteral(), expected_identiefers[i]);
+        try expectEqualStrings(statement.identifier.?.token.tokenLiteral(), expected_identiefers[i]);
 
     }
 }
@@ -319,9 +348,43 @@ test "Identifier Expression" {
     
     try expectEqualStrings("foobar", Statement.tokenLiteral(&stmt));
 
-    try expectEqualStrings("foobar", stmt.expression.?.tokenLiteral());
+    try expectEqualStrings("foobar", stmt.expression.?.token.tokenLiteral());
+
+    try expect(stmt.expression.?.kind == .Identifier);
 }
 
+
+test "Integer Literal Expression" {
+
+    const allocator = std.testing.allocator;
+
+    const input = "5;";
+    const input_int: u32 = 5;
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    try parser.checkParseErrors();
+
+    try expect(program.statements.items.len == 1);
+
+    const stmt = program.statements.items[0];
+
+    try expect(stmt.kind == .Expression);
+
+    try expect(stmt.expression.?.kind == .IntegerLiteral);
+
+    switch (stmt.expression.?.value.?) {
+        .int_val => |val| try expect(val == input_int)
+    }
+
+}
 
 test "Parsing Errors" {
 
