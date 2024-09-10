@@ -31,7 +31,8 @@ pub const Statement = struct {
 pub const Expression = union(enum) {
     identifier: Identifier,
     integer_literal: IntegerLiteralExpression,
-    prefix_expression: PrefixExpression
+    prefix_expression: PrefixExpression,
+    infix_expression: InfixExpression,
     
 };
 
@@ -45,6 +46,11 @@ pub const PrefixExpression = struct {
     right: *Expression,
 };
 
+pub const InfixExpression = struct {
+    token: Token,
+    left: *Expression,
+    right: *Expression,
+};
 
 pub const Identifier = struct {
     token: Token,
@@ -71,6 +77,10 @@ pub const Program = struct {
                 if (stmt.expression) |expr| {
                     switch (expr) {
                         .prefix_expression => |pe| program.allocator.destroy(pe.right),
+                        .infix_expression => |ie| {
+                            program.allocator.destroy(ie.left);
+                            program.allocator.destroy(ie.right);
+                        },
                         else => continue
                     }
                 }

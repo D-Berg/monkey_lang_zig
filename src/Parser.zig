@@ -13,6 +13,7 @@ const expect = std.testing.expect;
 const expectEqualStrings = std.testing.expectEqualStrings;
 
 const print = std.debug.print;
+const log = std.log;
 
 const Parser = @This();
 
@@ -34,6 +35,24 @@ const Precedence = enum {
     Product,
     Prefix,
     Call,
+    
+    fn get(tk: Token.Kind) ?Precedence {
+
+        const pd = switch (tk) {
+            Token.Kind.Eq => Precedence.Equals,
+            Token.Kind.Neq => Precedence.Equals,
+            Token.Kind.Lt => Precedence.LessGreater,
+            Token.Kind.Gt => Precedence.LessGreater,
+            Token.Kind.Plus => Precedence.Sum,
+            Token.Kind.Minus => Precedence.Sum,
+            Token.Kind.Slash => Precedence.Product,
+            Token.Kind.Asterisk => Precedence.Product,
+            else => .Lowest
+        };
+
+        return pd;
+
+    }
 };
 
 pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
@@ -72,7 +91,6 @@ fn parseStatement(parser: *Parser) ?Statement {
             return parser.parseLetStatement();
         },
         Token.Kind.Return => {
-
             return parser.parseReturnStatement();
         },
         else => {
@@ -120,9 +138,9 @@ fn parseExpressionStatement(parser: *Parser) ?Statement {
         .kind = .Expression
     };
 
-    stmt.expression = parser.parseExpression();
+    stmt.expression = parser.parseExpression(.Lowest);
 
-    while (parser.peekTokenIs(Token.Kind.Semicolon)) {
+    if (parser.peekTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
     }
 
@@ -131,32 +149,39 @@ fn parseExpressionStatement(parser: *Parser) ?Statement {
 }
 
 // TODO: Take in precedence arg
-fn parseExpression(parser: *Parser) ?Expression {
+fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
 
-    switch (parser.current_token.kind) {
+    const prefix = switch (parser.current_token.kind) { // same as looking into the hashmap p.prefixParseFns in GO
+        .Ident => parser.parseIdentifier(),
+        .Int => parser.parseIntegerLiteral(),
+        .Bang, .Minus => parser.parsePrefixExpression(),
+        else => null
+    };
 
-        .Ident => {
-            return parser.parseIdentifier();
-        },
 
-        .Int =>{
-            return parser.parseIntegerLiteral() catch {
-                @panic("Failed to parse integer literal");
-            };
-        },
-        .Bang => {
-            return parser.parsePrefixExpression();
-        },
+    if (prefix == null) return null; // TODO: add to parser.errors
+    
+    var left_expr: Expression = prefix.?;
 
-        .Minus => {
-            return parser.parsePrefixExpression();
-        },
+    while (!parser.peekTokenIs(.Semicolon) and @intFromEnum(precedence) < @intFromEnum(parser.peekPrecedence())) {
 
-        else => {
-            return null;
-        }
+
+        const infix = switch (parser.peek_token.kind) {
+            .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => parser.parseInfixExpression(left_expr),
+            else => null
+        };
+
+
+        if (infix == null) return left_expr;
+
+
+        parser.nextToken();
+
+        left_expr = infix.?;
 
     }
+
+    return left_expr;
 }
 
 fn parseIdentifier(parser: *Parser) Expression {
@@ -169,18 +194,24 @@ fn parseIdentifier(parser: *Parser) Expression {
 
 }
 
-fn parseIntegerLiteral(parser: *Parser) !Expression {
+fn parseIntegerLiteral(parser: *Parser) ?Expression {
     
-    const val = try std.fmt.parseInt(u32, parser.current_token.tokenLiteral(), 0);
+    const maybe_val = std.fmt.parseInt(u32, parser.current_token.tokenLiteral(), 0);
 
+    if (maybe_val) |val| {
+        return Expression { 
+            .integer_literal = .{
+                .token = parser.current_token,
+                .value = val
+            }
+        };
+    } else |_| {
+
+        // TODO: format and also handle error better
+        parser.errors.append("Failed to parse Integer Literal") catch unreachable;
+        return null;
+    }
     
-    return Expression { 
-        .integer_literal = .{
-            .token = parser.current_token,
-            .value = val
-        }
-    };
-
 }
 
 fn parsePrefixExpression(parser: *Parser) Expression {
@@ -192,9 +223,7 @@ fn parsePrefixExpression(parser: *Parser) Expression {
     const expr_ptr = parser.allocator.create(Expression) catch {
         @panic("Failed to create an expression pointer");
     };
-    expr_ptr.* = parser.parseExpression().?;
-
-
+    expr_ptr.* = parser.parseExpression(.Prefix).?;
 
     return Expression {
         .prefix_expression = .{ 
@@ -202,6 +231,39 @@ fn parsePrefixExpression(parser: *Parser) Expression {
             .right = expr_ptr,
         }
     };
+
+}
+
+fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
+
+    parser.nextToken();
+
+    const token = parser.current_token;
+
+    const precedence = parser.curPrecedence();
+
+    parser.nextToken();
+
+    // TODO: better mem management
+    const left_ptr = parser.allocator.create(Expression) catch {
+        @panic("Failed to create left expression in infix");
+    };
+    const right_ptr = parser.allocator.create(Expression) catch {
+        @panic("Failed to create right expression in infix");
+    };
+
+    left_ptr.* = left;
+    right_ptr.* = parser.parseExpression(precedence).?;
+
+    return Expression {
+        .infix_expression = .{
+            .token = token,
+            .left = left_ptr,
+            .right = right_ptr
+        }
+    };
+
+
 
 }
 
@@ -225,6 +287,17 @@ fn expectPeek(parser: *Parser, kind: Token.Kind) bool {
     }
 
 }
+
+fn curPrecedence(parser: *Parser) Precedence {
+    const prec = Precedence.get(parser.current_token.kind) orelse .Lowest;
+    return prec;
+}
+
+fn peekPrecedence(parser: *Parser) Precedence {
+    const prec = Precedence.get(parser.peek_token.kind) orelse .Lowest;
+    return prec;
+}
+
 
 pub fn ParseProgram(parser: *Parser, allocator: Allocator) !Program {
 
@@ -467,6 +540,81 @@ test "Prefix Expression" {
     }
 
 }
+
+test "Infix Expression" {
+
+    const allocator = std.testing.allocator;
+
+    const input = [_][]const u8 {
+        "5 + 10;",
+        "5 - 10;",
+        "5 * 10;",
+        "5 / 10;",
+        "5 > 10;",
+        "5 < 10;",
+        "5 == 10;",
+        "5 != 10;"
+    };
+
+    const token_kinds = [_]Token.Kind {
+        .Plus,
+        .Minus,
+        .Asterisk,
+        .Slash,
+        .Gt,
+        .Lt,
+        .Eq,
+        .Neq
+    };
+
+    const left_value = 5;
+    const right_value = 10;
+
+    for (0..input.len) |i| {
+
+        var lexer = try Lexer.init(allocator, input[i]);
+        defer lexer.deinit();
+
+        var parser = Parser.init(&lexer, allocator);
+        defer parser.deinit();
+
+        var program = try parser.ParseProgram(allocator);
+        defer program.deinit();
+
+        try parser.checkParseErrors();
+
+        expect(program.statements.items.len == 1) catch |err| {
+
+            print("wront stmt len: expected=1, got={}\n", .{
+                program.statements.items.len
+            });
+            return err;
+        };
+
+        var stmt = program.statements.items[0];
+
+        try expect(stmt.kind == .Expression);
+
+        try expect(stmt.expression.? == .infix_expression);
+
+        expect(stmt.expression.?.infix_expression.token.kind == token_kinds[i]) catch |err| {
+            print("wrong token: expected=[{}], got=[{}]\n", .{token_kinds[i], stmt.token.kind});
+
+            print("token literal: {s}\n", .{stmt.token.tokenLiteral()});
+
+            return err;
+        };
+
+        try expect(stmt.expression.?.infix_expression.left.*.integer_literal.value == left_value);
+        try expect(stmt.expression.?.infix_expression.right.*.integer_literal.value == right_value);
+
+
+    }
+
+
+
+}
+
 
 test "Parsing Errors" {
 
