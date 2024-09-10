@@ -101,12 +101,13 @@ fn parseStatement(parser: *Parser) ?Statement {
 
 fn parseLetStatement(parser: *Parser) ?Statement {
 
-    var statement = Statement { .token = parser.current_token, .kind = .Let};
+    const token = parser.current_token;
     // TODO: possible mem leak
 
     if (!parser.expectPeek(Token.Kind.Ident)) return null;
 
-    statement.identifier = Identifier { .token = parser.current_token };
+
+    const identifier = Identifier { .token = parser.current_token };
 
     if (!parser.expectPeek(Token.Kind.Assign)) return null;
 
@@ -114,12 +115,23 @@ fn parseLetStatement(parser: *Parser) ?Statement {
         parser.nextToken();
     }
 
-    return statement;
+    return Statement { 
+        .let_stmt = .{
+            .token = token,
+            .name = identifier,
+            .value = null
+        }
+    };
 }
 
 fn parseReturnStatement(parser: *Parser) ?Statement {
 
-    const stmt = Statement { .token = parser.current_token, .kind = .Return };
+    const stmt = Statement { 
+        .ret_stmt = .{
+            .token = parser.current_token,
+            .value = null
+        }
+    };
 
     parser.nextToken();
 
@@ -133,18 +145,20 @@ fn parseReturnStatement(parser: *Parser) ?Statement {
 
 fn parseExpressionStatement(parser: *Parser) ?Statement {
 
-    var stmt = Statement { 
-        .token = parser.current_token,
-        .kind = .Expression
-    };
+    const token = parser.current_token;
 
-    stmt.expression = parser.parseExpression(.Lowest);
+    const expression = parser.parseExpression(.Lowest);
 
     if (parser.peekTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
     }
 
-    return stmt;
+    return Statement { 
+        .expr_stmt = .{
+            .token = token,
+            .expression = expression
+        }
+    };
 
 }
 
@@ -386,10 +400,10 @@ test "Let Statements" {
 
 
     for (program.statements.items, 0..) |*statement, i| {
-        try expect(statement.kind == .Let);
+        try expect(statement.* == .let_stmt);
         try expectEqualStrings(statement.tokenLiteral(), "let");
 
-        try expectEqualStrings(statement.identifier.?.token.tokenLiteral(), expected_identiefers[i]);
+        try expectEqualStrings(statement.let_stmt.name.token.tokenLiteral(), expected_identiefers[i]);
 
     }
 }
@@ -419,7 +433,7 @@ test "Return Statements" {
     try expect(program.statements.items.len == 3);
 
     for (program.statements.items) |*statement| {
-        try expect(statement.kind == .Return);
+        try expect(statement.* == .ret_stmt);
         try expectEqualStrings("return", statement.tokenLiteral());
     }
 
@@ -445,15 +459,15 @@ test "Identifier Expression" {
 
     var stmt = program.statements.items[0];
 
-    try expect(stmt.kind == .Expression);
+    try expect(stmt == .expr_stmt);
 
     // try expectEqualStrings(ident.value.?)
     
     try expectEqualStrings("foobar", Statement.tokenLiteral(&stmt));
 
-    try expect(stmt.expression.? == .identifier);
+    try expect(stmt.expr_stmt.expression.? == .identifier);
 
-    try expectEqualStrings("foobar", stmt.expression.?.identifier.token.tokenLiteral());
+    try expectEqualStrings("foobar", stmt.expr_stmt.expression.?.identifier.token.tokenLiteral());
 
 }
 
@@ -480,11 +494,11 @@ test "Integer Literal Expression" {
 
     const stmt = program.statements.items[0];
 
-    try expect(stmt.kind == .Expression);
+    try expect(stmt == .expr_stmt);
 
-    try expect(stmt.expression.? == .integer_literal);
+    try expect(stmt.expr_stmt.expression.? == .integer_literal);
 
-    switch (stmt.expression.?) {
+    switch (stmt.expr_stmt.expression.?) {
         .integer_literal => |il| {
             try expect(il.value == input_int);
         }, 
@@ -528,15 +542,15 @@ test "Prefix Expression" {
 
         var stmt = program.statements.items[0];
 
-        try expect(stmt.kind == .Expression);
+        try expect(stmt == .expr_stmt);
 
-        try expect(stmt.expression.? == .prefix_expression);
+        try expect(stmt.expr_stmt.expression.? == .prefix_expression);
 
-        try expect(stmt.expression.?.prefix_expression.right.* == .integer_literal);
+        try expect(stmt.expr_stmt.expression.?.prefix_expression.right.* == .integer_literal);
 
-        try expect(stmt.expression.?.prefix_expression.right.integer_literal.value == int_values[i]);
+        try expect(stmt.expr_stmt.expression.?.prefix_expression.right.integer_literal.value == int_values[i]);
 
-        try expectEqualStrings(operators[i], Token.tokenLiteral(&stmt.expression.?.prefix_expression.token));
+        try expectEqualStrings(operators[i], Token.tokenLiteral(&stmt.expr_stmt.expression.?.prefix_expression.token));
     }
 
 }
@@ -593,20 +607,20 @@ test "Infix Expression" {
 
         var stmt = program.statements.items[0];
 
-        try expect(stmt.kind == .Expression);
+        try expect(stmt == .expr_stmt);
 
-        try expect(stmt.expression.? == .infix_expression);
+        try expect(stmt.expr_stmt.expression.? == .infix_expression);
 
-        expect(stmt.expression.?.infix_expression.token.kind == token_kinds[i]) catch |err| {
-            print("wrong token: expected=[{}], got=[{}]\n", .{token_kinds[i], stmt.token.kind});
+        expect(stmt.expr_stmt.expression.?.infix_expression.token.kind == token_kinds[i]) catch |err| {
+            print("wrong token: expected=[{}], got=[{}]\n", .{token_kinds[i], stmt.expr_stmt.token.kind});
 
-            print("token literal: {s}\n", .{stmt.token.tokenLiteral()});
+            print("token literal: {s}\n", .{stmt.tokenLiteral()});
 
             return err;
         };
 
-        try expect(stmt.expression.?.infix_expression.left.*.integer_literal.value == left_value);
-        try expect(stmt.expression.?.infix_expression.right.*.integer_literal.value == right_value);
+        try expect(stmt.expr_stmt.expression.?.infix_expression.left.*.integer_literal.value == left_value);
+        try expect(stmt.expr_stmt.expression.?.infix_expression.right.*.integer_literal.value == right_value);
 
 
     }
@@ -615,6 +629,38 @@ test "Infix Expression" {
 
 }
 
+
+test "Operator Precedence" {
+
+    // const allocator = std.testing.allocator;
+    //
+    // const input = [_][]const u8 {
+    //     "-a * b",
+    // };
+    //
+    // const answer = [_][]const u8 {
+    //     "((-a) * b)",
+    // };
+    //
+    // for (0..input.len) |i| {
+    //
+    //     var lexer = try Lexer.init(allocator, input[i]);
+    //     defer lexer.deinit();
+    //
+    //     var parser = Parser.init(&lexer, allocator);
+    //     defer parser.deinit();
+    //
+    //     var program = try parser.ParseProgram(allocator);
+    //     defer program.deinit();
+    //
+    //     try parser.checkParseErrors();
+    //
+    //     try expectEqualStrings(answer[i], try program.String());
+    //
+    //
+    // }
+    //
+}
 
 test "Parsing Errors" {
 

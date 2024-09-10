@@ -9,25 +9,57 @@ const Node = struct {
 
 };
 
-pub const Statement = struct {
-    token: Token,
-    kind: Kind,
-    expression: ?Expression = null,
-    identifier: ?Identifier = null,
-    
-    // fn statementNode(ls: *LetStatement) void {},
+pub const Statement = union(enum) {
+    let_stmt: LetStatement,
+    ret_stmt: ReturnStatement,
+    expr_stmt: ExpressionStatement,
     
     pub fn tokenLiteral(stmt: *Statement) []const u8 {
-        return stmt.token.tokenLiteral();
+        switch (stmt.*) {
+            .let_stmt => |*ls| return ls.token.tokenLiteral(),
+            .ret_stmt => |*rs| return rs.token.tokenLiteral(),
+            .expr_stmt => |*es| return es.token.tokenLiteral(),
+        }
     }
-    
-    const Kind = enum {
-        Let,
-        Return,
-        Expression,
-    };
+
+    // pub fn String(stmt: *Statement) []const u8 {
+    //
+    //     switch (stmt.kind) {
+    //
+    //         .Let => {
+    //             return "this is a let";
+    //
+    //         },
+    //
+    //         else => {
+    //             unreachable;
+    //         }
+    //
+    //     }
+    //
+    //
+    // }
 };
 
+// Statements
+pub const LetStatement = struct {
+    token: Token, // the Let TokenLiteral
+    name: Identifier,
+    value: ?Expression, //TODO: remove null
+};
+
+pub const ReturnStatement = struct {
+    token: Token, // A Return token
+    value: ?Expression
+};
+
+pub const ExpressionStatement = struct {
+    token: Token, // the first token of the expression
+    expression: ?Expression
+};
+
+
+// Expressions
 pub const Expression = union(enum) {
     identifier: Identifier,
     integer_literal: IntegerLiteralExpression,
@@ -52,6 +84,8 @@ pub const InfixExpression = struct {
     right: *Expression,
 };
 
+
+// Identifier
 pub const Identifier = struct {
     token: Token,
 };
@@ -72,21 +106,23 @@ pub const Program = struct {
 
         for (program.statements.items) |stmt| {
 
-            if (stmt.kind == .Expression) {
+            switch (stmt) {
 
-                if (stmt.expression) |expr| {
-                    switch (expr) {
-                        .prefix_expression => |pe| program.allocator.destroy(pe.right),
-                        .infix_expression => |ie| {
-                            program.allocator.destroy(ie.left);
-                            program.allocator.destroy(ie.right);
-                        },
-                        else => continue
+                .expr_stmt => |es| {
+                    if (es.expression) |es_expr|{
+                        switch (es_expr) {
+                            .prefix_expression => |pe| program.allocator.destroy(pe.right),
+                            .infix_expression => |ie| {
+                                program.allocator.destroy(ie.left);
+                                program.allocator.destroy(ie.right);
+                            },
+                            else => continue
+                        }
                     }
-                }
-
+                },
+                else => continue,
             }
-                
+
 
         }
 
@@ -94,6 +130,27 @@ pub const Program = struct {
 
     }
     
+    pub fn String(program: *Program) ![]const u8 {
+        
+        var str_len: usize = 0;
+        const buffer = try program.allocator.alloc(u8, 0);
+
+        for (program.statements.items) |*stmt| {
+
+            const stmt_str = stmt.String();
+
+            program.allocator.realloc(buffer, str_len + stmt_str.len);
+
+            str_len += stmt_str.len;
+
+        }
+        
+        return buffer;
+
+
+    }
+
+    // TODO: check if needeed
     fn TokenLiteral(program: *Program) []const u8 {
         
         if (program.statements.len > 0) {
