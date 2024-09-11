@@ -171,6 +171,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         .Ident => parser.parseIdentifier(),
         .Int => parser.parseIntegerLiteral(),
         .Bang, .Minus => parser.parsePrefixExpression(),
+        .False, .True => parser.parseBooleanExpression(),
         else => null
     };
 
@@ -233,6 +234,17 @@ fn parseIntegerLiteral(parser: *Parser) ?Expression {
         return null;
     }
     
+}
+
+fn parseBooleanExpression(parser: *Parser) Expression {
+
+    return Expression {
+        .boolean_literal = .{
+            .token = parser.current_token,
+            .value = parser.curTokenIs(.True),
+        }
+    };
+
 }
 
 fn parsePrefixExpression(parser: *Parser) Expression {
@@ -533,6 +545,47 @@ test "Integer Literal Expression" {
             return error.WrongExpressionType;
         }
     }
+
+}
+
+test "Boolean lit expr" {
+
+    const allocator = std.testing.allocator;
+
+    const input = [_][]const u8 {
+        "true",
+        "false",
+        "3 > 5 == false",
+        "3 < 5 == true",
+    };
+    const answer = [_][]const u8 {
+        "true",
+        "false",
+        "((3 > 5) == false)",
+        "((3 < 5) == true)",
+    };
+
+    for (0..input.len) |i| {
+
+        var lexer = try Lexer.init(allocator, input[i]);
+        defer lexer.deinit();
+
+        var parser = Parser.init(&lexer, allocator);
+        defer parser.deinit();
+
+        var program = try parser.ParseProgram(allocator);
+        defer program.deinit();
+
+        try parser.checkParseErrors();
+
+        const prog_str = try program.String();
+        defer allocator.free(prog_str);
+
+        try expectEqualStrings(answer[i], prog_str);
+
+    }
+
+
 
 }
 

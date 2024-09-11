@@ -39,7 +39,11 @@ pub const Statement = union(enum) {
 
                     return str;
                 } else {
-                    unreachable;
+                    const str = try std.fmt.allocPrint(allocator, "let {s} = null;", .{
+                        ls.name.token.tokenLiteral(),
+                    });
+
+                    return str;
 
                 }
 
@@ -91,6 +95,7 @@ pub const ExpressionStatement = struct {
 pub const Expression = union(enum) {
     identifier: Identifier,
     integer_literal: IntegerLiteralExpression,
+    boolean_literal: BooleanLiteralExpression,
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
 
@@ -98,7 +103,6 @@ pub const Expression = union(enum) {
         
         switch (expr.*) {
             
-            .identifier, .integer_literal => allocator.destroy(expr),
             .prefix_expression => |*pe| {
                 pe.right.deinit(allocator);
                 allocator.destroy(expr);
@@ -107,7 +111,8 @@ pub const Expression = union(enum) {
                 ie.left.deinit(allocator);
                 ie.right.deinit(allocator);
                 allocator.destroy(expr);
-            }
+            },
+            else => allocator.destroy(expr),
         }
 
     }
@@ -115,19 +120,18 @@ pub const Expression = union(enum) {
     fn String(expr: *Expression, allocator: Allocator) ![]const u8 {
         
         switch (expr.*) {
-
-            .identifier => |ie| {
-                var token = ie.token;
-                const str = try std.fmt.allocPrint(allocator, "{s}", .{Token.tokenLiteral(&token)});
+            .identifier, => |*id|{
+                const str = try std.fmt.allocPrint(allocator, "{s}", .{id.token.tokenLiteral()});
                 return str;
             },
-
-            .integer_literal => |*il| {
+            .integer_literal => |*il|{
                 const str = try std.fmt.allocPrint(allocator, "{s}", .{il.token.tokenLiteral()});
                 return str;
-
             },
-            
+            .boolean_literal => |*bl|{
+                const str = try std.fmt.allocPrint(allocator, "{s}", .{bl.token.tokenLiteral()});
+                return str;
+            },
             .prefix_expression => |*pe| {
                 const right_str = try pe.right.String(allocator);
                 defer allocator.free(right_str);
@@ -147,7 +151,7 @@ pub const Expression = union(enum) {
                     left_str, ie.token.tokenLiteral(), right_str
                 });
 
-            },
+            }
 
         }
 
@@ -158,6 +162,11 @@ pub const Expression = union(enum) {
 pub const IntegerLiteralExpression = struct {
     token: Token,
     value: u32
+};
+
+pub const BooleanLiteralExpression = struct {
+    token: Token,
+    value: bool
 };
 
 pub const PrefixExpression = struct {
