@@ -39,14 +39,14 @@ const Precedence = enum {
     fn get(tk: Token.Kind) ?Precedence {
 
         const pd = switch (tk) {
-            Token.Kind.Eq => Precedence.Equals,
-            Token.Kind.Neq => Precedence.Equals,
-            Token.Kind.Lt => Precedence.LessGreater,
-            Token.Kind.Gt => Precedence.LessGreater,
-            Token.Kind.Plus => Precedence.Sum,
-            Token.Kind.Minus => Precedence.Sum,
-            Token.Kind.Slash => Precedence.Product,
-            Token.Kind.Asterisk => Precedence.Product,
+            .Eq => Precedence.Equals,
+            .Neq => Precedence.Equals,
+            .Lt => Precedence.LessGreater,
+            .Gt => Precedence.LessGreater,
+            .Plus => Precedence.Sum,
+            .Minus => Precedence.Sum,
+            .Slash => Precedence.Product,
+            .Asterisk => Precedence.Product,
             else => .Lowest
         };
 
@@ -88,12 +88,15 @@ fn nextToken(parser: *Parser) void {
 fn parseStatement(parser: *Parser) ?Statement {
     switch (parser.current_token.kind) {
         Token.Kind.Let => {
+            log.debug("parsing let statement", .{});
             return parser.parseLetStatement();
         },
         Token.Kind.Return => {
+            log.debug("parsing return statement", .{});
             return parser.parseReturnStatement();
         },
         else => {
+            log.debug("parsing expression statement", .{});
             return parser.parseExpressionStatement();
         }
     }
@@ -173,7 +176,12 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
     };
 
 
-    if (prefix == null) return null; // TODO: add to parser.errors
+    if (prefix == null) {
+        parser.noPrefixParseFunction(parser.current_token.kind) catch |err| {
+            log.err("Failed to create error msg because {}", .{err});
+        };
+        return null; // TODO: add to parser.errors
+    }
     
     var left_expr: Expression = prefix.?;
 
@@ -189,7 +197,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         if (infix == null) return left_expr;
 
 
-        parser.nextToken();
+        // parser.nextToken();
 
         left_expr = infix.?;
 
@@ -230,14 +238,20 @@ fn parseIntegerLiteral(parser: *Parser) ?Expression {
 
 fn parsePrefixExpression(parser: *Parser) Expression {
     
+    log.debug("expression=prefix_expression", .{});
+
     const tok = parser.current_token;
+
 
     parser.nextToken();
 
     const expr_ptr = parser.allocator.create(Expression) catch {
         @panic("Failed to create an expression pointer");
     };
+
     expr_ptr.* = parser.parseExpression(.Prefix).?;
+
+    log.debug("token = {}, right ={any}", .{tok.kind, expr_ptr.*});
 
     return Expression {
         .prefix_expression = .{ 
@@ -250,6 +264,7 @@ fn parsePrefixExpression(parser: *Parser) Expression {
 
 fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
 
+    log.debug("parsing infix expression", .{});
     parser.nextToken();
 
     const token = parser.current_token;
@@ -269,6 +284,11 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
     left_ptr.* = left;
     right_ptr.* = parser.parseExpression(precedence).?;
 
+    log.debug("token={}, \n\tleft={}, \n\tright={}", .{
+        token.kind, left_ptr.*, right_ptr.*
+    });
+
+
     return Expression {
         .infix_expression = .{
             .token = token,
@@ -276,8 +296,6 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
             .right = right_ptr
         }
     };
-
-
 
 }
 
@@ -318,6 +336,7 @@ pub fn ParseProgram(parser: *Parser, allocator: Allocator) !Program {
     var program = Program.init(allocator);
 
     while (parser.current_token.kind != Token.Kind.Eof) {
+
         const maybe_statement = parser.parseStatement();
 
         if (maybe_statement) |statement| {
@@ -349,6 +368,12 @@ fn peekError(parser: *Parser, kind: Token.Kind) void {
     };
 
 
+}
+
+fn noPrefixParseFunction(parser: *Parser, kind: Token.Kind) !void {
+    const err_msg = try std.fmt.allocPrint(parser.allocator, "no prefix parse function for {} found", .{kind});
+
+    try parser.errors.append(err_msg);
 }
 
 
@@ -670,31 +695,35 @@ test "Get Program String" {
 
 test "Operator Precedence" {
 
-    // const allocator = std.testing.allocator;
-    //
-    // const input = [_][]const u8 {
-    //     "-a * b",
-    // };
-    //
-    // const answer = [_][]const u8 {
-    //     "((-a) * b)",
-    // };
-    //
-    // for (0..input.len) |i| {
-    //
-    //     var lexer = try Lexer.init(allocator, input[i]);
-    //     defer lexer.deinit();
-    //
-    //     var parser = Parser.init(&lexer, allocator);
-    //     defer parser.deinit();
-    //
-    //     var program = try parser.ParseProgram(allocator);
-    //     defer program.deinit();
-    //
-    //     try parser.checkParseErrors();
-    //
-    //     try expectEqualStrings(answer[i], try program.String());
-    // }
+    const allocator = std.testing.allocator;
+
+    const input = [_][]const u8 {
+        "-a * b",
+    };
+
+    const answer = [_][]const u8 {
+        "((-a) * b)",
+    };
+    _ = answer;
+
+    for (0..input.len) |i| {
+
+        var lexer = try Lexer.init(allocator, input[i]);
+        defer lexer.deinit();
+
+        var parser = Parser.init(&lexer, allocator);
+        defer parser.deinit();
+
+        var program = try parser.ParseProgram(allocator);
+        defer program.deinit();
+
+        // try parser.checkParseErrors();
+
+        // const prog_str = try program.String();
+        // defer program.allocator.free(prog_str);
+
+        // try expectEqualStrings(answer[i], prog_str);
+    }
 
 }
 
@@ -719,7 +748,7 @@ test "Parsing Errors" {
 
 
     expect(parser.errors.items.len == 3) catch |err| {
-        print("parser didnt find eny error", .{});
+        print("parser didnt find eny error\n", .{});
         return err;
     };
 

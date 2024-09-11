@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 // https://www.openmymind.net/Using-A-Custom-Test-Runner-In-Zig/
 
+pub const log_level: std.log.Level = .err;
+
 pub fn main() !void {
     const out = std.io.getStdOut().writer();
 

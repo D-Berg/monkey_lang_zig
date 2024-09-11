@@ -45,6 +45,19 @@ pub const Statement = union(enum) {
 
 
             },
+            
+            .expr_stmt => |*es| {
+                
+                if (es.expression != null) {
+                    return try es.expression.?.String(allocator);
+                } else {
+                    
+                    return try std.fmt.allocPrint(allocator, "", .{});
+            
+                }
+                
+            
+            },
 
             else => {
                 unreachable;
@@ -81,19 +94,60 @@ pub const Expression = union(enum) {
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
 
+    fn deinit(expr: *Expression, allocator: Allocator) void {
+        
+        switch (expr.*) {
+            
+            .identifier, .integer_literal => allocator.destroy(expr),
+            .prefix_expression => |*pe| {
+                pe.right.deinit(allocator);
+                allocator.destroy(expr);
+            },
+            .infix_expression => |*ie| {
+                ie.left.deinit(allocator);
+                ie.right.deinit(allocator);
+            }
+        }
+
+    }
+
     fn String(expr: *Expression, allocator: Allocator) ![]const u8 {
         
         switch (expr.*) {
 
             .identifier => |ie| {
-
                 var token = ie.token;
                 const str = try std.fmt.allocPrint(allocator, "{s}", .{Token.tokenLiteral(&token)});
                 return str;
-            
             },
 
-            else => unreachable
+            .integer_literal => |*il| {
+                const str = try std.fmt.allocPrint(allocator, "{s}", .{il.token.tokenLiteral()});
+                return str;
+
+            },
+            
+            .prefix_expression => |*pe| {
+                const right_str = try pe.right.String(allocator);
+                defer allocator.free(right_str);
+
+                return try std.fmt.allocPrint(allocator, "({s}{s})", .{
+                    pe.token.tokenLiteral(), right_str
+                });
+            },
+
+            .infix_expression => |*ie| {
+                const left_str = try ie.left.String(allocator);
+                defer allocator.free(left_str);
+                const right_str = try ie.right.String(allocator);
+                defer allocator.free(right_str);
+                
+                return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{
+                    left_str, ie.token.tokenLiteral(), right_str
+                });
+
+            },
+
         }
 
     }
@@ -143,15 +197,19 @@ pub const Program = struct {
                 .expr_stmt => |es| {
                     if (es.expression) |es_expr|{
                         switch (es_expr) {
-                            .prefix_expression => |pe| program.allocator.destroy(pe.right),
+                            .prefix_expression => |pe| {
+                                pe.right.deinit(program.allocator);
+                            },
+
                             .infix_expression => |ie| {
-                                program.allocator.destroy(ie.left);
-                                program.allocator.destroy(ie.right);
+                                ie.left.deinit(program.allocator);
+                                ie.right.deinit(program.allocator);
                             },
                             else => continue
                         }
                     }
                 },
+
                 else => continue,
             }
 
