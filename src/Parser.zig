@@ -165,7 +165,6 @@ fn parseExpressionStatement(parser: *Parser) ?Statement {
 
 }
 
-// TODO: Take in precedence arg
 fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
 
     const prefix = switch (parser.current_token.kind) { // same as looking into the hashmap p.prefixParseFns in GO
@@ -187,17 +186,17 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
 
     while (!parser.peekTokenIs(.Semicolon) and @intFromEnum(precedence) < @intFromEnum(parser.peekPrecedence())) {
 
+        const peek_kind = parser.peek_token.kind;
 
-        const infix = switch (parser.peek_token.kind) {
+        parser.nextToken();
+        
+        const infix = switch (peek_kind) {
             .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => parser.parseInfixExpression(left_expr),
             else => null
         };
 
 
         if (infix == null) return left_expr;
-
-
-        parser.nextToken();
 
         left_expr = infix.?;
 
@@ -264,10 +263,11 @@ fn parsePrefixExpression(parser: *Parser) Expression {
 
 fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
 
-    // // log.debug("parsing infix expression", .{});
-    parser.nextToken();
+    // log.debug("parsing infix expression", .{});
 
-    const token = parser.current_token;
+    var token = parser.current_token;
+
+    log.debug("token = {}, {s}", .{token.kind, Token.tokenLiteral(&token)});
 
     const precedence = parser.curPrecedence();
 
@@ -285,7 +285,7 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
     right_ptr.* = parser.parseExpression(precedence).?;
 
     // log.debug("token={}, \n\tleft={}, \n\tright={}", .{
-        // token.kind, left_ptr.*, right_ptr.*
+    //     token.kind, left_ptr.*, right_ptr.*
     // });
 
 
@@ -699,12 +699,15 @@ test "Operator Precedence" {
 
     const input = [_][]const u8 {
         "-a * b",
+        "!-a",
+        "a + b + c"
     };
 
     const answer = [_][]const u8 {
         "((-a) * b)",
+        "(!(-a))",
+        "((a + b) + c)"
     };
-    _ = answer;
 
     for (0..input.len) |i| {
 
@@ -717,12 +720,12 @@ test "Operator Precedence" {
         var program = try parser.ParseProgram(allocator);
         defer program.deinit();
 
-        // try parser.checkParseErrors();
+        try parser.checkParseErrors();
 
-        // const prog_str = try program.String();
-        // defer program.allocator.free(prog_str);
+        const prog_str = try program.String();
+        defer program.allocator.free(prog_str);
 
-        // try expectEqualStrings(answer[i], prog_str);
+        try expectEqualStrings(answer[i], prog_str);
     }
 
 }
