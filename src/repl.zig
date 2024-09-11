@@ -28,13 +28,17 @@ pub fn start(allocator: Allocator) !void {
         defer lex.deinit();
 
         var parser = Parser.init(&lex, allocator);
-        parser.deinit();
+        defer parser.deinit();
 
         var program = try parser.ParseProgram(allocator);
         defer program.deinit();
 
         const prog_str = try program.String();
         defer allocator.free(prog_str);
+
+        for (parser.errors.items) |err| {
+            std.debug.print("monkey_parse_err: {s}\n", .{err});
+        }
 
         std.debug.print("Program: {s}\n", .{prog_str});
 

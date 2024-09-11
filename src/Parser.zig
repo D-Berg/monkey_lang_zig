@@ -68,12 +68,12 @@ pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
 }
 
 pub fn deinit(parser: Parser) void {
-    for (parser.errors.items) |parse_err| {
-
-        parser.allocator.free(parse_err);
-
-    }
-
+    // for (parser.errors.items) |parse_err| {
+    //
+    //     parser.allocator.free(parse_err);
+    //
+    // }
+    //
     parser.errors.deinit();
     
 }
@@ -383,9 +383,9 @@ fn peekError(parser: *Parser, kind: Token.Kind) void {
 }
 
 fn noPrefixParseFunction(parser: *Parser, kind: Token.Kind) !void {
-    const err_msg = try std.fmt.allocPrint(parser.allocator, "no prefix parse function for {} found", .{kind});
-
-    try parser.errors.append(err_msg);
+    _ = kind;
+    // TODO: fix error handling for monkey
+    try parser.errors.append("no defined prefix parse function");
 }
 
 
