@@ -265,9 +265,9 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
 
     // log.debug("parsing infix expression", .{});
 
-    var token = parser.current_token;
+    const token = parser.current_token;
 
-    log.debug("token = {}, {s}", .{token.kind, Token.tokenLiteral(&token)});
+    // log.debug("token = {}, {s}", .{token.kind, Token.tokenLiteral(&token)});
 
     const precedence = parser.curPrecedence();
 
@@ -700,13 +700,34 @@ test "Operator Precedence" {
     const input = [_][]const u8 {
         "-a * b",
         "!-a",
-        "a + b + c"
+        "a + b + c",
+        "a + b - c",
+        "a * b * c",
+        "a * b / c",
+        "a + b / c",
+        "a + b * c + d / e - f",
+        "3 + 4; -5 * 5",
+        "5 > 4 == 3 < 4",
+        "5 < 4 != 3 > 4",
+        "3 + 4 * 5 == 3 * 1 + 4 * 5",
+        "3 + 4 * 5 == 3 * 1 + 4 * 5",
     };
 
     const answer = [_][]const u8 {
         "((-a) * b)",
         "(!(-a))",
-        "((a + b) + c)"
+        "((a + b) + c)",
+        "((a + b) - c)",
+        "((a * b) * c)",
+        "((a * b) / c)",
+        "(a + (b / c))",
+        "(((a + (b * c)) + (d / e)) - f)",
+        "(3 + 4)((-5) * 5)",
+        "((5 > 4) == (3 < 4))",
+        "((5 < 4) != (3 > 4))",
+        "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+        "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+
     };
 
     for (0..input.len) |i| {
