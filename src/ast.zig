@@ -106,6 +106,7 @@ pub const Expression = union(enum) {
             .infix_expression => |*ie| {
                 ie.left.deinit(allocator);
                 ie.right.deinit(allocator);
+                allocator.destroy(expr);
             }
         }
 
