@@ -22,23 +22,38 @@ pub const Statement = union(enum) {
         }
     }
 
-    // pub fn String(stmt: *Statement) []const u8 {
-    //
-    //     switch (stmt.kind) {
-    //
-    //         .Let => {
-    //             return "this is a let";
-    //
-    //         },
-    //
-    //         else => {
-    //             unreachable;
-    //         }
-    //
-    //     }
-    //
-    //
-    // }
+    pub fn String(stmt: *Statement, allocator: Allocator) ![]const u8 {
+
+        switch (stmt.*) {
+
+            .let_stmt => |*ls| {
+                
+                if (ls.value != null) {
+                    const value_str = try ls.value.?.String(allocator);
+                    defer allocator.free(value_str);
+
+                    const str = try std.fmt.allocPrint(allocator, "let {s} = {s};", .{
+                        ls.name.token.tokenLiteral(),
+                        value_str
+                    });
+
+                    return str;
+                } else {
+                    unreachable;
+
+                }
+
+
+            },
+
+            else => {
+                unreachable;
+            }
+
+        }
+
+
+    }
 };
 
 // Statements
@@ -65,6 +80,23 @@ pub const Expression = union(enum) {
     integer_literal: IntegerLiteralExpression,
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
+
+    fn String(expr: *Expression, allocator: Allocator) ![]const u8 {
+        
+        switch (expr.*) {
+
+            .identifier => |ie| {
+
+                var token = ie.token;
+                const str = try std.fmt.allocPrint(allocator, "{s}", .{Token.tokenLiteral(&token)});
+                return str;
+            
+            },
+
+            else => unreachable
+        }
+
+    }
     
 };
 
@@ -133,13 +165,17 @@ pub const Program = struct {
     pub fn String(program: *Program) ![]const u8 {
         
         var str_len: usize = 0;
-        const buffer = try program.allocator.alloc(u8, 0);
+        var buffer = try program.allocator.alloc(u8, 0);
 
         for (program.statements.items) |*stmt| {
 
-            const stmt_str = stmt.String();
 
-            program.allocator.realloc(buffer, str_len + stmt_str.len);
+            const stmt_str = try stmt.String(program.allocator);
+            defer program.allocator.free(stmt_str);
+
+            buffer = try program.allocator.realloc(buffer, str_len + stmt_str.len);
+
+            @memcpy(buffer[str_len..(str_len + stmt_str.len)], stmt_str);
 
             str_len += stmt_str.len;
 

@@ -6,7 +6,8 @@ const Token = @This();
 
 // allocator: Allocator,
 kind: Kind,
-literal: [32:0]u8, // literal can be at most 32 bytes
+// TODO: allocate string on heap
+literal: [32:0]u8, // literal can be at most 32 bytes 
 literal_len: usize,
     
 pub fn init(kind: Token.Kind, chars: []const u8) Token {

@@ -405,6 +405,8 @@ test "Let Statements" {
 
         try expectEqualStrings(statement.let_stmt.name.token.tokenLiteral(), expected_identiefers[i]);
 
+        // TODO: check values
+
     }
 }
 
@@ -625,10 +627,46 @@ test "Infix Expression" {
 
     }
 
-
-
 }
 
+
+
+test "Get Program String" {
+
+    const allocator = std.testing.allocator;
+
+    var statements = ArrayList(Statement).init(allocator);
+
+    try statements.append(
+        Statement { 
+            .let_stmt = .{ 
+                .token = Token.init(.Let, "let"),
+                .name = Identifier {
+                    .token = Token.init(.Ident, "myVar"),
+                },
+                .value = Expression {
+                    .identifier = Identifier {
+                        .token = Token.init(.Ident, "anotherVar")
+                    }
+                }
+            }
+        }
+
+    );
+
+    var prog = Program {
+        .allocator = allocator,
+        .statements = statements
+    };
+
+    defer prog.deinit();
+
+    const prog_str = try prog.String();
+    defer prog.allocator.free(prog_str);
+
+    try expectEqualStrings("let myVar = anotherVar;", prog_str);
+
+}
 
 test "Operator Precedence" {
 
@@ -656,10 +694,8 @@ test "Operator Precedence" {
     //     try parser.checkParseErrors();
     //
     //     try expectEqualStrings(answer[i], try program.String());
-    //
-    //
     // }
-    //
+
 }
 
 test "Parsing Errors" {
