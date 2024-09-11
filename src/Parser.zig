@@ -88,15 +88,15 @@ fn nextToken(parser: *Parser) void {
 fn parseStatement(parser: *Parser) ?Statement {
     switch (parser.current_token.kind) {
         Token.Kind.Let => {
-            log.debug("parsing let statement", .{});
+            // log.debug("parsing let statement", .{});
             return parser.parseLetStatement();
         },
         Token.Kind.Return => {
-            log.debug("parsing return statement", .{});
+            // log.debug("parsing return statement", .{});
             return parser.parseReturnStatement();
         },
         else => {
-            log.debug("parsing expression statement", .{});
+            // log.debug("parsing expression statement", .{});
             return parser.parseExpressionStatement();
         }
     }
@@ -197,7 +197,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         if (infix == null) return left_expr;
 
 
-        // parser.nextToken();
+        parser.nextToken();
 
         left_expr = infix.?;
 
@@ -238,7 +238,7 @@ fn parseIntegerLiteral(parser: *Parser) ?Expression {
 
 fn parsePrefixExpression(parser: *Parser) Expression {
     
-    log.debug("expression=prefix_expression", .{});
+    // log.debug("expression=prefix_expression", .{});
 
     const tok = parser.current_token;
 
@@ -251,7 +251,7 @@ fn parsePrefixExpression(parser: *Parser) Expression {
 
     expr_ptr.* = parser.parseExpression(.Prefix).?;
 
-    log.debug("token = {}, right ={any}", .{tok.kind, expr_ptr.*});
+    // // log.debug("token = {}, right ={any}", .{tok.kind, expr_ptr.*});
 
     return Expression {
         .prefix_expression = .{ 
@@ -264,7 +264,7 @@ fn parsePrefixExpression(parser: *Parser) Expression {
 
 fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
 
-    log.debug("parsing infix expression", .{});
+    // // log.debug("parsing infix expression", .{});
     parser.nextToken();
 
     const token = parser.current_token;
@@ -284,9 +284,9 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
     left_ptr.* = left;
     right_ptr.* = parser.parseExpression(precedence).?;
 
-    log.debug("token={}, \n\tleft={}, \n\tright={}", .{
-        token.kind, left_ptr.*, right_ptr.*
-    });
+    // log.debug("token={}, \n\tleft={}, \n\tright={}", .{
+        // token.kind, left_ptr.*, right_ptr.*
+    // });
 
 
     return Expression {
@@ -745,7 +745,6 @@ test "Parsing Errors" {
 
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
-
 
     expect(parser.errors.items.len == 3) catch |err| {
         print("parser didnt find eny error\n", .{});
