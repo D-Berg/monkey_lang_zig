@@ -2,7 +2,7 @@ const Token = @import("Token.zig");
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
-
+const print = std.debug.print;
 
 
 const Node = struct {
@@ -91,7 +91,11 @@ pub const ExpressionStatement = struct {
 
 pub const BlockStatement = struct {
     token: Token,
-    statements: []Statement
+    statements: []Statement,
+
+    // fn deinit(allocator: Allocator) {
+    //
+    // }
 };
 
 
@@ -100,6 +104,7 @@ pub const Expression = union(enum) {
     identifier: Identifier,
     integer_literal: IntegerLiteralExpression,
     boolean_literal: BooleanLiteralExpression,
+    // Recursive: holds pointers to other Expression
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
     if_expression: IfExpression,
@@ -109,13 +114,32 @@ pub const Expression = union(enum) {
         switch (expr.*) {
             
             .prefix_expression => |*pe| {
+                print("deallocating prefix_expression\n", .{});
                 pe.right.deinit(allocator);
                 allocator.destroy(expr);
             },
             .infix_expression => |*ie| {
+                print("deallocating infix_expression\n", .{});
                 ie.left.deinit(allocator);
                 ie.right.deinit(allocator);
                 allocator.destroy(expr);
+            },
+            .if_expression => |*if_expr| {
+
+                print("deallocating prefix_expression\n", .{});
+                if_expr.condition.deinit(allocator);
+                allocator.destroy(if_expr.condition);
+                
+                // for (if_expr.consequence.statements) |*stmt| {
+                //     if (stmt.* == .expr_stmt) {
+                //         stmt.expr_stmt.expression.?.deinit(allocator);
+                //     }
+                // }
+                //
+                // allocator.free(if_expr.consequence.statements);
+
+                allocator.destroy(expr);
+
             },
             else => allocator.destroy(expr),
         }
@@ -182,8 +206,8 @@ pub const InfixExpression = struct {
 pub const IfExpression = struct {
     token: Token, 
     condition: *Expression,
-    consequence: BlockStatement,
-    alternative: ?BlockStatement,
+    // consequence: BlockStatement,
+    // alternative: ?BlockStatement,
 };
 
 // Identifier
@@ -219,6 +243,9 @@ pub const Program = struct {
                             .infix_expression => |ie| {
                                 ie.left.deinit(program.allocator);
                                 ie.right.deinit(program.allocator);
+                            },
+                            .if_expression => |if_expr| {
+                                if_expr.condition.deinit(program.allocator);
                             },
                             else => continue
                         }

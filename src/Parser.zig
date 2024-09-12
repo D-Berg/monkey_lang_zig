@@ -97,7 +97,7 @@ fn parseStatement(parser: *Parser) ?Statement {
             return parser.parseReturnStatement();
         },
         else => {
-            // log.debug("parsing expression statement", .{});
+            log.debug("parsing expression statement", .{});
             return parser.parseExpressionStatement();
         }
     }
@@ -109,7 +109,6 @@ fn parseLetStatement(parser: *Parser) ?Statement {
     // TODO: possible mem leak
 
     if (!parser.expectPeek(Token.Kind.Ident)) return null;
-
 
     const identifier = Identifier { .token = parser.current_token };
 
@@ -278,11 +277,11 @@ fn parsePrefixExpression(parser: *Parser) Expression {
 
 fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
 
-    // log.debug("parsing infix expression", .{});
+    log.debug("parsing infix expression", .{});
 
-    const token = parser.current_token;
+    var token = parser.current_token;
 
-    // log.debug("token = {}, {s}", .{token.kind, Token.tokenLiteral(&token)});
+    log.debug("token = {}, {s}", .{token.kind, Token.tokenLiteral(&token)});
 
     const precedence = parser.curPrecedence();
 
@@ -299,9 +298,9 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
     left_ptr.* = left;
     right_ptr.* = parser.parseExpression(precedence).?;
 
-    // log.debug("token={}, \n\tleft={}, \n\tright={}", .{
-    //     token.kind, left_ptr.*, right_ptr.*
-    // });
+    log.debug("infix: token={}, \n\tleft={}, \n\tright={}\n", .{
+        token.kind, left_ptr.*, right_ptr.*
+    });
 
 
     return Expression {
@@ -329,64 +328,66 @@ fn parseGroupedExpression(parser: *Parser) ?Expression {
 fn parseIfExpression(parser: *Parser) ?Expression {
     
     const curr_tok = parser.current_token;
+    
+    print("if curr_tot = {}\n", .{curr_tok.kind});
 
     if (!parser.expectPeek(.Lparen)) return null;
     
     parser.nextToken();
     const condition = parser.parseExpression(.Lowest).?;
+    print("if condition = {}\n", .{condition});
 
     if (!parser.expectPeek(.Rparen)) return null;
 
     if (!parser.expectPeek(.Lbrace)) return null;
 
-    const consequence = parser.parseBlockStatement();
+    // const consequence = parser.parseBlockStatement();
 
     const condition_ptr = parser.allocator.create(Expression) catch {
         @panic("failed to allocate mem");
     };
     condition_ptr.* = condition;
 
-
-
+    // if (<condition>) {<consequence>} else {<alternative>}
     return Expression {
         .if_expression = .{ 
             .token = curr_tok,
             .condition = condition_ptr,
-            .consequence = consequence,
-            .alternative = null,
+            // .consequence = consequence,
+            // .alternative = null,
         }
     };
 
 }
 
-fn parseBlockStatement(parser: *Parser) BlockStatement {
-
-    const curr_tok = parser.current_token;
-
-    parser.nextToken();
-    
-    var statements = parser.allocator.alloc(Statement, 0) catch {
-        @panic("Failed to create statements slice");
-    };
-
-    while (!parser.curTokenIs(.Rbrace) and !parser.curTokenIs(.Eof)) : (parser.nextToken()){
-        const maybe_stmt = parser.parseStatement();
-
-        if (maybe_stmt) |stmt| {
-            const old_len = statements.len;
-            statements = parser.allocator.realloc(statements, old_len + 1) catch {
-                @panic("Failed to alloc mem");
-            };
-            statements[old_len] = stmt;
-        }
-    }
-
-    return BlockStatement {
-        .token = curr_tok,
-        .statements = statements
-    };
-
-}
+// fn parseBlockStatement(parser: *Parser) BlockStatement {
+//
+//     const curr_tok = parser.current_token;
+//
+//     parser.nextToken();
+//
+//     var statements = parser.allocator.alloc(Statement, 0) catch {
+//         @panic("Failed to create statements slice");
+//     };
+//
+//     while (!parser.curTokenIs(.Rbrace) and !parser.curTokenIs(.Eof)) : (parser.nextToken()){
+//         const maybe_stmt = parser.parseStatement();
+//
+//         if (maybe_stmt) |stmt| {
+//             const old_len = statements.len;
+//             statements = parser.allocator.realloc(statements, old_len + 1) catch {
+//                 @panic("Failed to alloc mem");
+//             };
+//             statements[old_len] = stmt;
+//         }
+//     }
+//
+//     return BlockStatement {
+//         .token = curr_tok,
+//         .statements = statements
+//     };
+//
+// }
 
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.current_token.kind == kind;
@@ -896,24 +897,23 @@ test "Operator Precedence" {
 }
 
 test "If Expression" {
-    // const allocator = std.testing.allocator;
-    //
-    // const input = "if (x < y) { x }";
-    //
-    //
-    // var lexer = try Lexer.init(allocator, input);
-    // defer lexer.deinit();
-    //
-    // var parser = Parser.init(&lexer, allocator);
-    // defer parser.deinit();
-    //
-    // var program = try parser.ParseProgram(allocator);
-    // defer program.deinit();
-    //
+    const allocator = std.testing.allocator;
+
+    const input = "if (x < y) { x }";
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
     // try parser.checkParseErrors();
-    //
+
     // try expect(program.statements.items.len == 1);
-    //
+
 
 }
 
