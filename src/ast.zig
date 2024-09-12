@@ -100,6 +100,8 @@ pub const Statement = union(enum) {
                 
             
             },
+            
+            // TODO .block_stmt
 
             else => {
                 unreachable;
@@ -202,8 +204,27 @@ pub const Expression = union(enum) {
                 return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{
                     left_str, ie.token.tokenLiteral(), right_str
                 });
+            },
+
+            // TODO: fix if_expr.string()
+            .if_expression => |*if_expr| {
+                const condition_str = try if_expr.condition.String(allocator);
+                defer allocator.free(condition_str);
+
+                if (if_expr.alternative) |alt| {
+                    _ = alt;
+                    unreachable;
+                    // return try std.fmt.allocPrint(allocator, "if {s} cons else alt", .{
+                    //     if_expr.condition.String(allocator)
+                    // });
+                } else {
+                    return try std.fmt.allocPrint(allocator, "if {s} conse", .{
+                        condition_str
+                    });
+                }
 
             },
+
             inline else => |*case| {
                 const str = try std.fmt.allocPrint(allocator, "{s}", .{case.token.tokenLiteral()});
                 return str;
@@ -242,7 +263,7 @@ pub const IfExpression = struct {
     token: Token, 
     condition: *Expression,
     consequence: BlockStatement,
-    // alternative: ?BlockStatement,
+    alternative: ?BlockStatement,
 };
 
 // Identifier

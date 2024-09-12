@@ -79,11 +79,9 @@ pub fn deinit(parser: Parser) void {
     
 }
 
-
 fn nextToken(parser: *Parser) void {
     parser.current_token = parser.peek_token;
     parser.peek_token = parser.lexer.NextToken();
-
 }
 
 fn parseStatement(parser: *Parser) ?Statement {
@@ -106,7 +104,6 @@ fn parseStatement(parser: *Parser) ?Statement {
 fn parseLetStatement(parser: *Parser) ?Statement {
 
     const token = parser.current_token;
-    // TODO: possible mem leak
 
     if (!parser.expectPeek(Token.Kind.Ident)) return null;
 
@@ -354,7 +351,7 @@ fn parseIfExpression(parser: *Parser) ?Expression {
             .token = curr_tok,
             .condition = condition_ptr,
             .consequence = consequence,
-            // .alternative = null,
+            .alternative = null,
         }
     };
 
