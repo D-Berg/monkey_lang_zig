@@ -368,12 +368,17 @@ fn checkParseErrors(parser: *Parser) error{ParsingError}!void {
 
 }
 
+// TODO: Fix dynamic error message
 fn peekError(parser: *Parser, kind: Token.Kind) void {
-    const msg = std.fmt.allocPrint(parser.allocator, "Expected next token to be {any}, got {any} instead", .{
-        kind, parser.peek_token.kind 
-    }) catch {
-        @panic("failed to create error msg");
-    };
+
+    // const msg = std.fmt.allocPrint(parser.allocator, "Expected next token to be {any}, got {any} instead", .{
+    //     kind, parser.peek_token.kind 
+    // }) catch {
+    //     @panic("failed to create error msg");
+    // };
+    _ = kind;
+    
+    const msg = "peek error";
 
     parser.errors.append(msg) catch {
         @panic("failed to allocate error msg");
