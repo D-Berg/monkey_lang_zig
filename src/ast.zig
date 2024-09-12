@@ -17,15 +17,17 @@ pub const Statement = union(enum) {
 
     pub fn deinit(stmt: *Statement, allocator: Allocator) void {
         
-        // if (stmt == .blck_stmt) {
-        //
-        //     for (stmt.blck_stmt.statements) |block_stmt| {
-        //
-        //         block_stmt.deinit(allocator);
-        //
-        //     }
-        //
-        // }
+        if (stmt.* == .blck_stmt) {
+
+            for (stmt.blck_stmt.statements) |*block_stmt| {
+
+                block_stmt.deinit(allocator);
+
+            }
+
+            allocator.free(stmt.blck_stmt.statements);
+
+        }
 
         if (stmt.* == .expr_stmt) {
             const es = stmt.expr_stmt;
@@ -43,6 +45,7 @@ pub const Statement = union(enum) {
                     },
                     .if_expression => |if_expr| {
                         if_expr.condition.deinit(allocator);
+                        allocator.free(if_expr.consequence.statements);
                     },
                     else => {}
                 }
@@ -238,7 +241,7 @@ pub const InfixExpression = struct {
 pub const IfExpression = struct {
     token: Token, 
     condition: *Expression,
-    // consequence: BlockStatement,
+    consequence: BlockStatement,
     // alternative: ?BlockStatement,
 };
 

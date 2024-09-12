@@ -341,7 +341,7 @@ fn parseIfExpression(parser: *Parser) ?Expression {
 
     if (!parser.expectPeek(.Lbrace)) return null;
 
-    // const consequence = parser.parseBlockStatement();
+    const consequence = parser.parseBlockStatement();
 
     const condition_ptr = parser.allocator.create(Expression) catch {
         @panic("failed to allocate mem");
@@ -353,7 +353,7 @@ fn parseIfExpression(parser: *Parser) ?Expression {
         .if_expression = .{ 
             .token = curr_tok,
             .condition = condition_ptr,
-            // .consequence = consequence,
+            .consequence = consequence,
             // .alternative = null,
         }
     };
