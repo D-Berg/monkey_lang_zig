@@ -560,7 +560,7 @@ test "Return Statements" {
 
 }
 
-test "Identifier Expression" {
+test "Ident Expression" {
     const allocator = std.testing.allocator;
 
     const input = "foobar;";
@@ -593,7 +593,7 @@ test "Identifier Expression" {
 }
 
 
-test "Integer Literal Expression" {
+test "Int Lit Expression" {
 
     const allocator = std.testing.allocator;
 
