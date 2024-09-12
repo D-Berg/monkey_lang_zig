@@ -183,7 +183,7 @@ pub const IfExpression = struct {
     token: Token, 
     condition: *Expression,
     consequence: BlockStatement,
-    alternative: BlockStatement,
+    alternative: ?BlockStatement,
 };
 
 // Identifier
@@ -269,6 +269,6 @@ pub const Program = struct {
         }
 
     }
-};
 
+};
 

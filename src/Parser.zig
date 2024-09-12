@@ -6,6 +6,7 @@ const Program = ast.Program;
 const Statement = ast.Statement;
 const Identifier = ast.Identifier;
 const Expression = ast.Expression;
+const BlockStatement = ast.BlockStatement;
 const ArrayList = std.ArrayList;
 
 const Allocator = std.mem.Allocator;
@@ -173,6 +174,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         .Bang, .Minus => parser.parsePrefixExpression(),
         .False, .True => parser.parseBooleanExpression(),
         .Lparen => parser.parseGroupedExpression(),
+        .If => parser.parseIfExpression(),
         else => null
     };
 
@@ -324,6 +326,67 @@ fn parseGroupedExpression(parser: *Parser) ?Expression {
     return expr;
 }
 
+fn parseIfExpression(parser: *Parser) ?Expression {
+    
+    const curr_tok = parser.current_token;
+
+    if (!parser.expectPeek(.Lparen)) return null;
+    
+    parser.nextToken();
+    const condition = parser.parseExpression(.Lowest).?;
+
+    if (!parser.expectPeek(.Rparen)) return null;
+
+    if (!parser.expectPeek(.Lbrace)) return null;
+
+    const consequence = parser.parseBlockStatement();
+
+    const condition_ptr = parser.allocator.create(Expression) catch {
+        @panic("failed to allocate mem");
+    };
+    condition_ptr.* = condition;
+
+
+
+    return Expression {
+        .if_expression = .{ 
+            .token = curr_tok,
+            .condition = condition_ptr,
+            .consequence = consequence,
+            .alternative = null,
+        }
+    };
+
+}
+
+fn parseBlockStatement(parser: *Parser) BlockStatement {
+
+    const curr_tok = parser.current_token;
+
+    parser.nextToken();
+    
+    var statements = parser.allocator.alloc(Statement, 0) catch {
+        @panic("Failed to create statements slice");
+    };
+
+    while (!parser.curTokenIs(.Rbrace) and !parser.curTokenIs(.Eof)) : (parser.nextToken()){
+        const maybe_stmt = parser.parseStatement();
+
+        if (maybe_stmt) |stmt| {
+            const old_len = statements.len;
+            statements = parser.allocator.realloc(statements, old_len + 1) catch {
+                @panic("Failed to alloc mem");
+            };
+            statements[old_len] = stmt;
+        }
+    }
+
+    return BlockStatement {
+        .token = curr_tok,
+        .statements = statements
+    };
+
+}
 
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.current_token.kind == kind;
@@ -829,6 +892,28 @@ test "Operator Precedence" {
 
         try expectEqualStrings(answer[i], prog_str);
     }
+
+}
+
+test "If Expression" {
+    // const allocator = std.testing.allocator;
+    //
+    // const input = "if (x < y) { x }";
+    //
+    //
+    // var lexer = try Lexer.init(allocator, input);
+    // defer lexer.deinit();
+    //
+    // var parser = Parser.init(&lexer, allocator);
+    // defer parser.deinit();
+    //
+    // var program = try parser.ParseProgram(allocator);
+    // defer program.deinit();
+    //
+    // try parser.checkParseErrors();
+    //
+    // try expect(program.statements.items.len == 1);
+    //
 
 }
 
