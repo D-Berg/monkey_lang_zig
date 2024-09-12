@@ -13,12 +13,11 @@ pub const Statement = union(enum) {
     let_stmt: LetStatement,
     ret_stmt: ReturnStatement,
     expr_stmt: ExpressionStatement,
+    blck_stmt: BlockStatement,
     
     pub fn tokenLiteral(stmt: *Statement) []const u8 {
         switch (stmt.*) {
-            .let_stmt => |*ls| return ls.token.tokenLiteral(),
-            .ret_stmt => |*rs| return rs.token.tokenLiteral(),
-            .expr_stmt => |*es| return es.token.tokenLiteral(),
+            inline else => |*case| return case.token.tokenLiteral(),
         }
     }
 
@@ -90,6 +89,11 @@ pub const ExpressionStatement = struct {
     expression: ?Expression
 };
 
+pub const BlockStatement = struct {
+    token: Token,
+    statements: []Statement
+};
+
 
 // Expressions
 pub const Expression = union(enum) {
@@ -98,6 +102,7 @@ pub const Expression = union(enum) {
     boolean_literal: BooleanLiteralExpression,
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
+    if_expression: IfExpression,
 
     fn deinit(expr: *Expression, allocator: Allocator) void {
         
@@ -151,6 +156,7 @@ pub const Expression = union(enum) {
     
 };
 
+// TODO: check if need to be public
 pub const IntegerLiteralExpression = struct {
     token: Token,
     value: u32
@@ -172,6 +178,13 @@ pub const InfixExpression = struct {
     right: *Expression,
 };
 
+
+pub const IfExpression = struct {
+    token: Token, 
+    condition: *Expression,
+    consequence: BlockStatement,
+    alternative: BlockStatement,
+};
 
 // Identifier
 pub const Identifier = struct {
