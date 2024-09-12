@@ -14,6 +14,42 @@ pub const Statement = union(enum) {
     ret_stmt: ReturnStatement,
     expr_stmt: ExpressionStatement,
     blck_stmt: BlockStatement,
+
+    pub fn deinit(stmt: *Statement, allocator: Allocator) void {
+        
+        // if (stmt == .blck_stmt) {
+        //
+        //     for (stmt.blck_stmt.statements) |block_stmt| {
+        //
+        //         block_stmt.deinit(allocator);
+        //
+        //     }
+        //
+        // }
+
+        if (stmt.* == .expr_stmt) {
+            const es = stmt.expr_stmt;
+
+            if (es.expression) |es_expr|{
+
+                switch (es_expr) {
+                    .prefix_expression => |pe| {
+                        pe.right.deinit(allocator);
+                    },
+
+                    .infix_expression => |ie| {
+                        ie.left.deinit(allocator);
+                        ie.right.deinit(allocator);
+                    },
+                    .if_expression => |if_expr| {
+                        if_expr.condition.deinit(allocator);
+                    },
+                    else => {}
+                }
+            }
+        }
+        
+    }
     
     pub fn tokenLiteral(stmt: *Statement) []const u8 {
         switch (stmt.*) {
@@ -114,19 +150,15 @@ pub const Expression = union(enum) {
         switch (expr.*) {
             
             .prefix_expression => |*pe| {
-                print("deallocating prefix_expression\n", .{});
                 pe.right.deinit(allocator);
                 allocator.destroy(expr);
             },
             .infix_expression => |*ie| {
-                print("deallocating infix_expression\n", .{});
                 ie.left.deinit(allocator);
                 ie.right.deinit(allocator);
                 allocator.destroy(expr);
             },
             .if_expression => |*if_expr| {
-
-                print("deallocating prefix_expression\n", .{});
                 if_expr.condition.deinit(allocator);
                 allocator.destroy(if_expr.condition);
                 
@@ -229,32 +261,9 @@ pub const Program = struct {
 
     pub fn deinit(program: *Program) void {
 
-        for (program.statements.items) |stmt| {
+        for (program.statements.items) |*stmt| {
 
-            switch (stmt) {
-
-                .expr_stmt => |es| {
-                    if (es.expression) |es_expr|{
-                        switch (es_expr) {
-                            .prefix_expression => |pe| {
-                                pe.right.deinit(program.allocator);
-                            },
-
-                            .infix_expression => |ie| {
-                                ie.left.deinit(program.allocator);
-                                ie.right.deinit(program.allocator);
-                            },
-                            .if_expression => |if_expr| {
-                                if_expr.condition.deinit(program.allocator);
-                            },
-                            else => continue
-                        }
-                    }
-                },
-
-                else => continue,
-            }
-
+            stmt.deinit(program.allocator);
 
         }
 
