@@ -120,18 +120,6 @@ pub const Expression = union(enum) {
     fn String(expr: *Expression, allocator: Allocator) ![]const u8 {
         
         switch (expr.*) {
-            .identifier, => |*id|{
-                const str = try std.fmt.allocPrint(allocator, "{s}", .{id.token.tokenLiteral()});
-                return str;
-            },
-            .integer_literal => |*il|{
-                const str = try std.fmt.allocPrint(allocator, "{s}", .{il.token.tokenLiteral()});
-                return str;
-            },
-            .boolean_literal => |*bl|{
-                const str = try std.fmt.allocPrint(allocator, "{s}", .{bl.token.tokenLiteral()});
-                return str;
-            },
             .prefix_expression => |*pe| {
                 const right_str = try pe.right.String(allocator);
                 defer allocator.free(right_str);
@@ -151,6 +139,10 @@ pub const Expression = union(enum) {
                     left_str, ie.token.tokenLiteral(), right_str
                 });
 
+            },
+            inline else => |*case| {
+                const str = try std.fmt.allocPrint(allocator, "{s}", .{case.token.tokenLiteral()});
+                return str;
             }
 
         }
