@@ -172,6 +172,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         .Int => parser.parseIntegerLiteral(),
         .Bang, .Minus => parser.parsePrefixExpression(),
         .False, .True => parser.parseBooleanExpression(),
+        .Lparen => parser.parseGroupedExpression(),
         else => null
     };
 
@@ -309,6 +310,18 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
         }
     };
 
+}
+
+fn parseGroupedExpression(parser: *Parser) ?Expression {
+    parser.nextToken();
+
+    const expr = parser.parseExpression(.Lowest);
+
+    if (!parser.expectPeek(.Rparen)) {
+        return null;
+    }
+
+    return expr;
 }
 
 
@@ -769,6 +782,11 @@ test "Operator Precedence" {
         "5 < 4 != 3 > 4",
         "3 + 4 * 5 == 3 * 1 + 4 * 5",
         "3 + 4 * 5 == 3 * 1 + 4 * 5",
+        "1 + (2 + 3) + 4",
+        "(5 + 5) * 2",
+        "2 / (5 + 5)",
+        "-(5 + 5)",
+        "!(true == true)",
     };
 
     const answer = [_][]const u8 {
@@ -785,6 +803,11 @@ test "Operator Precedence" {
         "((5 < 4) != (3 > 4))",
         "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
         "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+        "((1 + (2 + 3)) + 4)",
+        "((5 + 5) * 2)",
+        "(2 / (5 + 5))",
+        "(-(5 + 5))",
+        "(!(true == true))",
 
     };
 
