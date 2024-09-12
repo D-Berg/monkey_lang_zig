@@ -1,4 +1,3 @@
-// TODO: remove token struct 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
@@ -75,6 +74,7 @@ pub const Kind = enum {
 };
 
 
+// TODO: remove and replace with a switch
 pub const Keywords = struct {
     
     words: std.StringHashMap(Token.Kind),
