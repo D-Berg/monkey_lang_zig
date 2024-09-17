@@ -152,11 +152,12 @@ pub const Expression = union(enum) {
     identifier: Identifier,
     integer_literal: IntegerLiteralExpression,
     boolean_literal: BooleanLiteralExpression,
-    // Recursive: holds pointers to other Expression
+    // Recursive: holds pointers to other Expression, need to be deallocated
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
     if_expression: IfExpression,
     fn_literal: FnLiteralExpression,
+    call_expression: CallExpression,
 
     fn deinit(expr: *Expression, allocator: Allocator) void {
         
@@ -286,6 +287,14 @@ pub const FnLiteralExpression = struct {
     parameters: ?ArrayList(Identifier),
     body: BlockStatement
 };
+
+
+pub const CallExpression = struct {
+    token: Token, // the '('
+    function: *Expression, // fnlit or ident expr
+    args: ArrayList(Expression),
+};
+
 
 // Identifier
 pub const Identifier = struct {

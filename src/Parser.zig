@@ -48,6 +48,7 @@ const Precedence = enum {
             .Minus => Precedence.Sum,
             .Slash => Precedence.Product,
             .Asterisk => Precedence.Product,
+            .Lparen => Precedence.Call,
             else => .Lowest
         };
 
@@ -193,6 +194,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         
         const infix = switch (peek_kind) {
             .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => parser.parseInfixExpression(left_expr),
+            .Lparen => parser.parseCallExpression(left_expr),
             else => null
         };
 
@@ -453,6 +455,57 @@ fn parseFunctionParameters(parser: *Parser) ?ArrayList(Identifier) {
 
     return identifiers;
     
+}
+
+fn parseCallExpression(parser: *Parser, function: Expression) Expression {
+    const curr_tok = parser.current_token;
+
+    const arguments = parser.parseCallArguments();
+
+    const func_ptr = parser.allocator.create(Expression) catch {
+        @panic("Failed to create func_ptr");
+    };
+
+    func_ptr.* = function;
+
+    return Expression {
+        .call_expression = .{
+            .token = curr_tok,
+            .function = func_ptr,
+            .args = arguments
+        }
+    };
+}
+
+fn parseCallArguments(parser: *Parser) ArrayList(Expression) {
+
+    var args = ArrayList(Expression).init(parser.allocator);
+
+    if (parser.peekTokenIs(.Rparen)) {
+        parser.nextToken();
+        return args;
+    }
+
+    parser.nextToken(); 
+    args.append(parser.parseExpression(.Lowest).?) catch {
+        @panic("Failed to append expression");
+    };
+
+    while (parser.peekTokenIs(.Comma)) {
+        parser.nextToken();
+        parser.nextToken();
+
+        
+        args.append(parser.parseExpression(.Lowest).?) catch {
+            @panic("Failed to append expression");
+        };
+    }
+
+    // TODO: handle if !expectpeek(.Rparent) return null
+
+    return args;
+
+
 }
 
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
@@ -1027,6 +1080,36 @@ test "Func Lit Expr" {
     try expect(fn_lit.body.statements.len == 1);
 
     try expect(fn_lit.body.statements[0] == .expr_stmt);
+}
+
+test "Call expression" {
+    
+    const allocator = std.testing.allocator;
+
+    const input = "add(1, 2 * 3, 4 + 5);";
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    try expect(program.statements.items.len == 1);
+
+    const stmt = program.statements.items[0];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr = stmt.expr_stmt.expression.?;
+
+    try expect(expr == .call_expression);
+
+    try expect(expr.call_expression.args.items.len == 3);
+
+
 }
 
 test "Parsing Errors" {
