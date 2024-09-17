@@ -132,7 +132,7 @@ pub const ExpressionStatement = struct {
 
 pub const BlockStatement = struct {
     token: Token,
-    statements: []Statement,
+    statements: []Statement, // TODO: use arraylist for better perf
 
     // fn deinit(allocator: Allocator) {
     //
@@ -211,12 +211,12 @@ pub const Expression = union(enum) {
                 const condition_str = try if_expr.condition.String(allocator);
                 defer allocator.free(condition_str);
 
+                // TODO: get string for BlockStatement
                 if (if_expr.alternative) |alt| {
                     _ = alt;
-                    unreachable;
-                    // return try std.fmt.allocPrint(allocator, "if {s} cons else alt", .{
-                    //     if_expr.condition.String(allocator)
-                    // });
+                    return try std.fmt.allocPrint(allocator, "if {s} cons else alt", .{
+                        condition_str
+                    });
                 } else {
                     return try std.fmt.allocPrint(allocator, "if {s} conse", .{
                         condition_str
