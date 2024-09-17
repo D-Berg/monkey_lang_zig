@@ -47,6 +47,13 @@ pub const Statement = union(enum) {
                         if_expr.condition.deinit(allocator);
                         allocator.free(if_expr.consequence.statements);
                     },
+                    .fn_literal => |fl| {
+                        for (fl.body.statements) |*bd_stmt| {
+                            bd_stmt.deinit(allocator);
+                        }
+                        allocator.free(fl.body.statements);
+                        if (fl.parameters != null) fl.parameters.?.deinit();
+                    },
                     else => {}
                 }
             }
@@ -149,6 +156,7 @@ pub const Expression = union(enum) {
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
     if_expression: IfExpression,
+    fn_literal: FnLiteralExpression,
 
     fn deinit(expr: *Expression, allocator: Allocator) void {
         
@@ -225,6 +233,13 @@ pub const Expression = union(enum) {
 
             },
 
+            .fn_literal => |*fn_lit| {
+                _ = fn_lit;
+                // TODO impl string() for fn_lit
+                return try std.fmt.allocPrint(allocator, "not yet impl for fn", .{});
+
+            },
+
             inline else => |*case| {
                 const str = try std.fmt.allocPrint(allocator, "{s}", .{case.token.tokenLiteral()});
                 return str;
@@ -266,9 +281,19 @@ pub const IfExpression = struct {
     alternative: ?BlockStatement,
 };
 
+pub const FnLiteralExpression = struct {
+    token: Token,
+    parameters: ?ArrayList(Identifier),
+    body: BlockStatement
+};
+
 // Identifier
 pub const Identifier = struct {
     token: Token,
+
+    pub fn tokenLiteral(ident: *Identifier) []const u8 {
+        return ident.token.tokenLiteral();
+    }
 };
 
 pub const Program = struct {

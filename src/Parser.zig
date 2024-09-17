@@ -171,6 +171,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         .False, .True => parser.parseBooleanExpression(),
         .Lparen => parser.parseGroupedExpression(),
         .If => parser.parseIfExpression(),
+        .Function => parser.parseFunctionLiteral(),
         else => null
     };
 
@@ -396,6 +397,64 @@ fn parseBlockStatement(parser: *Parser) BlockStatement {
 
 }
 
+fn parseFunctionLiteral(parser: *Parser) ?Expression {
+    const curr_tok = parser.current_token;
+
+    if (!parser.expectPeek(.Lparen)) return null;
+
+    const parameters = parser.parseFunctionParameters();
+
+    if (!parser.expectPeek(.Lbrace)) {
+        if (parameters != null) parameters.?.deinit();
+        return null;
+    }
+
+    const body = parser.parseBlockStatement();
+
+    return Expression {
+        .fn_literal = .{
+            .token = curr_tok,
+            .parameters = parameters,
+            .body = body,
+        }
+    };
+
+}
+
+fn parseFunctionParameters(parser: *Parser) ?ArrayList(Identifier) {
+    
+    var identifiers = ArrayList(Identifier).init(parser.allocator);
+
+    if (parser.peekTokenIs(.Rparen)) {
+        parser.nextToken();
+        return identifiers;
+    }
+
+    parser.nextToken();
+
+    identifiers.append(.{ .token = parser.current_token }) catch {
+        @panic("failed to append identifier");
+    };
+
+    while (parser.peekTokenIs(.Comma)) {
+        parser.nextToken();
+        parser.nextToken();
+
+        identifiers.append(.{ .token = parser.current_token }) catch {
+            @panic("failed to append identifier");
+        };
+
+    }
+
+    if (!parser.expectPeek(.Rparen)) {
+        identifiers.deinit();
+        return null; // TODO: replace with err
+    }
+
+    return identifiers;
+    
+}
+
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.current_token.kind == kind;
 }
@@ -477,6 +536,8 @@ fn noPrefixParseFunction(parser: *Parser, kind: Token.Kind) !void {
     try parser.errors.append("no defined prefix parse function");
 }
 
+
+// TODO: fn for creating parser, lexer program for tests
 
 test "Let Statements" {
 
@@ -924,6 +985,48 @@ test "If Expression" {
     // TODO: expand test 
 
 
+}
+
+
+test "Func Lit Expr" {
+
+    const allocator = std.testing.allocator;
+    const input = "fn(x, y) { x + y; }";
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    try expect(program.statements.items.len == 1);
+
+    const stmt = program.statements.items[0];
+
+    try expect(stmt == .expr_stmt);
+
+    try expect(stmt.expr_stmt.expression.? == .fn_literal);
+
+    const fn_lit = stmt.expr_stmt.expression.?.fn_literal;
+
+    try expect(fn_lit.parameters.?.items.len == 2);
+
+    
+    var p_1 = fn_lit.parameters.?.items[0];
+    var p_2 = fn_lit.parameters.?.items[1];
+
+
+    try expectEqualStrings("x", p_1.tokenLiteral());
+
+
+    try expectEqualStrings("y", p_2.tokenLiteral());
+
+    try expect(fn_lit.body.statements.len == 1);
+
+    try expect(fn_lit.body.statements[0] == .expr_stmt);
 }
 
 test "Parsing Errors" {
