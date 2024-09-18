@@ -79,6 +79,7 @@ pub fn deinit(parser: Parser) void {
 }
 
 fn nextToken(parser: *Parser) void {
+    // print("current token: {}\n", .{parser.current_token.kind});
     parser.current_token = parser.peek_token;
     parser.peek_token = parser.lexer.NextToken();
 }
@@ -505,6 +506,9 @@ fn parseCallArguments(parser: *Parser) ArrayList(Expression) {
     }
 
     // TODO: handle if !expectpeek(.Rparent) return null
+    if (!parser.expectPeek(.Rparen)) {
+        @panic("NOO Right BRAAXKEt");
+    }
 
     return args;
 
@@ -1085,7 +1089,7 @@ test "Func Lit Expr" {
 }
 
 test "Call expression" {
-    
+
     const allocator = std.testing.allocator;
 
     const input = "add(1, 2 * 3, 4 + 5);";
@@ -1110,7 +1114,6 @@ test "Call expression" {
     try expect(expr == .call_expression);
 
     try expect(expr.call_expression.args.items.len == 3);
-
 
 }
 
