@@ -45,6 +45,9 @@ pub const Statement = union(enum) {
                     },
                     .if_expression => |if_expr| {
                         if_expr.condition.deinit(allocator);
+                        for (if_expr.consequence.statements) |*blck_stmts| {
+                            blck_stmts.deinit(allocator);
+                        }
                         allocator.free(if_expr.consequence.statements);
                     },
                     .fn_literal => |fl| {
@@ -54,6 +57,7 @@ pub const Statement = union(enum) {
                         allocator.free(fl.body.statements);
                         if (fl.parameters != null) fl.parameters.?.deinit();
                     },
+                    
                     else => {}
                 }
             }
@@ -176,13 +180,11 @@ pub const Expression = union(enum) {
                 if_expr.condition.deinit(allocator);
                 allocator.destroy(if_expr.condition);
                 
-                // for (if_expr.consequence.statements) |*stmt| {
-                //     if (stmt.* == .expr_stmt) {
-                //         stmt.expr_stmt.expression.?.deinit(allocator);
-                //     }
-                // }
-                //
-                // allocator.free(if_expr.consequence.statements);
+                for (if_expr.consequence.statements) |*stmt| {
+                    stmt.deinit(allocator);
+                }
+
+                allocator.free(if_expr.consequence.statements);
 
                 allocator.destroy(expr);
 

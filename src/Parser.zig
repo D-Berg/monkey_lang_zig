@@ -70,12 +70,10 @@ pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
 }
 
 pub fn deinit(parser: Parser) void {
-    // for (parser.errors.items) |parse_err| {
-    //
-    //     parser.allocator.free(parse_err);
-    //
-    // }
-    //
+    for (parser.errors.items) |parse_err| {
+        parser.allocator.free(parse_err);
+    }
+    
     parser.errors.deinit();
     
 }
@@ -232,7 +230,13 @@ fn parseIntegerLiteral(parser: *Parser) ?Expression {
     } else |_| {
 
         // TODO: format and also handle error better
-        parser.errors.append("Failed to parse Integer Literal") catch unreachable;
+        const err_str = std.fmt.allocPrint(parser.allocator, "Failed to parse Integer Literal {s}", .{
+            parser.current_token.tokenLiteral()
+        }) catch |err| {
+            print("Failed to allocPrint with err {}", .{err});
+            @panic("cant allocPrint");
+        };
+        parser.errors.append(err_str) catch unreachable;
         return null;
     }
     
@@ -495,7 +499,6 @@ fn parseCallArguments(parser: *Parser) ArrayList(Expression) {
         parser.nextToken();
         parser.nextToken();
 
-        
         args.append(parser.parseExpression(.Lowest).?) catch {
             @panic("Failed to append expression");
         };
@@ -564,19 +567,16 @@ fn checkParseErrors(parser: *Parser) error{ParsingError}!void {
 
 }
 
-// TODO: Fix dynamic error message
 fn peekError(parser: *Parser, kind: Token.Kind) void {
 
-    // const msg = std.fmt.allocPrint(parser.allocator, "Expected next token to be {any}, got {any} instead", .{
-    //     kind, parser.peek_token.kind 
-    // }) catch {
-    //     @panic("failed to create error msg");
-    // };
-    _ = kind;
-    
-    const msg = "peek error";
+    const err_str = std.fmt.allocPrint(parser.allocator, "expected next token to be {}, got {} instead", .{
+        kind, parser.peek_token.kind
+    }) catch |err| {
+        print("Error: {}\n", .{err});
+        @panic("Failed allocPrint");
+    };
 
-    parser.errors.append(msg) catch {
+    parser.errors.append(err_str) catch {
         @panic("failed to allocate error msg");
     };
 
@@ -584,9 +584,11 @@ fn peekError(parser: *Parser, kind: Token.Kind) void {
 }
 
 fn noPrefixParseFunction(parser: *Parser, kind: Token.Kind) !void {
-    _ = kind;
     // TODO: fix error handling for monkey
-    try parser.errors.append("no defined prefix parse function");
+    const err_str = try std.fmt.allocPrint(parser.allocator, "no defined prefix parse function for {}", .{
+        kind
+    });
+    try parser.errors.append(err_str);
 }
 
 
