@@ -212,9 +212,47 @@ pub const Expression = union(enum) {
 
             .call_expression => |*call_expr| {
 
-                _ = call_expr;
                 // TODO impl string() for fn_lit
-                return try std.fmt.allocPrint(allocator, "not yet impl for call_expr", .{});
+                var fn_expr = program.expressions.items[call_expr.function];
+                const fn_str = try fn_expr.String(program);
+                defer allocator.free(fn_str);
+
+                var str_len: usize = 0;
+                var args_str = try program.allocator.alloc(u8, 0);
+                defer allocator.free(args_str);
+
+                const n_args = call_expr.args.items.len;
+                
+
+                for (call_expr.args.items, 0..) |arg_idx, i| {
+
+                    var arg_expr = program.expressions.items[arg_idx];
+                    const arg_str = try arg_expr.String(program);
+                    defer allocator.free(arg_str);
+                    
+                    
+                    if (i == n_args - 1) {
+                        args_str = try allocator.realloc(args_str, str_len + arg_str.len);
+                        @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
+                        str_len += arg_str.len;
+
+                    } else {
+                        
+                        args_str = try allocator.realloc(args_str, str_len + arg_str.len + 2);
+                        args_str[str_len + arg_str.len] = ',';
+                        args_str[str_len + arg_str.len + 1] = ' ';
+
+                        @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
+                        str_len += arg_str.len + 2;
+
+                
+                    }
+
+                }
+
+                return try std.fmt.allocPrint(allocator, "{s}({s})", .{
+                    fn_str, args_str
+                });
 
             },
             inline else => |*case| {

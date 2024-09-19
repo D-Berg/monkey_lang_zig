@@ -1056,6 +1056,10 @@ test "Operator Precedence" {
         "2 / (5 + 5)",
         "-(5 + 5)",
         "!(true == true)",
+        // relies on call exprssions
+        "a + add(b * c) + d",
+        "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+        "add(a + b + c * d / f + g)",
     };
 
     const answer = [_][]const u8 {
@@ -1077,6 +1081,9 @@ test "Operator Precedence" {
         "(2 / (5 + 5))",
         "(-(5 + 5))",
         "(!(true == true))",
+        "((a + add((b * c))) + d)",
+        "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+        "add((((a + b) + ((c * d) / f)) + g))",
 
     };
 
@@ -1210,7 +1217,8 @@ test "Call expression" {
 
     try expect(expr == .call_expression);
 
-    try expect(expr.call_expression.args.len == 3);
+
+    try expect(expr.call_expression.args.items.len == 3);
 
 }
 
