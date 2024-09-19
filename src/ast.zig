@@ -16,7 +16,7 @@ pub const Statement = union(enum) {
     ret_stmt: ReturnStatement,
     // need deallocations
     expr_stmt: ExpressionStatement,
-    blck_stmt: BlockStatement,
+    blck_stmt: BlockStatement, // hold arraylist to idxs to statements
 
     pub fn tokenLiteral(stmt: *Statement) []const u8 {
         switch (stmt.*) {
@@ -36,7 +36,7 @@ pub const Statement = union(enum) {
 
                     const expr_idx = ls.value.?;
                     var value = program.expressions.items[expr_idx];
-                    const value_str = try value.String(allocator);
+                    const value_str = try value.String(program);
                     defer program.allocator.free(value_str);
 
                     const str = try std.fmt.allocPrint(allocator, "let {s} = {s};", .{
@@ -56,19 +56,20 @@ pub const Statement = union(enum) {
 
 
             },
-            //
-            // .expr_stmt => |*es| {
-            //
-            //     if (es.expression != null) {
-            //         return try es.expression.?.String(allocator);
-            //     } else {
-            //
-            //         return try std.fmt.allocPrint(allocator, "", .{});
-            //
-            //     }
-            //
-            //
-            // },
+
+            .expr_stmt => |*es| {
+
+                if (es.expression) |expr_idx| {
+                    var expr = program.expressions.items[expr_idx];
+                    return try expr.String(program);
+                } else {
+
+                    return try std.fmt.allocPrint(allocator, "", .{});
+
+                }
+
+
+            },
 
             // TODO .block_stmt
         
@@ -107,8 +108,7 @@ pub const ExpressionStatement = struct {
 
 pub const BlockStatement = struct {
     token: Token,
-    statements: []StateIdx, // TODO: use arraylist for better perf
-
+    statements: ArrayList(usize), 
     // fn deinit(allocator: Allocator) {
     //
     // }
@@ -120,71 +120,99 @@ pub const Expression = union(enum) {
     identifier: Identifier,
     integer_literal: IntegerLiteralExpression,
     boolean_literal: BooleanLiteralExpression,
-    // Recursive: holds pointers to other Expression, need to be deallocated
     prefix_expression: PrefixExpression,
     infix_expression: InfixExpression,
-    if_expression: IfExpression,
-    fn_literal: FnLiteralExpression,
+    if_expression: IfExpression, // deinit
+    fn_literal: FnLiteralExpression, // deinit
     call_expression: CallExpression,
 
-    fn String(expr: *Expression, allocator: Allocator) ![]const u8 {
-        _ = expr;
-        _ = allocator;
-        unreachable;
+    pub fn deinit(expr: *Expression) void {
         
-        // switch (expr.*) {
-        //     .prefix_expression => |*pe| {
-        //         const right_str = try pe.right.String(allocator);
-        //         defer allocator.free(right_str);
-        //
-        //         return try std.fmt.allocPrint(allocator, "({s}{s})", .{
-        //             pe.token.tokenLiteral(), right_str
-        //         });
-        //     },
-        //
-        //     .infix_expression => |*ie| {
-        //         const left_str = try ie.left.String(allocator);
-        //         defer allocator.free(left_str);
-        //         const right_str = try ie.right.String(allocator);
-        //         defer allocator.free(right_str);
-        //
-        //         return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{
-        //             left_str, ie.token.tokenLiteral(), right_str
-        //         });
-        //     },
-        //
-        //     // TODO: fix if_expr.string()
-        //     .if_expression => |*if_expr| {
-        //         const condition_str = try if_expr.condition.String(allocator);
-        //         defer allocator.free(condition_str);
-        //
-        //         // TODO: get string for BlockStatement
-        //         if (if_expr.alternative) |alt| {
-        //             _ = alt;
-        //             return try std.fmt.allocPrint(allocator, "if {s} cons else alt", .{
-        //                 condition_str
-        //             });
-        //         } else {
-        //             return try std.fmt.allocPrint(allocator, "if {s} conse", .{
-        //                 condition_str
-        //             });
-        //         }
-        //
-        //     },
-        //
-        //     .fn_literal => |*fn_lit| {
-        //         _ = fn_lit;
-        //         // TODO impl string() for fn_lit
-        //         return try std.fmt.allocPrint(allocator, "not yet impl for fn", .{});
-        //
-        //     },
-        //
-        //     inline else => |*case| {
-        //         const str = try std.fmt.allocPrint(allocator, "{s}", .{case.token.tokenLiteral()});
-        //         return str;
-        //     }
-        //
-        // }
+        switch (expr.*) {
+
+            .if_expression => |*ie| {
+                ie.consequence.statements.deinit();
+                if (ie.alternative) |*alt| {
+                    alt.statements.deinit();
+                }
+            },
+            
+            .fn_literal => |fl| {
+                fl.body.statements.deinit();
+                if (fl.parameters) |params| {
+                    params.deinit();
+                }
+
+            },
+            
+            inline else => {}
+
+        }
+
+    }
+
+    fn String(expr: *Expression, program: *Program) ![]const u8 {
+        
+        const allocator = program.allocator;
+        
+        switch (expr.*) {
+            .prefix_expression => |*pe| {
+                var right_expr = program.expressions.items[pe.right];
+                const right_str = try right_expr.String(program);
+                defer allocator.free(right_str);
+
+                return try std.fmt.allocPrint(allocator, "({s}{s})", .{
+                    pe.token.tokenLiteral(), right_str
+                });
+            },
+
+            .infix_expression => |*ie| {
+                var left_expr = program.expressions.items[ie.left];
+                const left_str = try left_expr.String(program);
+                defer allocator.free(left_str);
+
+                var right_expr = program.expressions.items[ie.right];
+                const right_str = try right_expr.String(program);
+                defer allocator.free(right_str);
+
+                return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{
+                    left_str, ie.token.tokenLiteral(), right_str
+                });
+            },
+
+            // TODO: fix if_expr.string()
+            .if_expression => |*if_expr| {
+                var condition_expr = program.expressions.items[if_expr.condition];
+                const condition_str = try condition_expr.String(program);
+                defer allocator.free(condition_str);
+
+                // TODO: get string for BlockStatement
+                if (if_expr.alternative) |alt| {
+                    _ = alt;
+                    return try std.fmt.allocPrint(allocator, "if {s} cons else alt", .{
+                        condition_str
+                    });
+                } else {
+                    return try std.fmt.allocPrint(allocator, "if {s} conse", .{
+                        condition_str
+                    });
+                }
+
+            },
+
+            .fn_literal => |*fn_lit| {
+                _ = fn_lit;
+                // TODO impl string() for fn_lit
+                return try std.fmt.allocPrint(allocator, "not yet impl for fn", .{});
+
+            },
+
+            inline else => |*case| {
+                const str = try std.fmt.allocPrint(allocator, "{s}", .{case.token.tokenLiteral()});
+                return str;
+            }
+
+        }
 
     }
     
@@ -213,6 +241,7 @@ pub const InfixExpression = struct {
 };
 
 
+// Need dealloc
 pub const IfExpression = struct {
     token: Token, 
     condition: ExprIdx,
@@ -220,6 +249,7 @@ pub const IfExpression = struct {
     alternative: ?BlockStatement,
 };
 
+// need dealloc
 pub const FnLiteralExpression = struct {
     token: Token,
     parameters: ?ArrayList(Identifier),
@@ -245,12 +275,14 @@ pub const Identifier = struct {
 
 pub const Program = struct {
     allocator: Allocator,
+    root_stmt_idx: ArrayList(StateIdx),
     statements: ArrayList(Statement),
     expressions: ArrayList(Expression),
 
     pub fn init(allocator: Allocator) Program {
         return .{
             .allocator = allocator,
+            .root_stmt_idx = ArrayList(StateIdx).init(allocator),
             .statements = ArrayList(Statement).init(allocator),
             .expressions = ArrayList(Expression).init(allocator)
         };
@@ -258,7 +290,13 @@ pub const Program = struct {
     }
 
     pub fn deinit(program: *Program) void {
+        program.root_stmt_idx.deinit();
         program.statements.deinit();
+        
+        for (program.expressions.items) |*expr| {
+            expr.deinit();
+        }
+        
         program.expressions.deinit();
     }
     
@@ -267,7 +305,9 @@ pub const Program = struct {
         var str_len: usize = 0;
         var buffer = try program.allocator.alloc(u8, 0);
 
-        for (program.statements.items) |*stmt| {
+        for (program.root_stmt_idx.items) |stmt_idx| {
+
+            var stmt = program.statements.items[stmt_idx];
 
             const stmt_str = try stmt.String(program);
             defer program.allocator.free(stmt_str);
