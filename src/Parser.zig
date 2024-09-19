@@ -95,11 +95,21 @@ pub fn deinit(parser: Parser) void {
 }
 
 fn getStmtIdx(parser: *Parser) usize {
-    return parser.statements.items.len - 1;
+    const n_stmts = parser.statements.items.len;
+    if (n_stmts > 0) {
+        return n_stmts - 1;
+    } else {
+        return 0;
+    }
 }
 
 fn getExprIdx(parser: *Parser) usize {
-    return parser.expressions.items.len - 1;
+    const n_exprs = parser.expressions.items.len;
+    if (n_exprs > 0) {
+        return n_exprs - 1;
+    } else {
+        return 0;
+    }
 }
 
 fn nextToken(parser: *Parser) void {
