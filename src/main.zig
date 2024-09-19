@@ -7,6 +7,19 @@ const expect = std.testing.expect;
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
 
+const monkey = 
+    \\ .--.  .-"   "-.  .--.
+    \\/..  \/ .-. .-. \/..  \ 
+    \\| | '| /   Y   \ |'  | |
+    \\| \ \  \ 0 | 0 / /   / |
+    \\\ '-,\.-"""""""-./,-' /
+    \\ ''-'/ _  ^ ^  _ \'-''
+    \\    |   \._ _./   |
+    \\    \    \'~'/    /
+    \\     '._ '-=-' _.'
+    \\        '-----'
+;
+
 pub fn main() !void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -15,6 +28,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     try stdout.print("Hello! This is the monkey programming language!\n", .{});
+    try stdout.print("{s}\n", .{monkey});
     try stdout.print("Feel free to type in commands\n", .{});
     try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
