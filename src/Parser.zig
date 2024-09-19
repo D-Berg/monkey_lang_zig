@@ -77,13 +77,13 @@ pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
 
 pub fn deinit(parser: Parser) void {
 
-    _ = parser;
 
-    // for (parser.errors.items) |parse_err| {
-    //     parser.allocator.free(parse_err);
-    // }
-    //
-    // parser.errors.deinit();
+    for (parser.errors.items) |parse_err| {
+        parser.allocator.free(parse_err);
+    }
+
+    parser.errors.deinit();
+
     // parser.root_stmt_idx.deinit();
     // parser.statements.deinit();
     //
@@ -208,7 +208,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         .False, .True => parser.parseBooleanExpression(),
         .Lparen => parser.parseGroupedExpression(),
         .If => parser.parseIfExpression(),
-        // .Function => parser.parseFunctionLiteral(),
+        .Function => parser.parseFunctionLiteral(),
         else => null
     };
 
@@ -230,7 +230,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
 
         const infix = switch (peek_kind) {
             .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => parser.parseInfixExpression(left_expr),
-            // .Lparen => parser.parseCallExpression(left_expr),
+            .Lparen => parser.parseCallExpression(left_expr),
             else => null
         };
 
@@ -436,131 +436,127 @@ fn parseBlockStatement(parser: *Parser) BlockStatement {
 
 }
 
-// fn parseFunctionLiteral(parser: *Parser) ?Expression {
-//     const curr_tok = parser.current_token;
-//
-//     if (!parser.expectPeek(.Lparen)) return null;
-//
-//     const parameters = parser.parseFunctionParameters();
-//
-//     if (!parser.expectPeek(.Lbrace)) {
-//         if (parameters != null) parameters.?.deinit();
-//         return null;
-//     }
-//
-//     const body = parser.parseBlockStatement();
-//
-//     return Expression {
-//         .fn_literal = .{
-//             .token = curr_tok,
-//             .parameters = parameters,
-//             .body = body,
-//         }
-//     };
-//
-// }
-//
-// fn parseFunctionParameters(parser: *Parser) ?ArrayList(Identifier) {
-//
-//     var identifiers = ArrayList(Identifier).init(parser.allocator);
-//
-//     if (parser.peekTokenIs(.Rparen)) {
-//         parser.nextToken();
-//         return identifiers;
-//     }
-//
-//     parser.nextToken();
-//
-//     identifiers.append(.{ .token = parser.current_token }) catch {
-//         @panic("failed to append identifier");
-//     };
-//
-//     while (parser.peekTokenIs(.Comma)) {
-//         parser.nextToken();
-//         parser.nextToken();
-//
-//         identifiers.append(.{ .token = parser.current_token }) catch {
-//             @panic("failed to append identifier");
-//         };
-//
-//     }
-//
-//     if (!parser.expectPeek(.Rparen)) {
-//         identifiers.deinit();
-//         return null; // TODO: replace with err
-//     }
-//
-//     return identifiers;
-//
-// }
-//
-// fn parseCallExpression(parser: *Parser, function: Expression) Expression {
-//     const curr_tok = parser.current_token;
-//
-//     const arguments = parser.parseCallArguments();
-//
-//     const func_ptr = parser.allocator.create(Expression) catch {
-//         @panic("Failed to create func_ptr");
-//     };
-//
-//     func_ptr.* = function;
-//
-//     return Expression {
-//         .call_expression = .{
-//             .token = curr_tok,
-//             .function = func_ptr,
-//             .args = arguments
-//         }
-//     };
-// }
-//
-// fn parseCallArguments(parser: *Parser) []Expression {
-//
-//     var args = parser.allocator.alloc(Expression, 0) catch {
-//         @panic("Failed to alloc args");
-//     };
-//     print("arg_len = {}\n", .{args.len});
-//
-//     if (parser.peekTokenIs(.Rparen)) {
-//         parser.nextToken();
-//         return args;
-//     }
-//
-//     parser.nextToken();
-//
-//     args = parser.allocator.realloc(args, args.len + 1) catch {
-//         @panic("Failed to realloc args");
-//     };
-//     args[args.len - 1] = parser.parseExpression(.Lowest).?;
-//     print("arg_len = {}\n", .{args.len});
-//
-//     print("arg: {}\n", .{args[args.len - 1]});
-//
-//     while (parser.peekTokenIs(.Comma)) {
-//         parser.nextToken();
-//         parser.nextToken();
-//
-//
-//         args = parser.allocator.realloc(args, args.len + 1) catch {
-//             @panic("Failed to realloc args");
-//         };
-//
-//         args[args.len - 1] = parser.parseExpression(.Lowest).?;
-//
-//         print("arg: {}\n", .{args[args.len - 1]});
-//     }
-//
-//     print("arg_len = {}\n", .{args.len});
-//
-//     // TODO: handle if !expectpeek(.Rparent) return null
-//     if (!parser.expectPeek(.Rparen)) {
-//         @panic("NOO Right BRAAXKEt");
-//     }
-//
-//     return args;
-//
-//
-// }
+fn parseFunctionLiteral(parser: *Parser) ?Expression {
+    const curr_tok = parser.current_token;
+
+    if (!parser.expectPeek(.Lparen)) return null;
+
+    const parameters = parser.parseFunctionParameters();
+
+    if (!parser.expectPeek(.Lbrace)) {
+        if (parameters != null) parameters.?.deinit();
+        return null;
+    }
+
+    const body = parser.parseBlockStatement();
+
+    return Expression {
+        .fn_literal = .{
+            .token = curr_tok,
+            .parameters = parameters,
+            .body = body,
+        }
+    };
+
+}
+
+fn parseFunctionParameters(parser: *Parser) ?ArrayList(Identifier) {
+
+    var identifiers = ArrayList(Identifier).init(parser.allocator);
+
+    if (parser.peekTokenIs(.Rparen)) {
+        parser.nextToken();
+        return identifiers;
+    }
+
+    parser.nextToken();
+
+    identifiers.append(.{ .token = parser.current_token }) catch {
+        @panic("failed to append identifier");
+    };
+
+    while (parser.peekTokenIs(.Comma)) {
+        parser.nextToken();
+        parser.nextToken();
+
+        identifiers.append(.{ .token = parser.current_token }) catch {
+            @panic("failed to append identifier");
+        };
+
+    }
+
+    if (!parser.expectPeek(.Rparen)) {
+        identifiers.deinit();
+        return null; // TODO: replace with err
+    }
+
+    return identifiers;
+
+}
+
+
+fn parseCallExpression(parser: *Parser, function: Expression) Expression {
+    const curr_tok = parser.current_token;
+
+    const arguments = parser.parseCallArguments();
+
+    parser.expressions.append(function) catch {
+        @panic("Failed to append func expr");
+    };
+
+    const func_idx = parser.getExprIdx();
+
+    return Expression {
+        .call_expression = .{
+            .token = curr_tok,
+            .function = func_idx,
+            .args = arguments
+        }
+    };
+}
+
+fn parseCallArguments(parser: *Parser) ArrayList(usize) {
+
+    var args = ArrayList(usize).init(parser.allocator);
+
+    if (parser.peekTokenIs(.Rparen)) {
+        parser.nextToken();
+        return args;
+    }
+
+    parser.nextToken();
+
+    parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
+        @panic("Failed to append arg expr");
+    };
+
+    args.append(parser.getExprIdx()) catch {
+        @panic("Failed to append arg expr idx");
+    };
+
+
+    while (parser.peekTokenIs(.Comma)) {
+        parser.nextToken();
+        parser.nextToken();
+
+        parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
+            @panic("Failed to append arg expr");
+        };
+
+        args.append(parser.getExprIdx()) catch {
+            @panic("Failed to append arg expr idx");
+        };
+
+    }
+
+    // TODO: handle if !expectpeek(.Rparent) return null
+    if (!parser.expectPeek(.Rparen)) {
+        @panic("NOO Right BRAAXKEt");
+    }
+
+    return args;
+
+}
 //
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.current_token.kind == kind;
@@ -1129,84 +1125,94 @@ test "If Expression" {
 }
 //
 
-// test "Func Lit Expr" {
-//
-//     const allocator = std.testing.allocator;
-//     const input = "fn(x, y) { x + y; }";
-//
-//     var lexer = try Lexer.init(allocator, input);
-//     defer lexer.deinit();
-//
-//     var parser = Parser.init(&lexer, allocator);
-//     defer parser.deinit();
-//
-//     var program = try parser.ParseProgram(allocator);
-//     defer program.deinit();
-//
-//     try expect(program.statements.items.len == 1);
-//
-//     const stmt = program.statements.items[0];
-//
-//     try expect(stmt == .expr_stmt);
-//
-//     const expr_idx = stmt.expr_stmt.expression.?;
-//     const expr = program.expressions.items[expr_idx];
-//
-//     try expect(expr == .fn_literal);
-//
-//     const fn_lit = expr.fn_literal;
-//
-//     try expect(fn_lit.parameters.?.items.len == 2);
-//
-//
-//     var p_1 = fn_lit.parameters.?.items[0];
-//     var p_2 = fn_lit.parameters.?.items[1];
-//
-//
-//     try expectEqualStrings("x", p_1.tokenLiteral());
-//
-//
-//     try expectEqualStrings("y", p_2.tokenLiteral());
-//
-//     try expect(fn_lit.body.statements.items.len == 1);
-//
-//     const body_stmt_idx = fn_lit.body.statements.items[0];
-//     const body_stmt = program.statements.items[body_stmt_idx];
-//     try expect(body_stmt == .expr_stmt);
-//
-// }
-//
-// test "Call expression" {
-//
-//     const allocator = std.testing.allocator;
-//
-//     // const input = "add(1);";
-//     const input = "add(1, 2);";
-//     // const input = "add(3 + 4);";
-//     // const input = "add(1, 2 * 3, 4 + 5);";
-//
-//     var lexer = try Lexer.init(allocator, input);
-//     defer lexer.deinit();
-//
-//     var parser = Parser.init(&lexer, allocator);
-//     defer parser.deinit();
-//
-//     var program = try parser.ParseProgram(allocator);
-//     defer program.deinit();
-//
-//     try expect(program.statements.items.len == 1);
-//
-//     const stmt = program.statements.items[0];
-//
-//     try expect(stmt == .expr_stmt);
-//
-//     const expr = stmt.expr_stmt.expression.?;
-//
-//     try expect(expr == .call_expression);
-//
-//     // try expect(expr.call_expression.args.len == 3);
-//
-// }
+test "Func Lit Expr" {
+
+    const allocator = std.testing.allocator;
+    const input = "fn(x, y) { x + y; }";
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    expect(program.root_stmt_idx.items.len == 1) catch |err| {
+        print("Expected 1 stmt, got {}\n", .{program.root_stmt_idx.items.len});
+        return err;
+    };
+
+    const stmt_idx = program.root_stmt_idx.items[0];
+    const stmt = program.statements.items[stmt_idx];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr_idx = stmt.expr_stmt.expression.?;
+    const expr = program.expressions.items[expr_idx];
+
+    try expect(expr == .fn_literal);
+
+    const fn_lit = expr.fn_literal;
+
+    try expect(fn_lit.parameters.?.items.len == 2);
+
+
+    var p_1 = fn_lit.parameters.?.items[0];
+    var p_2 = fn_lit.parameters.?.items[1];
+
+
+    try expectEqualStrings("x", p_1.tokenLiteral());
+
+
+    try expectEqualStrings("y", p_2.tokenLiteral());
+
+    try expect(fn_lit.body.statements.items.len == 1);
+
+    const body_stmt_idx = fn_lit.body.statements.items[0];
+    const body_stmt = program.statements.items[body_stmt_idx];
+    try expect(body_stmt == .expr_stmt);
+
+}
+
+test "Call expression" {
+
+    const allocator = std.testing.allocator;
+
+    // const input = "add(1);";
+    // const input = "add(1, 2);";
+    // const input = "add(3 + 4);";
+    const input = "add(1, 2 * 3, 4 + 5);";
+
+    var lexer = try Lexer.init(allocator, input);
+    defer lexer.deinit();
+
+    var parser = Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    const n_stmts = program.root_stmt_idx.items.len;
+    expect(n_stmts == 1) catch |err| {
+        print("expected 1 stmt, got {}\n", .{n_stmts});
+        return err;
+    };
+
+    const stmt_idx = program.root_stmt_idx.items[0];
+    const stmt = program.statements.items[stmt_idx];
+
+    try expect(stmt == .expr_stmt);
+    //
+    const expr_idx = stmt.expr_stmt.expression.?;
+    const expr = program.expressions.items[expr_idx];
+
+    try expect(expr == .call_expression);
+
+    try expect(expr.call_expression.args.len == 3);
+
+}
 
 // test "Parsing Errors" {
 //

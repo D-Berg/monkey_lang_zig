@@ -144,6 +144,9 @@ pub const Expression = union(enum) {
                 }
 
             },
+            .call_expression => |ce| {
+                ce.args.deinit();
+            },
             
             inline else => {}
 
@@ -207,6 +210,13 @@ pub const Expression = union(enum) {
 
             },
 
+            .call_expression => |*call_expr| {
+
+                _ = call_expr;
+                // TODO impl string() for fn_lit
+                return try std.fmt.allocPrint(allocator, "not yet impl for call_expr", .{});
+
+            },
             inline else => |*case| {
                 const str = try std.fmt.allocPrint(allocator, "{s}", .{case.token.tokenLiteral()});
                 return str;
@@ -260,7 +270,7 @@ pub const FnLiteralExpression = struct {
 pub const CallExpression = struct {
     token: Token, // the '('
     function: ExprIdx, // fnlit or ident expr
-    args: []ExprIdx,
+    args: ArrayList(ExprIdx),
 };
 
 
