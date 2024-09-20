@@ -61,6 +61,15 @@ fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
                     };
 
                 }, 
+                .boolean_literal => |bool_lit| {
+
+                    return object.Object {
+                        .boolean = .{ 
+                            .value = bool_lit.value,
+                        }
+                    };
+
+                }, 
 
                 else => {
                     unreachable;
@@ -103,6 +112,20 @@ test "Eval Int expr" {
         try expect(evaluated.integer.value == ans);
     }
 
+}
+
+test "Eval bool expr" {
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ "true", "false" };
+    const answers = [_]bool{ true, false };
+
+    for (inputs, answers) |inp, ans| {
+
+        const evaluated = try testEval(allocator, inp);
+
+        try expect(evaluated.boolean.value == ans);
+    }
 
 }
 
