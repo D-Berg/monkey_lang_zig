@@ -126,11 +126,6 @@ fn parseStatement(parser: *Parser) !void {
         .Let => parser.parseLetStatement(),
         .Return => parser.parseReturnStatement(),
         else => parser.parseExpressionStatement(),
-         // {
-            // log.debug("parsing expression statement", .{});
-            // return parser.parseExpressionStatement();
-            // return null; // TODO: Remove
-        // }
     };
 
     if (maybe_stmt) |stmt| {
@@ -149,6 +144,15 @@ fn parseLetStatement(parser: *Parser) ?Statement {
 
     if (!parser.expectPeek(Token.Kind.Assign)) return null;
 
+    parser.nextToken();
+
+
+    parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
+        @panic("Failed to append expression for let");
+    }; // TODO: handle null
+    
+    const expr_idx = parser.getExprIdx();
+
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
     }
@@ -157,28 +161,34 @@ fn parseLetStatement(parser: *Parser) ?Statement {
         .let_stmt = .{
             .token = token,
             .name = identifier,
-            .value = null // TODO: fix in chaper 2.8 end
+            .value = expr_idx  
         }
     };
 }
 
 fn parseReturnStatement(parser: *Parser) ?Statement {
 
-    const stmt = Statement { 
-        .ret_stmt = .{
-            .token = parser.current_token,
-            .value = null
-        }
-    };
+    const curr_tok = parser.current_token;
+
 
     parser.nextToken();
+
+    parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
+        @panic("Failed to append return expression");
+    };
+
+    const expr_idx = parser.getExprIdx();
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
     }
 
-    return stmt;
-
+    return Statement { 
+        .ret_stmt = .{
+            .token = curr_tok,
+            .value = expr_idx
+        }
+    };
 }
 
 fn parseExpressionStatement(parser: *Parser) ?Statement {
