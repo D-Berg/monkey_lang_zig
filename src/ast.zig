@@ -73,9 +73,21 @@ pub const Statement = union(enum) {
 
             // TODO .block_stmt
         
-            .ret_stmt => {
-                const str = try std.fmt.allocPrint(allocator, "return <expr>;", .{});
-                return str;
+            .ret_stmt => |*rs| {
+
+                if (rs.value) |val_idx| {
+                    var val_expr = program.expressions.items[val_idx];
+                    const val_str = try val_expr.String(program);
+                    defer allocator.free(val_str);
+
+                    const str = try std.fmt.allocPrint(allocator, "return {s};", .{val_str});
+                    return str;
+
+                } else {
+                    const str = try std.fmt.allocPrint(allocator, "return;", .{});
+                    return str;
+                }
+
                 // TODO: implement
             },
 

@@ -168,16 +168,23 @@ fn parseLetStatement(parser: *Parser) ?Statement {
 
 fn parseReturnStatement(parser: *Parser) ?Statement {
 
+    // TODO: is "return;" valid syntax?
     const curr_tok = parser.current_token;
-
 
     parser.nextToken();
 
-    parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
-        @panic("Failed to append return expression");
-    };
+    const maybe_expr = parser.parseExpression(.Lowest);
 
-    const expr_idx = parser.getExprIdx();
+    var expr_idx: ?usize = null;
+
+    if (maybe_expr) |expr| {
+
+        parser.expressions.append(expr) catch {
+            @panic("Failed to append return expression");
+        };
+
+        expr_idx = parser.getExprIdx();
+    }
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
