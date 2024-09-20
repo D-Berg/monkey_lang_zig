@@ -7,6 +7,7 @@ const Statement = ast.Statement;
 const Identifier = ast.Identifier;
 const Expression = ast.Expression;
 const BlockStatement = ast.BlockStatement;
+const Node = ast.Node;
 const ArrayList = std.ArrayList;
 
 const Allocator = std.mem.Allocator;
@@ -23,9 +24,8 @@ lexer: *Lexer,
 current_token: Token,
 peek_token: Token,
 errors: ArrayList([]const u8),
-root_stmt_idx: ArrayList(usize),
-statements: ArrayList(Statement), // holds all Statement
-expressions: ArrayList(Expression),
+statement_indexes: ArrayList(usize),
+nodes: ArrayList(Node),
 
 const ParseError = error {
     WrongExpressionType
@@ -68,9 +68,8 @@ pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
         .current_token = lexer.NextToken(),
         .peek_token = lexer.NextToken(),
         .errors = ArrayList([]const u8).init(allocator),
-        .root_stmt_idx = ArrayList(usize).init(allocator),
-        .statements = ArrayList(Statement).init(allocator),
-        .expressions = ArrayList(Expression).init(allocator)
+        .statement_indexes = ArrayList(usize).init(allocator),
+        .nodes = ArrayList(Node).init(allocator)
     };
 
 }
@@ -94,23 +93,15 @@ pub fn deinit(parser: Parser) void {
     
 }
 
-fn getStmtIdx(parser: *Parser) usize {
-    const n_stmts = parser.statements.items.len;
-    if (n_stmts > 0) {
-        return n_stmts - 1;
+fn getNodeIdx(parser: *Parser) usize {
+    const n_nodes = parser.nodes.items.len;
+    if (n_nodes > 0) {
+        return n_nodes - 1;
     } else {
         return 0;
     }
 }
 
-fn getExprIdx(parser: *Parser) usize {
-    const n_exprs = parser.expressions.items.len;
-    if (n_exprs > 0) {
-        return n_exprs - 1;
-    } else {
-        return 0;
-    }
-}
 
 fn nextToken(parser: *Parser) void {
     // print("current token: {}\n", .{parser.current_token.kind});
@@ -129,7 +120,7 @@ fn parseStatement(parser: *Parser) !void {
     };
 
     if (maybe_stmt) |stmt| {
-        try parser.statements.append(stmt);
+        try parser.nodes.append(.{ .statement = stmt });
     }
 
 }
@@ -147,11 +138,11 @@ fn parseLetStatement(parser: *Parser) ?Statement {
     parser.nextToken();
 
 
-    parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
+    parser.nodes.append( .{ .expression = parser.parseExpression(.Lowest).? }) catch {
         @panic("Failed to append expression for let");
     }; // TODO: handle null
     
-    const expr_idx = parser.getExprIdx();
+    const expr_idx = parser.getNodeIdx();
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
@@ -179,11 +170,11 @@ fn parseReturnStatement(parser: *Parser) ?Statement {
 
     if (maybe_expr) |expr| {
 
-        parser.expressions.append(expr) catch {
+        parser.nodes.append(.{ .expression = expr }) catch {
             @panic("Failed to append return expression");
         };
 
-        expr_idx = parser.getExprIdx();
+        expr_idx = parser.getNodeIdx();
     }
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
@@ -206,11 +197,11 @@ fn parseExpressionStatement(parser: *Parser) ?Statement {
     const maybe_expression = parser.parseExpression(.Lowest);
 
     if (maybe_expression) |expression| {
-        parser.expressions.append(expression) catch {
+        parser.nodes.append(.{ .expression = expression }) catch {
             @panic("Failed to append expression");
         };
 
-        expr_idx = parser.expressions.items.len - 1;
+        expr_idx = parser.getNodeIdx();
     }
 
     if (parser.peekTokenIs(Token.Kind.Semicolon)) {
@@ -327,9 +318,8 @@ fn parsePrefixExpression(parser: *Parser) Expression {
 
     parser.nextToken();
 
-    parser.expressions.append(parser.parseExpression(.Prefix).?) catch {
+    parser.nodes.append(.{ .expression = parser.parseExpression(.Prefix).? }) catch {
         @panic("Failed to append expression");
-
     };
 
     // // log.debug("token = {}, right ={any}", .{tok.kind, expr_ptr.*});
@@ -337,7 +327,7 @@ fn parsePrefixExpression(parser: *Parser) Expression {
     return Expression {
         .prefix_expression = .{ 
             .token = tok,
-            .right = parser.expressions.items.len - 1,
+            .right = parser.getNodeIdx(),
         }
     };
 
@@ -355,15 +345,16 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
 
     parser.nextToken();
 
-    parser.expressions.append(left) catch {
+    parser.nodes.append(.{ .expression = left }) catch {
         @panic("failed to append expression");
     };
-    const left_idx = parser.getExprIdx();
 
-    parser.expressions.append(parser.parseExpression(precedence).?) catch {
+    const left_idx = parser.getNodeIdx();
+
+    parser.nodes.append(.{ .expression = parser.parseExpression(precedence).? }) catch {
         @panic("failed to append expression");
     };
-    const right_idx = parser.getExprIdx();
+    const right_idx = parser.getNodeIdx();
 
     // log.debug("infix: token={}, \n\tleft={}, \n\tright={}\n", .{
     //     token.kind, left_ptr.*, right_ptr.*
@@ -410,10 +401,10 @@ fn parseIfExpression(parser: *Parser) ?Expression {
 
     const consequence = parser.parseBlockStatement();
 
-    parser.expressions.append(condition) catch {
+    parser.nodes.append(.{ .expression = condition }) catch {
         @panic("Failed to append expression");
     };
-    const condition_idx = parser.getExprIdx();
+    const condition_idx = parser.getNodeIdx();
 
     var alternative: ?BlockStatement = null;
     if (parser.peekTokenIs(.Else)) {
@@ -450,7 +441,7 @@ fn parseBlockStatement(parser: *Parser) BlockStatement {
             @panic("failed to parse block_statements");
         };
 
-        block_statements.append(parser.getStmtIdx()) catch {
+        block_statements.append(parser.getNodeIdx()) catch {
             @panic("failed to append blck stmt idx");
         };
 
@@ -527,11 +518,11 @@ fn parseCallExpression(parser: *Parser, function: Expression) Expression {
 
     const arguments = parser.parseCallArguments();
 
-    parser.expressions.append(function) catch {
+    parser.nodes.append(.{ .expression = function }) catch {
         @panic("Failed to append func expr");
     };
 
-    const func_idx = parser.getExprIdx();
+    const func_idx = parser.getNodeIdx();
 
     return Expression {
         .call_expression = .{
@@ -553,11 +544,11 @@ fn parseCallArguments(parser: *Parser) ArrayList(usize) {
 
     parser.nextToken();
 
-    parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
+    parser.nodes.append(.{ .expression = parser.parseExpression(.Lowest).? }) catch {
         @panic("Failed to append arg expr");
     };
 
-    args.append(parser.getExprIdx()) catch {
+    args.append(parser.getNodeIdx()) catch {
         @panic("Failed to append arg expr idx");
     };
 
@@ -566,11 +557,11 @@ fn parseCallArguments(parser: *Parser) ArrayList(usize) {
         parser.nextToken();
         parser.nextToken();
 
-        parser.expressions.append(parser.parseExpression(.Lowest).?) catch {
+        parser.nodes.append(.{ .expression = parser.parseExpression(.Lowest).? }) catch {
             @panic("Failed to append arg expr");
         };
 
-        args.append(parser.getExprIdx()) catch {
+        args.append(parser.getNodeIdx()) catch {
             @panic("Failed to append arg expr idx");
         };
 
@@ -623,18 +614,16 @@ pub fn ParseProgram(parser: *Parser, allocator: Allocator) !Program {
     while (parser.current_token.kind != Token.Kind.Eof) {
 
         try parser.parseStatement();
-        try parser.root_stmt_idx.append(parser.getStmtIdx());
+        try parser.statement_indexes.append(parser.getNodeIdx());
 
         parser.nextToken();
 
     }
 
-
     // does not clone, parsers arraylists gets deinited by program
     // TODO: make program own parser
-    program.root_stmt_idx = parser.root_stmt_idx;
-    program.statements = parser.statements;
-    program.expressions = parser.expressions;
+    program.statement_indexes = parser.statement_indexes;
+    program.nodes = parser.nodes;
     
     return program;
 }
@@ -709,7 +698,7 @@ test "Let Statements" {
 
     };
 
-    expect(program.statements.items.len == 3) catch |err| {
+    expect(program.statement_indexes.items.len == 3) catch |err| {
         print("Statements len is not 3: Failed with error", .{});
         return err;
     };
@@ -719,11 +708,12 @@ test "Let Statements" {
     };
 
 
-    for (program.statements.items, 0..) |*statement, i| {
-        try expect(statement.* == .let_stmt);
-        try expectEqualStrings(statement.tokenLiteral(), "let");
+    for (program.statement_indexes.items, 0..) |stmt_idx, i| {
+        var stmt = program.nodes.items[stmt_idx].statement;
+        try expect(stmt == .let_stmt);
+        try expectEqualStrings(stmt.tokenLiteral(), "let");
 
-        try expectEqualStrings(statement.let_stmt.name.token.tokenLiteral(), expected_identiefers[i]);
+        try expectEqualStrings(stmt.let_stmt.name.token.tokenLiteral(), expected_identiefers[i]);
 
         // TODO: check values
 
@@ -752,11 +742,13 @@ test "Return Statements" {
 
     try parser.checkParseErrors();
 
-    try expect(program.statements.items.len == 3);
+    try expect(program.statement_indexes.items.len == 3);
 
-    for (program.statements.items) |*statement| {
-        try expect(statement.* == .ret_stmt);
-        try expectEqualStrings("return", statement.tokenLiteral());
+    for (program.statement_indexes.items) |stmt_idx| {
+        var stmt = program.nodes.items[stmt_idx].statement;
+
+        try expect(stmt == .ret_stmt);
+        try expectEqualStrings("return", stmt.tokenLiteral());
     }
 }
 
@@ -776,12 +768,14 @@ test "Ident Expression" {
 
     // try parser.checkParseErrors();
 
-    expect(program.statements.items.len == 1) catch |err| {
-        print("statement_len = {}\n", .{program.statements.items.len});
+    expect(program.statement_indexes.items.len == 1) catch |err| {
+        print("statement_len = {}\n", .{program.statement_indexes.items.len});
         return err;
     };
 
-    var stmt = program.statements.items[0];
+
+    const stmt_idx = program.statement_indexes.items[0];
+    var stmt = program.nodes.items[stmt_idx].statement;
 
     try expect(stmt == .expr_stmt);
 
@@ -791,7 +785,7 @@ test "Ident Expression" {
 
     // try expect(stmt.expr_stmt.expression.? == .identifier);
     const expr_idx = stmt.expr_stmt.expression.?;
-    var expr = program.expressions.items[expr_idx];
+    var expr = program.nodes.items[expr_idx].expression;
 
     try expect(expr == .identifier);
 
@@ -817,14 +811,15 @@ test "Int Lit Expression" {
 
     try parser.checkParseErrors();
 
-    try expect(program.statements.items.len == 1);
+    try expect(program.statement_indexes.items.len == 1);
 
-    const stmt = program.statements.items[0];
+    const stmt_idx = program.statement_indexes.items[0];
+    const stmt = program.nodes.items[stmt_idx].statement;
 
     try expect(stmt == .expr_stmt);
 
     const expr_idx = stmt.expr_stmt.expression.?;
-    const expr = program.expressions.items[expr_idx];
+    const expr = program.nodes.items[expr_idx].expression;
 
     try expect(expr == .integer_literal);
 
@@ -906,19 +901,20 @@ test "Prefix Expression" {
 
         try parser.checkParseErrors();
 
-        try expect(program.statements.items.len == 1);
+        try expect(program.statement_indexes.items.len == 1);
 
-        const stmt = program.statements.items[0];
+        const stmt_idx = program.statement_indexes.items[0];
+        const stmt = program.nodes.items[stmt_idx].statement;
 
         try expect(stmt == .expr_stmt);
 
         const expr_idx = stmt.expr_stmt.expression.?;
-        var expr = program.expressions.items[expr_idx];
+        var expr = program.nodes.items[expr_idx].expression;
 
         try expect(expr == .prefix_expression);
 
         const right_idx = expr.prefix_expression.right;
-        const right_expr = program.expressions.items[right_idx];
+        const right_expr = program.nodes.items[right_idx].expression;
 
         try expect(right_expr == .integer_literal);
 
@@ -971,20 +967,21 @@ test "Infix Expression" {
 
         try parser.checkParseErrors();
 
-        expect(program.statements.items.len == 1) catch |err| {
+        expect(program.statement_indexes.items.len == 1) catch |err| {
 
             print("wront stmt len: expected=1, got={}\n", .{
-                program.statements.items.len
+                program.statement_indexes.items.len
             });
             return err;
         };
 
-        var stmt = program.statements.items[0];
+        const stmt_idx = program.statement_indexes.items[0];
+        var stmt = program.nodes.items[stmt_idx].statement;
 
         try expect(stmt == .expr_stmt);
 
         const expr_idx = stmt.expr_stmt.expression.?;
-        const expr = program.expressions.items[expr_idx];
+        const expr = program.nodes.items[expr_idx].expression;
 
         try expect(expr == .infix_expression);
 
@@ -998,8 +995,8 @@ test "Infix Expression" {
 
         const right_expr_idx = expr.infix_expression.right;
         const left_expr_idx = expr.infix_expression.left;
-        const left_expr = program.expressions.items[left_expr_idx];
-        const right_expr = program.expressions.items[right_expr_idx];
+        const left_expr = program.nodes.items[left_expr_idx].expression;
+        const right_expr = program.nodes.items[right_expr_idx].expression;
 
         try expect(left_expr.integer_literal.value == left_value);
         try expect(right_expr.integer_literal.value == right_value);
@@ -1015,42 +1012,42 @@ test "Get Program String" {
 
     const allocator = std.testing.allocator;
 
-    var root_stmt_idx = ArrayList(usize).init(allocator);
+    var statement_indexes = ArrayList(usize).init(allocator);
 
-    var statements = ArrayList(Statement).init(allocator);
-    
-    var expresssions = ArrayList(Expression).init(allocator);
+    var nodes = ArrayList(Node).init(allocator);
 
-    try root_stmt_idx.append(0);
+    try statement_indexes.append(0);
 
-    try expresssions.append(
-        Expression {
-            .identifier = Identifier {
-                .token = Token.init(.Ident, "anotherVar")
+    try nodes.append(
+        Node { 
+            .statement = Statement { 
+                .let_stmt = .{ 
+                    .token = Token.init(.Let, "let"),
+                    .name = Identifier {
+                        .token = Token.init(.Ident, "myVar"),
+                    },
+                    .value =  1
+                }
             }
         }
     );
 
-    try statements.append(
-        Statement { 
-            .let_stmt = .{ 
-                .token = Token.init(.Let, "let"),
-                .name = Identifier {
-                    .token = Token.init(.Ident, "myVar"),
-                },
-                .value =  0
+    try nodes.append(
+        Node {
+            .expression = Expression {
+                .identifier = Identifier {
+                    .token = Token.init(.Ident, "anotherVar")
+                }
             }
         }
-
     );
+
 
     var prog = Program {
         .allocator = allocator,
-        .root_stmt_idx = root_stmt_idx,
-        .statements = statements,
-        .expressions = expresssions
+        .statement_indexes = statement_indexes,
+        .nodes = nodes,
     };
-
     defer prog.deinit();
 
     const prog_str = try prog.String();
@@ -1151,7 +1148,7 @@ test "If Expression" {
 
     try parser.checkParseErrors();
 
-    try expect(program.root_stmt_idx.items.len == 1);
+    try expect(program.statement_indexes.items.len == 1);
 
     // TODO: expand test 
 
@@ -1173,18 +1170,18 @@ test "Func Lit Expr" {
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
 
-    expect(program.root_stmt_idx.items.len == 1) catch |err| {
-        print("Expected 1 stmt, got {}\n", .{program.root_stmt_idx.items.len});
+    expect(program.statement_indexes.items.len == 1) catch |err| {
+        print("Expected 1 stmt, got {}\n", .{program.statement_indexes.items.len});
         return err;
     };
 
-    const stmt_idx = program.root_stmt_idx.items[0];
-    const stmt = program.statements.items[stmt_idx];
+    const stmt_idx = program.statement_indexes.items[0];
+    const stmt = program.nodes.items[stmt_idx].statement;
 
     try expect(stmt == .expr_stmt);
 
     const expr_idx = stmt.expr_stmt.expression.?;
-    const expr = program.expressions.items[expr_idx];
+    const expr = program.nodes.items[expr_idx].expression;
 
     try expect(expr == .fn_literal);
 
@@ -1205,7 +1202,7 @@ test "Func Lit Expr" {
     try expect(fn_lit.body.statements.items.len == 1);
 
     const body_stmt_idx = fn_lit.body.statements.items[0];
-    const body_stmt = program.statements.items[body_stmt_idx];
+    const body_stmt = program.nodes.items[body_stmt_idx].statement;
     try expect(body_stmt == .expr_stmt);
 
 }
@@ -1228,19 +1225,19 @@ test "Call expression" {
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
 
-    const n_stmts = program.root_stmt_idx.items.len;
+    const n_stmts = program.statement_indexes.items.len;
     expect(n_stmts == 1) catch |err| {
         print("expected 1 stmt, got {}\n", .{n_stmts});
         return err;
     };
 
-    const stmt_idx = program.root_stmt_idx.items[0];
-    const stmt = program.statements.items[stmt_idx];
+    const stmt_idx = program.statement_indexes.items[0];
+    const stmt = program.nodes.items[stmt_idx].statement;
 
     try expect(stmt == .expr_stmt);
     //
     const expr_idx = stmt.expr_stmt.expression.?;
-    const expr = program.expressions.items[expr_idx];
+    const expr = program.nodes.items[expr_idx].expression;
 
     try expect(expr == .call_expression);
 

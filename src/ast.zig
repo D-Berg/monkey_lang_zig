@@ -7,8 +7,9 @@ const print = std.debug.print;
 const ExprIdx = usize;
 const StateIdx = usize;
 
-const Node = struct {
-
+pub const Node = union(enum) {
+    statement: Statement,
+    expression: Expression
 };
 
 pub const Statement = union(enum) {
@@ -35,7 +36,7 @@ pub const Statement = union(enum) {
                 if (ls.value != null) {
 
                     const expr_idx = ls.value.?;
-                    var value = program.expressions.items[expr_idx];
+                    var value = program.nodes.items[expr_idx].expression;
                     const value_str = try value.String(program);
                     defer program.allocator.free(value_str);
 
@@ -60,7 +61,7 @@ pub const Statement = union(enum) {
             .expr_stmt => |*es| {
 
                 if (es.expression) |expr_idx| {
-                    var expr = program.expressions.items[expr_idx];
+                    var expr = program.nodes.items[expr_idx].expression;
                     return try expr.String(program);
                 } else {
 
@@ -76,7 +77,7 @@ pub const Statement = union(enum) {
             .ret_stmt => |*rs| {
 
                 if (rs.value) |val_idx| {
-                    var val_expr = program.expressions.items[val_idx];
+                    var val_expr = program.nodes.items[val_idx].expression;
                     const val_str = try val_expr.String(program);
                     defer allocator.free(val_str);
 
@@ -172,7 +173,7 @@ pub const Expression = union(enum) {
         
         switch (expr.*) {
             .prefix_expression => |*pe| {
-                var right_expr = program.expressions.items[pe.right];
+                var right_expr = program.nodes.items[pe.right].expression;
                 const right_str = try right_expr.String(program);
                 defer allocator.free(right_str);
 
@@ -182,11 +183,11 @@ pub const Expression = union(enum) {
             },
 
             .infix_expression => |*ie| {
-                var left_expr = program.expressions.items[ie.left];
+                var left_expr = program.nodes.items[ie.left].expression;
                 const left_str = try left_expr.String(program);
                 defer allocator.free(left_str);
 
-                var right_expr = program.expressions.items[ie.right];
+                var right_expr = program.nodes.items[ie.right].expression;
                 const right_str = try right_expr.String(program);
                 defer allocator.free(right_str);
 
@@ -197,7 +198,7 @@ pub const Expression = union(enum) {
 
             // TODO: fix if_expr.string()
             .if_expression => |*if_expr| {
-                var condition_expr = program.expressions.items[if_expr.condition];
+                var condition_expr = program.nodes.items[if_expr.condition].expression;
                 const condition_str = try condition_expr.String(program);
                 defer allocator.free(condition_str);
 
@@ -225,7 +226,7 @@ pub const Expression = union(enum) {
             .call_expression => |*call_expr| {
 
                 // TODO impl string() for fn_lit
-                var fn_expr = program.expressions.items[call_expr.function];
+                var fn_expr = program.nodes.items[call_expr.function].expression;
                 const fn_str = try fn_expr.String(program);
                 defer allocator.free(fn_str);
 
@@ -238,7 +239,7 @@ pub const Expression = union(enum) {
 
                 for (call_expr.args.items, 0..) |arg_idx, i| {
 
-                    var arg_expr = program.expressions.items[arg_idx];
+                    var arg_expr = program.nodes.items[arg_idx].expression;
                     const arg_str = try arg_expr.String(program);
                     defer allocator.free(arg_str);
                     
@@ -335,29 +336,38 @@ pub const Identifier = struct {
 
 pub const Program = struct {
     allocator: Allocator,
-    root_stmt_idx: ArrayList(StateIdx),
-    statements: ArrayList(Statement),
-    expressions: ArrayList(Expression),
+    statement_indexes: ArrayList(usize), // 
+    nodes: ArrayList(Node),
+    
+    // statements: ArrayList(Statement),
+    // expressions: ArrayList(Expression),
 
     pub fn init(allocator: Allocator) Program {
         return .{
             .allocator = allocator,
-            .root_stmt_idx = ArrayList(StateIdx).init(allocator),
-            .statements = ArrayList(Statement).init(allocator),
-            .expressions = ArrayList(Expression).init(allocator)
+            .statement_indexes = ArrayList(StateIdx).init(allocator),
+            .nodes = ArrayList(Node).init(allocator),
         };
 
     }
 
     pub fn deinit(program: *Program) void {
-        program.root_stmt_idx.deinit();
-        program.statements.deinit();
+        program.statement_indexes.deinit();
         
-        for (program.expressions.items) |*expr| {
-            expr.deinit();
+        for (program.nodes.items) |*node| {
+            switch (node.*) {
+                .statement => {
+
+                },
+                .expression => |*expr| {
+                    expr.deinit();
+                }, 
+            }
         }
+
+        program.nodes.deinit();
+
         
-        program.expressions.deinit();
     }
     
     pub fn String(program: *Program) ![]const u8 {
@@ -365,9 +375,9 @@ pub const Program = struct {
         var str_len: usize = 0;
         var buffer = try program.allocator.alloc(u8, 0);
 
-        for (program.root_stmt_idx.items) |stmt_idx| {
+        for (program.statement_indexes.items) |stmt_idx| {
 
-            var stmt = program.statements.items[stmt_idx];
+            var stmt = program.nodes.items[stmt_idx].statement;
 
             const stmt_str = try stmt.String(program);
             defer program.allocator.free(stmt_str);
