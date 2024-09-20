@@ -2,6 +2,7 @@ const std = @import("std");
 const Lexer = @import("Lexer.zig");
 const Token = @import("Token.zig");
 const Parser = @import("Parser.zig");
+const evaluator = @import("evaluator.zig");
 
 const Allocator = std.mem.Allocator;
 const stdin = std.io.getStdIn().reader();
@@ -33,14 +34,20 @@ pub fn start(allocator: Allocator) !void {
         var program = try parser.ParseProgram(allocator);
         defer program.deinit();
 
-        const prog_str = try program.String();
-        defer allocator.free(prog_str);
+        // const prog_str = try program.String();
+        // defer allocator.free(prog_str);
 
         for (parser.errors.items) |err| {
             std.debug.print("monkey_parse_err: {s}\n", .{err});
         }
 
-        std.debug.print("Program: {s}\n", .{prog_str});
+        // std.debug.print("Program: {s}\n", .{prog_str});
+
+        const evaluated = try evaluator.Eval(&program);
+        const eval_str = try evaluated.inspect(allocator);
+        defer allocator.free(eval_str);
+        try stdout.print("evaluated: {s}\n", .{eval_str});
+
 
 
         // var tok = lex.NextToken();

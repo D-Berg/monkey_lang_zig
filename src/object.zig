@@ -8,7 +8,7 @@ pub const Object = union(enum) {
     nullable: NullObject,
 
     /// return string of value, str need to be deallocated by caller
-    pub fn inspect(obj: *Object, allocator: Allocator) []const u8 {
+    pub fn inspect(obj: *const Object, allocator: Allocator) ![]const u8 {
         
         switch (obj.*) {
             .nullable => {
@@ -27,7 +27,7 @@ pub const Object = union(enum) {
 };
 
 pub const IntegerObject = struct {
-    value: i32,
+    value: u32, // TODO: Negative numbers??
 };
 
 pub const BoolObject = struct {
