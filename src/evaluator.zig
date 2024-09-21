@@ -4,7 +4,8 @@ const Allocator = std.mem.Allocator;
 const Token = @import("Token.zig");
 
 const object = @import("object.zig");
-const Program = @import("ast.zig").Program;
+const ast = @import("ast.zig");
+const Program = ast.Program;
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
 
@@ -13,7 +14,7 @@ const expect = std.testing.expect;
 
 pub fn Eval(program: *Program) error{FailedEvaluation, OutOfMemory}!object.Object {
 
-    var maybe_result: ?object.Object = null;
+    var result: object.Object = undefined;
 
     const prg_str = try program.String();
     defer program.allocator.free(prg_str);
@@ -21,19 +22,15 @@ pub fn Eval(program: *Program) error{FailedEvaluation, OutOfMemory}!object.Objec
 
     for (program.statement_indexes.items) |stmt_idx| {
 
-        maybe_result = EvalNode(program, stmt_idx);
+        result = EvalNode(program, stmt_idx);
 
     }
 
-    if (maybe_result) |result| {
-        return result;
-    } else {
-        return error.FailedEvaluation;
-    }
+    return result;
 
 }
 
-fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
+fn EvalNode(program: *Program, node_idx: usize) object.Object {
 
     const node = program.nodes.items[node_idx];
 
@@ -44,6 +41,11 @@ fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
 
                 .expr_stmt => |es| {
                     return EvalNode(program, es.expression.?);
+                },
+
+                .blck_stmt => |bs| {
+
+                    return evalBlockStatement(program, &bs);
                 },
 
                 else => {
@@ -60,31 +62,31 @@ fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
                 .integer_literal => |int_lit| {
 
                     return object.Object {
-                        .integer = .{ 
-                            .value = @intCast(int_lit.value),
-                        }
+                        .integer = @intCast(int_lit.value),
                     };
 
                 }, 
                 .boolean_literal => |bool_lit| {
 
                     return object.Object {
-                        .boolean = .{ 
-                            .value = bool_lit.value,
-                        }
+                        .boolean = bool_lit.value,
                     };
 
                 }, 
                 
                 .prefix_expression => |pe| {
-                    const right = EvalNode(program, pe.right).?;
+                    const right = EvalNode(program, pe.right);
                     return evalPrefixExpression(pe.token.kind, &right);
                 },
 
                 .infix_expression => |ie| {
-                    const left = EvalNode(program, ie.left).?;
-                    const right = EvalNode(program, ie.right).?;
+                    const left = EvalNode(program, ie.left);
+                    const right = EvalNode(program, ie.right);
                     return evalInfixExpression(ie.token.kind, &left, &right);
+                },
+
+                .if_expression => |ie| {
+                    return evalIfExpression(program, &ie);
                 },
 
                 else => {
@@ -100,7 +102,7 @@ fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
 }
 
 
-fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) ?object.Object {
+fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) object.Object {
     switch (operator) {
         .Bang => {
 
@@ -108,33 +110,25 @@ fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) ?obje
             switch (right.*) {
 
                 .boolean => |b| {
-                    if (b.value) {
+                    if (b) {
                         return object.Object { 
-                            .boolean = .{ 
-                                .value = false 
-                            }
+                            .boolean = false 
                         };
                     } else {
                         return object.Object {
-                            .boolean = .{ 
-                                .value = true 
-                            }
+                            .boolean = true 
                         };
                     }
                 },
 
                 .nullable => {
                     return object.Object {
-                        .boolean = .{
-                            .value = true
-                        }
+                        .boolean = true
                     };
                 },
                 else => {
                     return object.Object {
-                        .boolean = .{ 
-                            .value = false 
-                        }
+                        .boolean = false 
                     };
                 }
 
@@ -144,20 +138,22 @@ fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) ?obje
 
         .Minus => {
             if (right.* != .integer) {
-                return null;
+                return object.Object {
+                    .nullable = {}
+                };
             }
 
-            const val = right.integer.value;
+            const val = right.integer;
 
             return object.Object {
-                .integer = .{ 
-                    .value = -val
-                }
+                .integer =  -val
             };
         },
 
         else => {
-            return null;
+            return object.Object {
+                .nullable = {}
+            };
         }
     }
 }
@@ -166,78 +162,59 @@ fn evalInfixExpression(
     operator: Token.Kind, 
     left: *const object.Object, 
     right: *const object.Object
-) ?object.Object {
+) object.Object {
 
     if (left.* == .integer and right.* == .integer) {
 
-        const left_val = left.integer.value;
-        const right_val = right.integer.value;
+        const left_val = left.integer;
+        const right_val = right.integer;
 
         switch (operator) {
             .Plus => {
                 return object.Object { 
-                    .integer = .{ 
-                        .value = left_val + right_val 
-                    }
+                    .integer = left_val + right_val 
                 };
             },
             .Minus => {
                 return object.Object { 
-                    .integer = .{ 
-                        .value = left_val - right_val 
-                    }
+                    .integer = left_val - right_val 
                 };
             },
             .Asterisk => {
                 return object.Object { 
-                    .integer = .{ 
-                        .value = left_val * right_val 
-                    }
+                    .integer = left_val * right_val 
                 };
             },
             .Slash => {
                 return object.Object { 
-                    .integer = .{ 
-                        .value = @divTrunc(left_val, right_val) 
-                    }
+                    .integer = @divTrunc(left_val, right_val) 
                 };
             },
             .Lt => {
                 return object.Object {
-                    .boolean = .{ 
-                        .value = left_val < right_val 
-                    }
-
+                    .boolean = left_val < right_val 
                 };
             },
 
             .Gt => {
                 return object.Object {
-                    .boolean = .{ 
-                        .value = left_val > right_val 
-                    }
-
+                    .boolean = left_val > right_val 
                 };
             },
             .Eq => {
                 return object.Object {
-                    .boolean = .{ 
-                        .value = left_val == right_val 
-                    }
-
+                    .boolean = left_val == right_val 
                 };
             },
             .Neq => {
                 return object.Object {
-                    .boolean = .{ 
-                        .value = left_val != right_val 
-                    }
-
+                    .boolean = left_val != right_val 
                 };
             },
             else => {
-                // TODO: return err;
-                return null;
+                return object.Object {
+                    .nullable = {}
+                };
             }
 
         }
@@ -245,37 +222,79 @@ fn evalInfixExpression(
     }
 
     if (left.* == .boolean and right.* == .boolean) {
-        const left_val = left.boolean.value;
-        const right_val = right.boolean.value;
+        const left_val = left.boolean;
+        const right_val = right.boolean;
 
         switch (operator) {
             .Eq => {
                 return object.Object {
-                    .boolean = .{
-                        .value = left_val == right_val
-                    }
+                    .boolean = left_val == right_val
                 };
 
             },
             .Neq => {
                 return object.Object {
-                    .boolean = .{
-                        .value = left_val != right_val
-                    }
+                    .boolean = left_val != right_val
                 };
             },
             else => {
-                return null;
+                return object.Object { .nullable = {} };
             }
 
         }
     }
 
-    return null;
+    return object.Object { .nullable = {} };
 
 }
 
+fn evalBlockStatement(program: *Program, blck_stmt: *const ast.BlockStatement) object.Object {
 
+    var obj: object.Object = undefined;
+
+    for (blck_stmt.statements.items) |stmt_idx| {
+        obj = EvalNode(program, stmt_idx);
+    }
+
+    return obj;
+    
+
+}
+fn evalIfExpression(program: *Program, if_epxr: *const ast.IfExpression) object.Object {
+
+    const condition = EvalNode(program, if_epxr.condition);
+
+    if (isTruthy(&condition)) {
+
+        return evalBlockStatement(program, &if_epxr.consequence);
+
+    } else {
+
+        if (if_epxr.alternative) |alt| {
+            return evalBlockStatement(program, &alt);
+
+        } else {
+            return object.Object { .nullable = {} };
+        }
+    }
+
+}
+
+fn isTruthy(obj: *const object.Object) bool {
+
+    switch (obj.*) {
+        .boolean => |b| {
+            return b;
+        },
+        .nullable => {
+            return false;
+        },
+        else => {
+            return true;
+        }
+    }
+
+}
 
 fn testEval(allocator: Allocator, input: []const u8) !object.Object {
     
@@ -328,9 +347,9 @@ test "Eval Int expr" {
 
         const evaluated = try testEval(allocator, inp);
 
-        expect(evaluated.integer.value == ans) catch |err| {
+        expect(evaluated.integer == ans) catch |err| {
             print("{s}\n", .{inp});
-            print("Expected {}, got {}\n", .{ans, evaluated.integer.value});
+            print("Expected {}, got {}\n", .{ans, evaluated.integer});
             return err;
         };
     }
@@ -388,15 +407,16 @@ test "Eval bool expr" {
 
         const evaluated = try testEval(allocator, inp);
 
-        expect(evaluated.boolean.value == ans) catch |err| {
+        expect(evaluated.boolean == ans) catch |err| {
             print("{s}\n", .{inp});
-            print("Expected {}, got {}\n", .{ans, evaluated.boolean.value});
+            print("Expected {}, got {}\n", .{ans, evaluated.boolean});
             return err;
 
         };
     }
 
 }
+
 
 test "Bang(!) operator" {
 
@@ -415,11 +435,57 @@ test "Bang(!) operator" {
 
         const evaluated = try testEval(allocator, inp);
 
-        try expect(evaluated.boolean.value == ans);
+        try expect(evaluated.boolean == ans);
     }
 
 }
 
 
+test "eval if expr" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "if (true) { 10 }",
+        "if (false) { 10 }",
+        "if (1) { 10 }",
+        "if (1 < 2) { 10 }",
+        "if (1 > 2) { 10 }",
+        "if (1 > 2) { 10 } else { 20 }",
+        "if (1 < 2) { 10 } else { 20 }"
+    };
+    const answers = [_]object.Object { 
+        object.Object{ .integer = 10 },
+        object.Object{ .nullable = {} },
+        object.Object{ .integer = 10 },
+        object.Object{ .integer = 10 },
+        object.Object{ .nullable = {} },
+        object.Object{ .integer = 20 },
+        object.Object{ .integer = 10 },
+
+    };
+
+    for (inputs, answers) |inp, ans| {
+
+        const evaluated = try testEval(allocator, inp);
+
+
+        switch (evaluated) {
+            .integer => |int| {
+                try expect(int == ans.integer);
+            },
+            .nullable => {
+                try expect(ans == .nullable);
+            },
+            else => {
+                return error.FailedEvaluation;
+            }
+        }
+
+
+    }
+
+
+}
 
 
