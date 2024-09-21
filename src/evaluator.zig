@@ -1,6 +1,7 @@
 const std = @import("std");
 const print = std.debug.print;
 const Allocator = std.mem.Allocator;
+const Token = @import("Token.zig");
 
 const object = @import("object.zig");
 const Program = @import("ast.zig").Program;
@@ -70,6 +71,11 @@ fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
                     };
 
                 }, 
+                
+                .prefix_expression => |pe| {
+                    const right = EvalNode(program, pe.right).?;
+                    return evalPrefixExpression(pe.token.kind, &right);
+                },
 
                 else => {
                     unreachable;
@@ -82,6 +88,56 @@ fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
     }
 
 }
+
+
+fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) ?object.Object {
+    switch (operator) {
+        .Bang => {
+
+            // same as evalBangOperatorExpression()
+            switch (right.*) {
+
+                .boolean => |b| {
+                    if (b.value) {
+                        return object.Object { 
+                            .boolean = .{ 
+                                .value = false 
+                            }
+                        };
+                    } else {
+                        return object.Object {
+                            .boolean = .{ 
+                                .value = true 
+                            }
+                        };
+                    }
+                },
+
+                .nullable => {
+                    return object.Object {
+                        .boolean = .{
+                            .value = true
+                        }
+                    };
+                },
+                else => {
+                    return object.Object {
+                        .boolean = .{ 
+                            .value = false 
+                        }
+                    };
+                }
+
+            }
+
+        },
+
+        else => {
+            return null;
+        }
+    }
+}
+
 
 
 fn testEval(allocator: Allocator, input: []const u8) !object.Object {
@@ -128,6 +184,29 @@ test "Eval bool expr" {
     }
 
 }
+
+test "Bang(!) operator" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "!true", "!false", "!5",
+        "!!true", "!!false", "!!5",
+    };
+    const answers = [_]bool{ 
+        false, true, false,
+        true, false, true
+    };
+
+    for (inputs, answers) |inp, ans| {
+
+        const evaluated = try testEval(allocator, inp);
+
+        try expect(evaluated.boolean.value == ans);
+    }
+
+}
+
 
 
 
