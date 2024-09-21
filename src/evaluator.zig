@@ -21,9 +21,11 @@ pub fn Eval(program: *Program) error{FailedEvaluation, OutOfMemory}!object.Objec
     print("prog str: {s}\n", .{prg_str});
 
     for (program.statement_indexes.items) |stmt_idx| {
-
         result = EvalNode(program, stmt_idx);
 
+        if (result == .return_val) {
+            return result.return_val.*;
+        }
     }
 
     return result;
@@ -39,12 +41,18 @@ fn EvalNode(program: *Program, node_idx: usize) object.Object {
         .statement => |stmt| {
             switch (stmt) {
 
+                .ret_stmt => |rs| {
+                    const val = EvalNode(program, rs.value.?);
+                    return object.Object {
+                        .return_val = &val // somehow this works lol
+                    };
+                },
+
                 .expr_stmt => |es| {
                     return EvalNode(program, es.expression.?);
                 },
 
                 .blck_stmt => |bs| {
-
                     return evalBlockStatement(program, &bs);
                 },
 
@@ -254,6 +262,11 @@ fn evalBlockStatement(program: *Program, blck_stmt: *const ast.BlockStatement) o
 
     for (blck_stmt.statements.items) |stmt_idx| {
         obj = EvalNode(program, stmt_idx);
+
+        if (obj != .nullable and obj == .return_val) {
+
+            return obj;
+        }
     }
 
     return obj;
@@ -484,8 +497,31 @@ test "eval if expr" {
 
 
     }
-
-
 }
 
+test "Eval return stmt" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "return 10;",
+        "return 10; 9;",
+        "return 2 * 5; 9;",
+        "9; return 2 * 5; 9;",
+        "if (10 > 1) { if (10 > 1) { return 10; } 129 return 1; }"
+    };
+    const answers = [_]i32 { 
+        10,
+        10,
+        10,
+        10,
+        10,
+    };
+
+    for (inputs, answers) |inp, ans| {
+        const evaluated = try testEval(allocator, inp);
+        try expect(ans == evaluated.integer);
+    }
+
+}
 
