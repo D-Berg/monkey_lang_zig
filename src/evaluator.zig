@@ -15,9 +15,9 @@ pub fn Eval(program: *Program) error{FailedEvaluation, OutOfMemory}!object.Objec
 
     var maybe_result: ?object.Object = null;
 
-    // const prg_str = try program.String();
-    // defer program.allocator.free(prg_str);
-    // print("prog str: {s}\n", .{prg_str});
+    const prg_str = try program.String();
+    defer program.allocator.free(prg_str);
+    print("prog str: {s}\n", .{prg_str});
 
     for (program.statement_indexes.items) |stmt_idx| {
 
@@ -202,7 +202,41 @@ fn evalInfixExpression(
                     }
                 };
             },
+            .Lt => {
+                return object.Object {
+                    .boolean = .{ 
+                        .value = left_val < right_val 
+                    }
+
+                };
+            },
+
+            .Gt => {
+                return object.Object {
+                    .boolean = .{ 
+                        .value = left_val > right_val 
+                    }
+
+                };
+            },
+            .Eq => {
+                return object.Object {
+                    .boolean = .{ 
+                        .value = left_val == right_val 
+                    }
+
+                };
+            },
+            .Neq => {
+                return object.Object {
+                    .boolean = .{ 
+                        .value = left_val != right_val 
+                    }
+
+                };
+            },
             else => {
+                // TODO: return err;
                 return null;
             }
 
@@ -279,14 +313,42 @@ test "Eval Int expr" {
 test "Eval bool expr" {
     const allocator = std.testing.allocator;
 
-    const inputs = [_][]const u8{ "true", "false" };
-    const answers = [_]bool{ true, false };
+    const inputs = [_][]const u8{ 
+        "true", 
+        "false",
+        "1 < 2",
+        "1 > 2",
+        "1 < 1",
+        "1 > 1",
+        "1 == 1",
+        "1 != 1",
+        "1 == 2",
+        "1 != 2"
+    };
+
+    const answers = [_]bool{
+        true, 
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        true
+    };
 
     for (inputs, answers) |inp, ans| {
 
         const evaluated = try testEval(allocator, inp);
 
-        try expect(evaluated.boolean.value == ans);
+        expect(evaluated.boolean.value == ans) catch |err| {
+            print("{s}\n", .{inp});
+            print("Expected {}, got {}\n", .{ans, evaluated.boolean.value});
+            return err;
+
+        };
     }
 
 }
