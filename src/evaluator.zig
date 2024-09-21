@@ -244,6 +244,33 @@ fn evalInfixExpression(
 
     }
 
+    if (left.* == .boolean and right.* == .boolean) {
+        const left_val = left.boolean.value;
+        const right_val = right.boolean.value;
+
+        switch (operator) {
+            .Eq => {
+                return object.Object {
+                    .boolean = .{
+                        .value = left_val == right_val
+                    }
+                };
+
+            },
+            .Neq => {
+                return object.Object {
+                    .boolean = .{
+                        .value = left_val != right_val
+                    }
+                };
+            },
+            else => {
+                return null;
+            }
+
+        }
+    }
+
     return null;
 
 }
@@ -323,7 +350,16 @@ test "Eval bool expr" {
         "1 == 1",
         "1 != 1",
         "1 == 2",
-        "1 != 2"
+        "1 != 2",
+        "true == true",
+        "false == false",
+        "true == false",
+        "true != false",
+        "false != true",
+        "(1 < 2) == true",
+        "(1 < 2) == false",
+        "(1 > 2) == true",
+        "(1 > 2) == false"
     };
 
     const answers = [_]bool{
@@ -333,6 +369,15 @@ test "Eval bool expr" {
         false,
         false,
         false,
+        true,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
         true,
         false,
         false,
