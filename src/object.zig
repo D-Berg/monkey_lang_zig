@@ -27,7 +27,7 @@ pub const Object = union(enum) {
 };
 
 pub const IntegerObject = struct {
-    value: u32, // TODO: Negative numbers??
+    value: i32, // TODO: Negative numbers??
 };
 
 pub const BoolObject = struct {

@@ -57,7 +57,7 @@ fn EvalNode(program: *Program, node_idx: usize) ?object.Object {
 
                     return object.Object {
                         .integer = .{ 
-                            .value = int_lit.value,
+                            .value = @intCast(int_lit.value),
                         }
                     };
 
@@ -132,6 +132,20 @@ fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) ?obje
 
         },
 
+        .Minus => {
+            if (right.* != .integer) {
+                return null;
+            }
+
+            const val = right.integer.value;
+
+            return object.Object {
+                .integer = .{ 
+                    .value = -val
+                }
+            };
+        },
+
         else => {
             return null;
         }
@@ -158,14 +172,17 @@ fn testEval(allocator: Allocator, input: []const u8) !object.Object {
 test "Eval Int expr" {
     const allocator = std.testing.allocator;
 
-    const inputs = [_][]const u8{ "5", "10" };
-    const answers = [_]u32{ 5, 10 };
+    const inputs = [_][]const u8{ "5", "10", "-5", "-10" };
+    const answers = [_]i32{ 5, 10, -5, -10 };
 
     for (inputs, answers) |inp, ans| {
 
         const evaluated = try testEval(allocator, inp);
 
-        try expect(evaluated.integer.value == ans);
+        expect(evaluated.integer.value == ans) catch |err| {
+            print("Expected {}, got {}\n", .{ans, evaluated.integer.value});
+            return err;
+        };
     }
 
 }
