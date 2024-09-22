@@ -49,22 +49,12 @@ pub fn start(allocator: Allocator) !void {
 
         const maybe_evaluated = try evaluator.Eval(&program, &env);
 
-        var iterator = env.store.iterator();
-
-        print("env contains: \n", .{});
-        while (iterator.next()) |entry| {
-            print("key: {s}, val: {}\n", .{
-                entry.key_ptr.*, entry.value_ptr.*
-            });
-        }
 
         if (maybe_evaluated) |evaluated| {
             const eval_str = try evaluated.inspect(allocator);
             defer allocator.free(eval_str);
             try stdout.print("evaluated: {s}\n", .{eval_str});
         }
-
-
 
         // var tok = lex.NextToken();
         // while (tok.kind != Token.Kind.Eof) : (tok = lex.NextToken()) {

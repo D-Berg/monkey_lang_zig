@@ -63,8 +63,10 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     const val = try EvalNode(program, env, ls.value.?);
 
 
-                    print("putting ident: {s} with val: {}\n", .{name, val.?});
+                    // print("putting ident: {s} with val: {}\n", .{name, val.?});
                     try env.store.put(name, val.?);
+
+                    // TODO print env, think key disapear because env lives longer than tokens.
 
                     // TODO: errors p.137
                     return null;
@@ -95,9 +97,9 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     var tok = ident.token;
                     const ident_name = tok.tokenLiteral();
                     
-                    print("Evaluating ident expr: {s}\n", .{ident_name});
+                    // print("Evaluating ident expr: {s}\n", .{ident_name});
 
-                    print("getting ident name: {s}\n", .{ident_name});
+                    // print("getting ident name: {s}\n", .{ident_name});
 
                     const maybe_val = env.store.get(ident_name);
 
