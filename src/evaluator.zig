@@ -24,9 +24,9 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
 
     var maybe_result: ?object.Object = undefined;
 
-    const prg_str = try program.String();
-    defer program.allocator.free(prg_str);
-    print("\nprog str: {s}\n", .{prg_str});
+    // const prg_str = try program.String();
+    // defer program.allocator.free(prg_str);
+    // print("\nprog str: {s}\n", .{prg_str});
 
     for (program.statement_indexes.items) |stmt_idx| {
         maybe_result = try EvalNode(program, env, stmt_idx);
@@ -58,7 +58,7 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     const name = ident.tokenLiteral();
 
 
-                    print("Evaluating let stmt: {s}\n", .{name});
+                    // print("Evaluating let stmt: {s}\n", .{name});
 
                     const val = try EvalNode(program, env, ls.value.?);
 
