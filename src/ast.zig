@@ -125,6 +125,16 @@ pub const BlockStatement = struct {
     // fn deinit(allocator: Allocator) {
     //
     // }
+    
+    pub fn clone(self: *const BlockStatement) !BlockStatement {
+        
+        return BlockStatement {
+            .token =  self.token,
+            .statements = try self.statements.clone(),
+        };
+
+    }
+    
 };
 
 
@@ -321,7 +331,7 @@ pub const FnLiteralExpression = struct {
 pub const CallExpression = struct {
     token: Token, // the '('
     function: ExprIdx, // fnlit or ident expr
-    args: ArrayList(ExprIdx),
+    args: ArrayList(usize),
 };
 
 

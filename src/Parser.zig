@@ -1214,7 +1214,9 @@ test "Call expression" {
     // const input = "add(1);";
     // const input = "add(1, 2);";
     // const input = "add(3 + 4);";
-    const input = "add(1, 2 * 3, 4 + 5);";
+    // const input = "add(1, 2 * 3, 4 + 5);";
+    const input = "add(1, 2 * 3, add(5, 5));";
+
 
     var lexer = try Lexer.init(allocator, input);
     defer lexer.deinit();

@@ -51,6 +51,7 @@ pub fn start(allocator: Allocator) !void {
 
 
         if (maybe_evaluated) |evaluated| {
+            defer evaluated.deinit();
             const eval_str = try evaluated.inspect(allocator);
             defer allocator.free(eval_str);
             try stdout.print("evaluated: {s}\n", .{eval_str});

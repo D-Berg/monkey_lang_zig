@@ -12,10 +12,13 @@ literal_len: usize,
 pub fn init(kind: Token.Kind, chars: []const u8) Token {
     var literal: [32:0]u8 = undefined;
 
+    // std.debug.print("chars: {s}\n", .{chars});
+    //
+    // std.debug.print("chars_len = {}\n", .{chars.len});
+
     for (0..literal.len) |i| {
         literal[i] = 0;
     }
-
     for (0..chars.len) |i| {
         literal[i] = chars[i];
     }
@@ -28,7 +31,9 @@ pub fn init(kind: Token.Kind, chars: []const u8) Token {
 }
 
 
+
 pub fn tokenLiteral(tok: *Token) []const u8 {
+    // std.debug.print("tk_len = {}\n", .{tok.literal_len});
     return tok.literal[0..tok.literal_len];
 }
 

@@ -10,6 +10,8 @@ const ast = @import("ast.zig");
 const Program = ast.Program;
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
+const ArrayList = std.ArrayList;
+const Identifier = ast.Identifier;
 
 const expect = std.testing.expect;
 
@@ -143,15 +145,81 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     return try evalIfExpression(program, env, &ie);
                 },
 
-                else => {
-                    unreachable;
-                }
+                .fn_literal => |fl| {
+
+                    var params: ?ArrayList(Identifier) = null;
+
+                    const maybe_params = fl.parameters;
+
+                    if (maybe_params) |fl_params| {
+                        params = try fl_params.clone();
+                    }
+
+                    return Object {
+                        .function = .{
+                            .params = params,
+                            .body = try fl.body.clone(),
+                            .env = env,
+                        }
+                    };
+
+                },
+
+                .call_expression => |ce| {
+                    const maybe_func = try EvalNode(program, env, ce.function);
+                    const func = maybe_func.?;
+                    defer func.deinit();
+
+                    var args = ArrayList(Object).init(program.allocator);
+
+                    defer {
+                        for (args.items) |arg| {
+                            arg.deinit();
+                        }
+                        args.deinit();
+                    }
+                        
+                    // evalExpressions p.144
+                    for (ce.args.items) |arg_idx| {
+                        try args.append((try EvalNode(program, env, arg_idx)).?);
+
+                    }
+
+                    return try applyFunction(program, &func, args);
+
+
+                },
 
             }
 
         }
 
     }
+
+}
+
+fn applyFunction(program: *Program, func_obj: *const Object, args: ArrayList(Object)) !?Object {
+
+    const func = func_obj.function;
+    var extendedEnv = func.env.initClosedEnv();
+    defer extendedEnv.deinit();
+
+    if (func.params) |params| {
+
+        for (params.items, args.items) |*p, arg| {
+
+
+            print("token got len: {}\n", .{p.token.literal_len});
+            print("first_char: {s}\n", .{p.token.literal});
+            const name = p.token.tokenLiteral();
+            print("name = {s}\n", .{name});
+
+            try extendedEnv.store.put(name, arg);
+        }
+
+    }
+
+    return try evalBlockStatement(program, &extendedEnv, &func.body);
 
 }
 
@@ -607,3 +675,49 @@ test "Eval Let stmt" {
 
 }
 
+test "func object" {
+
+    const allocator = std.testing.allocator;
+    const input = "fn(x) { x + 2 };";
+
+    const evaluated = try testEval(allocator, input);
+    defer evaluated.deinit();
+
+    try expect(evaluated == .function);
+
+}
+
+
+test "func application" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "let identity = fn(x) { x; }; identity(5);",
+        "let identity = fn(x) { return x; }; identity(5);",
+        "let double = fn(x) { x * 2; }; double(5);",
+        "let add = fn(x, y) { x + y; }; add(5, 5);",
+        "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
+        "fn(x) { x; }(5)"
+    };
+    const answers = [_]i32 { 
+        5,
+        5,
+        10,
+        10,
+        20,
+        5
+    };
+
+    for (inputs, answers) |inp, ans| {
+        const evaluated = try testEval(allocator, inp);
+
+        expect(ans == evaluated.integer) catch |err| {
+            print("expected {}, got {}\n", .{
+                ans, evaluated.integer
+            });
+
+            return err;
+        };
+    }
+}
