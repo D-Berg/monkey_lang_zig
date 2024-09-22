@@ -4,6 +4,8 @@ const Allocator = std.mem.Allocator;
 const Token = @import("Token.zig");
 
 const object = @import("object.zig");
+const Object = object.Object;
+const Environment = object.Environment;
 const ast = @import("ast.zig");
 const Program = ast.Program;
 const Lexer = @import("Lexer.zig");
@@ -11,28 +13,37 @@ const Parser = @import("Parser.zig");
 
 const expect = std.testing.expect;
 
+const EvalError = error {
+    // TODO: fill this out
+    FailedEvalLet,
+    EvalIdentNonExistent,
+} || Allocator.Error;
 
-pub fn Eval(program: *Program) error{FailedEvaluation, OutOfMemory}!object.Object {
 
-    var result: object.Object = undefined;
+pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
+
+    var maybe_result: ?object.Object = undefined;
 
     const prg_str = try program.String();
     defer program.allocator.free(prg_str);
-    print("prog str: {s}\n", .{prg_str});
+    print("\nprog str: {s}\n", .{prg_str});
 
     for (program.statement_indexes.items) |stmt_idx| {
-        result = EvalNode(program, stmt_idx);
+        maybe_result = try EvalNode(program, env, stmt_idx);
 
-        if (result == .return_val) {
-            return result.return_val.*;
+        if (maybe_result) |result| {
+            if (result == .return_val) {
+                return result.return_val.*;
+            }
         }
+
     }
 
-    return result;
+    return maybe_result;
 
 }
 
-fn EvalNode(program: *Program, node_idx: usize) object.Object {
+fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?object.Object {
 
     const node = program.nodes.items[node_idx];
 
@@ -41,25 +52,38 @@ fn EvalNode(program: *Program, node_idx: usize) object.Object {
         .statement => |stmt| {
             switch (stmt) {
 
+                .let_stmt => |*ls| {
+
+                    var ident = ls.name;
+                    const name = ident.tokenLiteral();
+
+
+                    print("Evaluating let stmt: {s}\n", .{name});
+
+                    const val = try EvalNode(program, env, ls.value.?);
+
+
+                    print("putting ident: {s} with val: {}\n", .{name, val.?});
+                    try env.store.put(name, val.?);
+
+                    // TODO: errors p.137
+                    return null;
+
+                },
                 .ret_stmt => |rs| {
-                    const val = EvalNode(program, rs.value.?);
+                    const val = try EvalNode(program, env, rs.value.?);
                     return object.Object {
-                        .return_val = &val // somehow this works lol
+                        .return_val = &val.? // somehow this works lol
                     };
                 },
 
                 .expr_stmt => |es| {
-                    return EvalNode(program, es.expression.?);
+                    return try EvalNode(program, env, es.expression.?);
                 },
 
                 .blck_stmt => |bs| {
-                    return evalBlockStatement(program, &bs);
-                },
-
-                else => {
-                    unreachable;
+                    return try evalBlockStatement(program, env, &bs);
                 }
-
             }
         },
 
@@ -67,6 +91,26 @@ fn EvalNode(program: *Program, node_idx: usize) object.Object {
 
             switch (expr) {
 
+                .identifier => |ident| {
+                    var tok = ident.token;
+                    const ident_name = tok.tokenLiteral();
+                    
+                    print("Evaluating ident expr: {s}\n", .{ident_name});
+
+                    print("getting ident name: {s}\n", .{ident_name});
+
+                    const maybe_val = env.store.get(ident_name);
+
+                    if (maybe_val) |val| {
+                        return val;
+                    } else {
+                        print("didnt find: {s}\n", .{ident_name});
+                        // TODO: create a eval error
+                        // return EvalError.EvalIdentNonExistent;
+                        return null;
+                    }
+
+                },
                 .integer_literal => |int_lit| {
 
                     return object.Object {
@@ -83,18 +127,18 @@ fn EvalNode(program: *Program, node_idx: usize) object.Object {
                 }, 
                 
                 .prefix_expression => |pe| {
-                    const right = EvalNode(program, pe.right);
+                    const right = (try EvalNode(program, env, pe.right)).?;
                     return evalPrefixExpression(pe.token.kind, &right);
                 },
 
                 .infix_expression => |ie| {
-                    const left = EvalNode(program, ie.left);
-                    const right = EvalNode(program, ie.right);
+                    const left = (try EvalNode(program, env, ie.left)).?;
+                    const right = (try EvalNode(program, env, ie.right)).?;
                     return evalInfixExpression(ie.token.kind, &left, &right);
                 },
 
                 .if_expression => |ie| {
-                    return evalIfExpression(program, &ie);
+                    return try evalIfExpression(program, env, &ie);
                 },
 
                 else => {
@@ -256,12 +300,12 @@ fn evalInfixExpression(
 
 }
 
-fn evalBlockStatement(program: *Program, blck_stmt: *const ast.BlockStatement) object.Object {
+fn evalBlockStatement(program: *Program, env: *Environment, blck_stmt: *const ast.BlockStatement) !object.Object {
 
     var obj: object.Object = undefined;
 
     for (blck_stmt.statements.items) |stmt_idx| {
-        obj = EvalNode(program, stmt_idx);
+        obj = try EvalNode(program, env, stmt_idx) orelse unreachable;
 
         if (obj != .nullable and obj == .return_val) {
 
@@ -273,18 +317,18 @@ fn evalBlockStatement(program: *Program, blck_stmt: *const ast.BlockStatement) o
     
 
 }
-fn evalIfExpression(program: *Program, if_epxr: *const ast.IfExpression) object.Object {
+fn evalIfExpression(program: *Program, env: *Environment, if_epxr: *const ast.IfExpression) EvalError!object.Object {
 
-    const condition = EvalNode(program, if_epxr.condition);
+    const condition = (try EvalNode(program, env, if_epxr.condition)).?;
 
     if (isTruthy(&condition)) {
 
-        return evalBlockStatement(program, &if_epxr.consequence);
+        return try evalBlockStatement(program, env, &if_epxr.consequence);
 
     } else {
 
         if (if_epxr.alternative) |alt| {
-            return evalBlockStatement(program, &alt);
+            return try evalBlockStatement(program, env, &alt);
 
         } else {
             return object.Object { .nullable = {} };
@@ -320,7 +364,10 @@ fn testEval(allocator: Allocator, input: []const u8) !object.Object {
     var program = try parser.ParseProgram(allocator);
     defer program.deinit();
 
-    return try Eval(&program);
+    var env = Environment.init(allocator);
+    defer env.deinit();
+
+    return (try Eval(&program, &env)).?;
 
 }
 
@@ -521,6 +568,36 @@ test "Eval return stmt" {
     for (inputs, answers) |inp, ans| {
         const evaluated = try testEval(allocator, inp);
         try expect(ans == evaluated.integer);
+    }
+
+}
+
+test "Eval Let stmt" {
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "let a = 5; a;",
+        "let a = 5 * 5; a;",
+        "let a = 5; let b = a; b;",
+        "let a = 5; let b = a; let c = a + b + 5; c;"
+    };
+    const answers = [_]i32 { 
+        5,
+        25,
+        5,
+        15
+    };
+
+    for (inputs, answers) |inp, ans| {
+        const evaluated = try testEval(allocator, inp);
+        
+        expect(ans == evaluated.integer) catch |err| {
+            print("expected {}, got {}\n", .{
+                ans, evaluated.integer
+            });
+
+            return err;
+        };
     }
 
 }

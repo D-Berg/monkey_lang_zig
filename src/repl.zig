@@ -3,10 +3,12 @@ const Lexer = @import("Lexer.zig");
 const Token = @import("Token.zig");
 const Parser = @import("Parser.zig");
 const evaluator = @import("evaluator.zig");
+const Environment = @import("object.zig").Environment;
 
 const Allocator = std.mem.Allocator;
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
+const print = std.debug.print;
 
 const prompt = ">> ";
 const buffer_size = 256;
@@ -16,6 +18,8 @@ pub fn start(allocator: Allocator) !void {
 
     var buffer: [buffer_size]u8 = undefined;
 
+    var env = Environment.init(allocator);
+    defer env.deinit();
 
     while (true) {
 
@@ -43,10 +47,22 @@ pub fn start(allocator: Allocator) !void {
 
         // std.debug.print("Program: {s}\n", .{prog_str});
 
-        const evaluated = try evaluator.Eval(&program);
-        const eval_str = try evaluated.inspect(allocator);
-        defer allocator.free(eval_str);
-        try stdout.print("evaluated: {s}\n", .{eval_str});
+        const maybe_evaluated = try evaluator.Eval(&program, &env);
+
+        var iterator = env.store.iterator();
+
+        print("env contains: \n", .{});
+        while (iterator.next()) |entry| {
+            print("key: {s}, val: {}\n", .{
+                entry.key_ptr.*, entry.value_ptr.*
+            });
+        }
+
+        if (maybe_evaluated) |evaluated| {
+            const eval_str = try evaluated.inspect(allocator);
+            defer allocator.free(eval_str);
+            try stdout.print("evaluated: {s}\n", .{eval_str});
+        }
 
 
 

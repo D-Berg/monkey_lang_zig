@@ -1,4 +1,5 @@
 const std = @import("std");
+const StringHashMap = std.StringHashMap;
 
 const Allocator = std.mem.Allocator;
 
@@ -22,6 +23,21 @@ pub const Object = union(enum) {
             }
 
         }
+    }
+
+};
+
+pub const Environment = struct {
+    store: StringHashMap(Object),
+
+    pub fn init(allocator: Allocator) Environment {
+        return Environment {
+            .store = StringHashMap(Object).init(allocator)
+        };
+    }
+
+    pub fn deinit(env: *Environment) void {
+        env.store.deinit();
     }
 
 };
