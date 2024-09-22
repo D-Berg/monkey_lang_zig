@@ -302,24 +302,27 @@ fn evalInfixExpression(
 
 }
 
-fn evalBlockStatement(program: *Program, env: *Environment, blck_stmt: *const ast.BlockStatement) !object.Object {
+fn evalBlockStatement(program: *Program, env: *Environment, blck_stmt: *const ast.BlockStatement) EvalError!?object.Object {
 
-    var obj: object.Object = undefined;
+    var maybe_result: ?object.Object = undefined;
 
     for (blck_stmt.statements.items) |stmt_idx| {
-        obj = try EvalNode(program, env, stmt_idx) orelse unreachable;
+        maybe_result = try EvalNode(program, env, stmt_idx);
+        
+        if (maybe_result) |result| {
+            if (result != .nullable and result == .return_val) {
 
-        if (obj != .nullable and obj == .return_val) {
-
-            return obj;
+                return result;
+            }
         }
+
     }
 
-    return obj;
+    return maybe_result;
     
 
 }
-fn evalIfExpression(program: *Program, env: *Environment, if_epxr: *const ast.IfExpression) EvalError!object.Object {
+fn evalIfExpression(program: *Program, env: *Environment, if_epxr: *const ast.IfExpression) EvalError!?object.Object {
 
     const condition = (try EvalNode(program, env, if_epxr.condition)).?;
 
