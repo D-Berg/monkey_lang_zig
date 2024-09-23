@@ -7,9 +7,11 @@ const ArrayList = std.ArrayList;
 const print = std.debug.print;
 const expect = std.testing.expect;
 
+
+const m: usize = std.math.pow(usize, 10, 9) + 9;
+
 pub fn HashMap(comptime V: type) type {
 
-    const m = std.math.pow(usize, 10, 9) + 9;
     const p = 31;
 
     return struct {
@@ -90,6 +92,8 @@ pub fn HashMap(comptime V: type) type {
 
             self.n_entries += 1;
         }
+
+
         pub fn get(self: *Self, key: []const u8) ?V {
 
             const h = hash(key);
@@ -99,7 +103,13 @@ pub fn HashMap(comptime V: type) type {
                 const maybe_entry = buckets[h % buckets.len];
                 
                 if (maybe_entry) |entry| {
-                    return entry.val;
+                    
+                    if (std.mem.eql(u8, entry.key, key)) {
+                        return entry.val;
+                    } 
+
+                    return null;
+                
                 } else {
                     return null;
                 }
