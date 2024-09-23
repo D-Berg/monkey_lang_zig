@@ -12,10 +12,16 @@ pub const Object = union(enum) {
     integer: i32,
     boolean: bool,
     nullable,
-    return_val: *const Object,
+    return_val_obj: ReturnObject,
     function: FunctionObject,
 
     pub fn deinit(obj: *const Object) void {
+
+        if (obj.* == .return_val_obj) {
+            
+            obj.return_val_obj.deinit();
+
+        }
 
         if (obj.* == .function) {
             
@@ -40,6 +46,16 @@ pub const Object = union(enum) {
             }
 
         }
+    }
+
+};
+
+const ReturnObject = struct {
+    allocator: Allocator,
+    value: *const Object,
+
+    pub fn deinit(ret_obj: *const ReturnObject) void {
+        ret_obj.allocator.destroy(ret_obj.value);
     }
 
 };
