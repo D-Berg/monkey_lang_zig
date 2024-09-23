@@ -7,6 +7,8 @@ const object = @import("object.zig");
 const Object = object.Object;
 const Environment = object.Environment;
 const ast = @import("ast.zig");
+const Statement = ast.Statement;
+const Expression = ast.Expression;
 const Program = ast.Program;
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
@@ -31,8 +33,8 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
     defer program.allocator.free(prg_str);
     print("\nprog str: {s}\n", .{prg_str});
 
-    for (program.statement_indexes.items) |stmt_idx| {
-        maybe_result = try EvalNode(program, env, stmt_idx);
+    for (program.statements.items) |stmt| {
+        maybe_result = try EvalStmt(program, env, &stmt);
 
         if (maybe_result) |result| {
             if (result == .return_val_obj) {
@@ -51,179 +53,168 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
     }
 
     return maybe_result;
+}
+
+fn EvalStmt(program: *Program, env: *Environment, stmt: *const Statement) EvalError!?object.Object {
+
+    switch (stmt.*) {
+
+        .let_stmt => |*ls| {
+
+            var ident = ls.name;
+            const name = ident.tokenLiteral();
+
+            // print("Evaluating let stmt: {s}\n", .{name});
+
+            const val = try EvalExpr(program, env, ls.value);
+
+            // print("putting ident: {s} with val: {}\n", .{name, val.?});
+            try env.store.put(name, val.?);
+
+            // TODO print env, think key disapear because env lives longer than tokens.
+
+            // TODO: errors p.137
+            return null;
+
+        },
+        .ret_stmt => |rs| {
+
+            print("evaluating  return stmt\n", .{});
+            const val = try EvalExpr(program, env, rs.value);
+            const res = try program.allocator.create(Object);
+            res.* = val.?;
+
+            return object.Object {
+                .return_val_obj = .{
+                    .allocator = program.allocator,
+                    .value = res
+                } // somehow this works lol
+            };
+        },
+
+        .expr_stmt => |es| {
+            return try EvalExpr(program, env, es.expression);
+        },
+
+        .blck_stmt => |bs| {
+            return try evalBlockStatement(program, env, &bs);
+        }
+    }
+
 
 }
 
-fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?object.Object {
+fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalError!?object.Object {
 
-    const node = program.nodes.items[node_idx];
+    switch (expr.*) {
 
-    
-    switch (node) {
-        .statement => |stmt| {
-            switch (stmt) {
-
-                .let_stmt => |*ls| {
-
-                    var ident = ls.name;
-                    const name = ident.tokenLiteral();
+        .identifier => |ident| {
+            var tok = ident.token;
+            const ident_name = tok.tokenLiteral();
+            
+            // print("Evaluating ident expr: {s}\n", .{ident_name});
 
 
-                    // print("Evaluating let stmt: {s}\n", .{name});
+            const maybe_val = try env.get(ident_name);
 
-                    const val = try EvalNode(program, env, ls.value.?);
+            print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
 
-
-                    // print("putting ident: {s} with val: {}\n", .{name, val.?});
-                    try env.store.put(name, val.?);
-
-                    // TODO print env, think key disapear because env lives longer than tokens.
-
-                    // TODO: errors p.137
-                    return null;
-
-                },
-                .ret_stmt => |rs| {
-
-                    print("evaluating  return stmt\n", .{});
-                    const val = try EvalNode(program, env, rs.value.?);
-                    const res = try program.allocator.create(Object);
-                    res.* = val.?;
-
-                    return object.Object {
-                        .return_val_obj = .{
-                            .allocator = program.allocator,
-                            .value = res
-                        } // somehow this works lol
-                    };
-                },
-
-                .expr_stmt => |es| {
-                    return try EvalNode(program, env, es.expression.?);
-                },
-
-                .blck_stmt => |bs| {
-                    return try evalBlockStatement(program, env, &bs);
-                }
+            if (maybe_val) |val| {
+                return val;
+            } else {
+                print("didnt find: {s}\n", .{ident_name});
+                // TODO: create a eval error
+                // return EvalError.EvalIdentNonExistent;
+                return null;
             }
+
+        },
+        .integer_literal => |int_lit| {
+
+            return object.Object {
+                .integer = @intCast(int_lit.value),
+            };
+
+        }, 
+        .boolean_literal => |bool_lit| {
+
+            return object.Object {
+                .boolean = bool_lit.value,
+            };
+
+        }, 
+        
+        .prefix_expression => |pe| {
+            const right = (try EvalExpr(program, env, pe.right)).?;
+            return evalPrefixExpression(pe.token.kind, &right);
         },
 
-        .expression => |expr| {
+        .infix_expression => |ie| {
+            const left = (try EvalExpr(program, env, ie.left)).?;
+            const right = (try EvalExpr(program, env, ie.right)).?;
+            return evalInfixExpression(ie.token.kind, &left, &right);
+        },
 
-            switch (expr) {
+        .if_expression => |ie| {
+            return try evalIfExpression(program, env, &ie);
+        },
 
-                .identifier => |ident| {
-                    var tok = ident.token;
-                    const ident_name = tok.tokenLiteral();
-                    
-                    // print("Evaluating ident expr: {s}\n", .{ident_name});
+        .fn_literal => |fl| {
 
+            print("making fn object\n", .{});
 
-                    const maybe_val = try env.get(ident_name);
+            var params: ?ArrayList(Identifier) = null; // TODO: use slice instead
 
-                    print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
+            const maybe_params = fl.parameters;
 
-                    if (maybe_val) |val| {
-                        return val;
-                    } else {
-                        print("didnt find: {s}\n", .{ident_name});
-                        // TODO: create a eval error
-                        // return EvalError.EvalIdentNonExistent;
-                        return null;
-                    }
+            // print("making fn obj\n", .{});
+            // defer print("\n", .{});
 
-                },
-                .integer_literal => |int_lit| {
+            if (maybe_params) |fl_params| {
+                params = try fl_params.clone(); // TODO: memcpy to slice
 
-                    return object.Object {
-                        .integer = @intCast(int_lit.value),
-                    };
-
-                }, 
-                .boolean_literal => |bool_lit| {
-
-                    return object.Object {
-                        .boolean = bool_lit.value,
-                    };
-
-                }, 
-                
-                .prefix_expression => |pe| {
-                    const right = (try EvalNode(program, env, pe.right)).?;
-                    return evalPrefixExpression(pe.token.kind, &right);
-                },
-
-                .infix_expression => |ie| {
-                    const left = (try EvalNode(program, env, ie.left)).?;
-                    const right = (try EvalNode(program, env, ie.right)).?;
-                    return evalInfixExpression(ie.token.kind, &left, &right);
-                },
-
-                .if_expression => |ie| {
-                    return try evalIfExpression(program, env, &ie);
-                },
-
-                .fn_literal => |fl| {
-
-                    print("making fn object\n", .{});
-
-                    var params: ?ArrayList(Identifier) = null; // TODO: use slice instead
-
-                    const maybe_params = fl.parameters;
-
-                    // print("making fn obj\n", .{});
-                    // defer print("\n", .{});
-
-                    if (maybe_params) |fl_params| {
-                        params = try fl_params.clone(); // TODO: memcpy to slice
-
-                        // for (params.?.items) |*p| {
-                        //     print("param: {s}\n", .{p.tokenLiteral()});
-                        // }
-                    }
-
-
-                    return Object {
-                        .function = .{
-                            .params = params,
-                            .body = try fl.body.clone(),
-                            .env = env,
-                        }
-                    };
-
-                },
-
-                .call_expression => |ce| {
-                    print("calling func\n", .{});
-                    const maybe_func = try EvalNode(program, env, ce.function);
-                    const func = maybe_func.?;
-                    defer func.deinit();
-
-                    var args = ArrayList(Object).init(program.allocator);
-                    defer {
-                        for (args.items) |arg| {
-                            arg.deinit();
-                        }
-                        args.deinit();
-                    }
-                        
-                    // evalExpressions p.144
-                    for (ce.args.items) |arg_idx| {
-                        try args.append((try EvalNode(program, env, arg_idx)).?);
-                    }
-
-
-                    return try applyFunction(program, &func.function, &args);
-
-
-                },
-
+                // for (params.?.items) |*p| {
+                //     print("param: {s}\n", .{p.tokenLiteral()});
+                // }
             }
 
-        }
+
+            return Object {
+                .function = .{
+                    .params = params,
+                    .body = try fl.body.clone(),
+                    .env = env,
+                }
+            };
+
+        },
+
+        .call_expression => |ce| {
+            print("calling func\n", .{});
+            const maybe_func = try EvalExpr(program, env, ce.function);
+            const func = maybe_func.?;
+            defer func.deinit();
+
+            var args = ArrayList(Object).init(program.allocator);
+            defer {
+                for (args.items) |arg| {
+                    arg.deinit();
+                }
+                args.deinit();
+            }
+                
+            // evalExpressions p.144
+            for (ce.args.items) |*arg| {
+                try args.append((try EvalExpr(program, env, arg)).?);
+            }
+
+
+            return try applyFunction(program, &func.function, &args);
+
+
+        },
 
     }
-
 }
 
 fn applyFunction(program: *Program, func: *const FuncionObject, args: *ArrayList(Object)) !?Object {
@@ -410,8 +401,8 @@ fn evalBlockStatement(program: *Program, env: *Environment, blck_stmt: *const as
 
     var maybe_result: ?object.Object = null;
 
-    for (blck_stmt.statements.items) |stmt_idx| {
-        maybe_result = try EvalNode(program, env, stmt_idx);
+    for (blck_stmt.statements.items) |*stmt| {
+        maybe_result = try EvalStmt(program, env, stmt);
         
         if (maybe_result) |result| {
             if (result != .nullable and result == .return_val_obj) {
@@ -427,7 +418,7 @@ fn evalBlockStatement(program: *Program, env: *Environment, blck_stmt: *const as
 }
 fn evalIfExpression(program: *Program, env: *Environment, if_epxr: *const ast.IfExpression) EvalError!?object.Object {
 
-    const condition = (try EvalNode(program, env, if_epxr.condition)).?;
+    const condition = (try EvalExpr(program, env, if_epxr.condition)).?;
 
     if (isTruthy(&condition)) {
 
