@@ -60,11 +60,11 @@ fn EvalStmt(program: *Program, env: *Environment, stmt: *const Statement) EvalEr
     switch (stmt.*) {
 
         .let_stmt => |*ls| {
-
+                
             var ident = ls.name;
             const name = ident.tokenLiteral();
 
-            // print("Evaluating let stmt: {s}\n", .{name});
+            print("Evaluating let stmt: {s}\n", .{name});
 
             const val = try EvalExpr(program, env, ls.value);
 
@@ -93,6 +93,7 @@ fn EvalStmt(program: *Program, env: *Environment, stmt: *const Statement) EvalEr
         },
 
         .expr_stmt => |es| {
+            print("evaluating  expression stmt\n", .{});
             return try EvalExpr(program, env, es.expression);
         },
 
@@ -109,11 +110,10 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
     switch (expr.*) {
 
         .identifier => |ident| {
+            print("\nEvaluating ident expr\n", .{});
             var tok = ident.token;
             const ident_name = tok.tokenLiteral();
             
-            // print("Evaluating ident expr: {s}\n", .{ident_name});
-
 
             const maybe_val = try env.get(ident_name);
 
@@ -401,7 +401,11 @@ fn evalBlockStatement(program: *Program, env: *Environment, blck_stmt: *const as
 
     var maybe_result: ?object.Object = null;
 
+    print("evaluating block stmts\n", .{});
+    defer print("finished eval of block\n", .{});
+
     for (blck_stmt.statements.items) |*stmt| {
+
         maybe_result = try EvalStmt(program, env, stmt);
         
         if (maybe_result) |result| {
@@ -749,5 +753,53 @@ test "func application" {
 
             return err;
         };
+    }
+}
+
+
+test "multi func application" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "let add = fn(x, y) { x + y; };",
+        "add(5, 5);", // breaks everything
+    };
+
+    var env = Environment.init(allocator);
+    defer env.deinit();
+
+    for (inputs, 0..) |inp, idx| {
+
+        var lexer = try Lexer.init(allocator, inp);
+        defer lexer.deinit();
+
+        var parser = Parser.init(&lexer, allocator);
+        defer parser.deinit();
+
+        var program = try parser.ParseProgram(allocator);
+        defer program.deinit();
+
+        const evaluated = try Eval(&program, &env);
+
+        if (idx == 0) {
+            expect(evaluated == null) catch |err| {
+                print("expected null, got {?}\n", .{
+                    evaluated
+                });
+
+                return err;
+            };
+        }
+
+        if (idx == 1) {
+            expect(evaluated.? == .integer) catch |err| {
+                print("expected integer, got {?}\n", .{
+                    evaluated
+                });
+
+                return err;
+            };
+        }
     }
 }
