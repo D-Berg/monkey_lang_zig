@@ -32,7 +32,7 @@ pub fn init(kind: Token.Kind, chars: []const u8) Token {
 
 
 
-pub fn tokenLiteral(tok: *Token) []const u8 {
+pub fn tokenLiteral(tok: *const Token) []const u8 {
     // std.debug.print("tk_len = {}\n", .{tok.literal_len});
     return tok.literal[0..tok.literal_len];
 }

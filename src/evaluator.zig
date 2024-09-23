@@ -12,6 +12,7 @@ const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
 const ArrayList = std.ArrayList;
 const Identifier = ast.Identifier;
+const FuncionObject = object.FunctionObject;
 
 const expect = std.testing.expect;
 
@@ -117,9 +118,10 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     
                     // print("Evaluating ident expr: {s}\n", .{ident_name});
 
-                    print("getting ident name: {s}\n", .{ident_name});
 
                     const maybe_val = try env.get(ident_name);
+
+                    print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
 
                     if (maybe_val) |val| {
                         return val;
@@ -163,6 +165,8 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
 
                 .fn_literal => |fl| {
 
+                    print("making fn object\n", .{});
+
                     var params: ?ArrayList(Identifier) = null; // TODO: use slice instead
 
                     const maybe_params = fl.parameters;
@@ -190,6 +194,7 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                 },
 
                 .call_expression => |ce| {
+                    print("calling func\n", .{});
                     const maybe_func = try EvalNode(program, env, ce.function);
                     const func = maybe_func.?;
                     defer func.deinit();
@@ -208,7 +213,7 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     }
 
 
-                    return try applyFunction(program, &func, &args);
+                    return try applyFunction(program, &func.function, &args);
 
 
                 },
@@ -221,13 +226,12 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
 
 }
 
-fn applyFunction(program: *Program, func_obj: *const Object, args: *ArrayList(Object)) !?Object {
+fn applyFunction(program: *Program, func: *const FuncionObject, args: *ArrayList(Object)) !?Object {
 
 
     print("\napplying func\n", .{});
 
-    const func = func_obj.function;
-    print("function = {}\n", .{func});
+    // print("function = {}\n", .{func});
     var extendedEnv = func.env.initClosedEnv();
     defer extendedEnv.deinit();
 
@@ -238,16 +242,17 @@ fn applyFunction(program: *Program, func_obj: *const Object, args: *ArrayList(Ob
 
         for (params.items, args.items) |*p, arg| {
 
-            print("param: {s} = {}\n", .{p.token.literal, arg});
 
             const name = p.token.tokenLiteral();
-            // print("name = {s}\n", .{name});
+
+            print("param: {s} = {}\n", .{name, arg});
 
             try extendedEnv.store.put(name, arg);
         }
 
     }
 
+    // Failes on new line because BlockStatement has indices to old program
     const evaluated = try evalBlockStatement(program, &extendedEnv, &func.body);
     print("applyFunction evaluated = {?}\n", .{evaluated});
 

@@ -28,8 +28,17 @@ statement_indexes: ArrayList(usize),
 nodes: ArrayList(Node),
 
 const ParseError = error {
-    WrongExpressionType
-};
+    WrongExpressionType,
+    ExpectedNextTokenIdentifier,
+    ExpectedNextTokenAssign,
+    ExpectedNextTokenRbrace,
+    ExpectedNextTokenLbrace,
+    ExpectedNextTokenRparen,
+    ExpectedNextTokenLparen,
+    FailedToConvertStringToInt,
+    NoPrefixFunction,
+    NoInfixFunction
+} || Allocator.Error;
 
 const Precedence = enum {
     Lowest,
@@ -111,38 +120,33 @@ fn nextToken(parser: *Parser) void {
 
 
 
-fn parseStatement(parser: *Parser) !void {
+fn parseStatement(parser: *Parser) ParseError!Statement {
 
-    const maybe_stmt = switch (parser.current_token.kind) {
-        .Let => parser.parseLetStatement(),
-        .Return => parser.parseReturnStatement(),
-        else => parser.parseExpressionStatement(),
+    const stmt = switch (parser.current_token.kind) {
+        .Let => try parser.parseLetStatement(),
+        .Return => try parser.parseReturnStatement(),
+        else => try parser.parseExpressionStatement(),
     };
 
-    if (maybe_stmt) |stmt| {
-        try parser.nodes.append(.{ .statement = stmt });
-    }
+    return stmt;
 
 }
 
-fn parseLetStatement(parser: *Parser) ?Statement {
+fn parseLetStatement(parser: *Parser) ParseError!Statement {
 
     const token = parser.current_token;
 
-    if (!parser.expectPeek(Token.Kind.Ident)) return null;
+    if (!parser.expectPeek(Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
 
     const identifier = Identifier { .token = parser.current_token };
 
-    if (!parser.expectPeek(Token.Kind.Assign)) return null;
+    if (!parser.expectPeek(Token.Kind.Assign)) return ParseError.ExpectedNextTokenAssign;
 
     parser.nextToken();
 
-
-    parser.nodes.append( .{ .expression = parser.parseExpression(.Lowest).? }) catch {
-        @panic("Failed to append expression for let");
-    }; // TODO: handle null
-    
-    const expr_idx = parser.getNodeIdx();
+    const expr = try parser.parseExpression(.Lowest);
+    const expr_ptr = try parser.allocator.create(Expression);
+    expr_ptr.* = expr;
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
@@ -150,32 +154,25 @@ fn parseLetStatement(parser: *Parser) ?Statement {
 
     return Statement { 
         .let_stmt = .{
+            .allocator = parser.allocator,
             .token = token,
             .name = identifier,
-            .value = expr_idx  
+            .value = expr_ptr  
         }
     };
 }
 
-fn parseReturnStatement(parser: *Parser) ?Statement {
+fn parseReturnStatement(parser: *Parser) ParseError!Statement {
 
     // TODO: is "return;" valid syntax?
     const curr_tok = parser.current_token;
 
     parser.nextToken();
 
-    const maybe_expr = parser.parseExpression(.Lowest);
+    const expr = try parser.parseExpression(.Lowest);
 
-    var expr_idx: ?usize = null;
-
-    if (maybe_expr) |expr| {
-
-        parser.nodes.append(.{ .expression = expr }) catch {
-            @panic("Failed to append return expression");
-        };
-
-        expr_idx = parser.getNodeIdx();
-    }
+    const expr_ptr = try parser.allocator.create(Expression);
+    expr_ptr.* = expr;
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
@@ -183,26 +180,20 @@ fn parseReturnStatement(parser: *Parser) ?Statement {
 
     return Statement { 
         .ret_stmt = .{
+            .allocator = parser.allocator,
             .token = curr_tok,
-            .value = expr_idx
+            .value = expr_ptr
         }
     };
 }
 
-fn parseExpressionStatement(parser: *Parser) ?Statement {
+fn parseExpressionStatement(parser: *Parser) ParseError!Statement {
 
     const token = parser.current_token;
 
-    var expr_idx: ?usize = null;
-    const maybe_expression = parser.parseExpression(.Lowest);
-
-    if (maybe_expression) |expression| {
-        parser.nodes.append(.{ .expression = expression }) catch {
-            @panic("Failed to append expression");
-        };
-
-        expr_idx = parser.getNodeIdx();
-    }
+    const expr = try parser.parseExpression(.Lowest);
+    const expr_ptr = try parser.allocator.create(Expression);
+    expr_ptr.* = expr;
 
     if (parser.peekTokenIs(Token.Kind.Semicolon)) {
         parser.nextToken();
@@ -210,35 +201,31 @@ fn parseExpressionStatement(parser: *Parser) ?Statement {
 
     return Statement { 
         .expr_stmt = .{
+            .allocator = parser.allocator,
             .token = token,
-            .expression = expr_idx
+            .expression = expr_ptr
         }
     };
 
 }
 
-fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
+fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expression {
 
     const prefix = switch (parser.current_token.kind) { // same as looking into the hashmap p.prefixParseFns in GO
         .Ident => parser.parseIdentifier(),
-        .Int => parser.parseIntegerLiteral(),
+        .Int => try parser.parseIntegerLiteral(),
         .Bang, .Minus => parser.parsePrefixExpression(),
         .False, .True => parser.parseBooleanExpression(),
-        .Lparen => parser.parseGroupedExpression(),
-        .If => parser.parseIfExpression(),
-        .Function => parser.parseFunctionLiteral(),
-        else => null
+        .Lparen => try parser.parseGroupedExpression(),
+        .If => try parser.parseIfExpression(),
+        .Function => try parser.parseFunctionLiteral(),
+        inline else => |kind| {
+            print("No prefix func for {}\n", .{kind});
+            return ParseError.NoPrefixFunction;
+        }
     };
 
-
-    if (prefix == null) {
-        parser.noPrefixParseFunction(parser.current_token.kind) catch |err| {
-            log.err("Failed to create error msg because {}", .{err});
-        };
-        return null; // TODO: add to parser.errors
-    }
-
-    var left_expr: Expression = prefix.?;
+    var left_expr: Expression = try prefix;
 
     while (!parser.peekTokenIs(.Semicolon) and @intFromEnum(precedence) < @intFromEnum(parser.peekPrecedence())) {
 
@@ -247,15 +234,15 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ?Expression {
         parser.nextToken();
 
         const infix = switch (peek_kind) {
-            .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => parser.parseInfixExpression(left_expr),
-            .Lparen => parser.parseCallExpression(left_expr),
-            else => null
+            .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => try parser.parseInfixExpression(left_expr),
+            .Lparen => try parser.parseCallExpression(left_expr),
+            else => ParseError.NoPrefixFunction
         };
 
 
-        if (infix == null) return left_expr;
+        // if (infix == ParseError.NoPrefixFunction) return left_expr;
 
-        left_expr = infix.?;
+        left_expr = infix catch return left_expr;
 
     }
 
@@ -272,7 +259,7 @@ fn parseIdentifier(parser: *Parser) Expression {
 
 }
 //
-fn parseIntegerLiteral(parser: *Parser) ?Expression {
+fn parseIntegerLiteral(parser: *Parser) ParseError!Expression {
 
     const maybe_val = std.fmt.parseInt(u32, parser.current_token.tokenLiteral(), 0);
 
@@ -293,7 +280,7 @@ fn parseIntegerLiteral(parser: *Parser) ?Expression {
             @panic("cant allocPrint");
         };
         parser.errors.append(err_str) catch unreachable;
-        return null;
+        return ParseError.FailedToConvertStringToInt;
     }
 
 }
@@ -309,7 +296,7 @@ fn parseBooleanExpression(parser: *Parser) Expression {
 
 }
 
-fn parsePrefixExpression(parser: *Parser) Expression {
+fn parsePrefixExpression(parser: *Parser) ParseError!Expression {
 
     // log.debug("expression=prefix_expression", .{});
 
@@ -318,22 +305,22 @@ fn parsePrefixExpression(parser: *Parser) Expression {
 
     parser.nextToken();
 
-    parser.nodes.append(.{ .expression = parser.parseExpression(.Prefix).? }) catch {
-        @panic("Failed to append expression");
-    };
-
+    const expr = try parser.parseExpression(.Prefix);
+    const expr_ptr = try parser.allocator.create(Expression);
+    expr_ptr.* = expr;
     // // log.debug("token = {}, right ={any}", .{tok.kind, expr_ptr.*});
 
     return Expression {
         .prefix_expression = .{ 
+            .allocator = parser.allocator,
             .token = tok,
-            .right = parser.getNodeIdx(),
+            .right = expr_ptr,
         }
     };
 
 }
 
-fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
+fn parseInfixExpression(parser: *Parser, left: Expression) ParseError!Expression {
 
     // log.debug("parsing infix expression", .{});
 
@@ -345,81 +332,75 @@ fn parseInfixExpression(parser: *Parser, left: Expression) Expression {
 
     parser.nextToken();
 
-    parser.nodes.append(.{ .expression = left }) catch {
-        @panic("failed to append expression");
-    };
+    const right = try parser.parseExpression(precedence);
 
-    const left_idx = parser.getNodeIdx();
+    const left_ptr = try parser.allocator.create(Expression);
+    const right_ptr = try parser.allocator.create(Expression);
 
-    parser.nodes.append(.{ .expression = parser.parseExpression(precedence).? }) catch {
-        @panic("failed to append expression");
-    };
-    const right_idx = parser.getNodeIdx();
+    left_ptr.* = left;
+    right_ptr.* = right;
 
-    // log.debug("infix: token={}, \n\tleft={}, \n\tright={}\n", .{
-    //     token.kind, left_ptr.*, right_ptr.*
-    // });
 
 
     return Expression {
         .infix_expression = .{
+            .allocator = parser.allocator,
             .token = token,
-            .left = left_idx,
-            .right = right_idx
+            .left = left_ptr,
+            .right = right_ptr
         }
     };
 
 }
 
-fn parseGroupedExpression(parser: *Parser) ?Expression {
+fn parseGroupedExpression(parser: *Parser) ParseError!Expression {
     parser.nextToken();
 
-    const expr = parser.parseExpression(.Lowest);
+    const expr = try parser.parseExpression(.Lowest);
 
     if (!parser.expectPeek(.Rparen)) {
-        return null;
+        return ParseError.ExpectedNextTokenRparen;
     }
 
     return expr;
 }
 
-fn parseIfExpression(parser: *Parser) ?Expression {
+fn parseIfExpression(parser: *Parser) ParseError!Expression {
 
     const curr_tok = parser.current_token;
 
     // print("if curr_tot = {}\n", .{curr_tok.kind});
 
-    if (!parser.expectPeek(.Lparen)) return null;
+    if (!parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
 
     parser.nextToken();
-    const condition = parser.parseExpression(.Lowest).?;
+    const condition = try parser.parseExpression(.Lowest);
     // print("if condition = {}\n", .{condition});
 
-    if (!parser.expectPeek(.Rparen)) return null;
+    if (!parser.expectPeek(.Rparen)) return ParseError.ExpectedNextTokenRparen;
 
-    if (!parser.expectPeek(.Lbrace)) return null;
+    if (!parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
-    const consequence = parser.parseBlockStatement();
+    const consequence = try parser.parseBlockStatement();
 
-    parser.nodes.append(.{ .expression = condition }) catch {
-        @panic("Failed to append expression");
-    };
-    const condition_idx = parser.getNodeIdx();
+    const condition_ptr = try parser.allocator.create(Expression);
+    condition_ptr.* = condition;
 
     var alternative: ?BlockStatement = null;
     if (parser.peekTokenIs(.Else)) {
         parser.nextToken();
 
-        if (!parser.expectPeek(.Lbrace)) return null;
+        if (!parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
-        alternative = parser.parseBlockStatement();
+        alternative = try parser.parseBlockStatement();
     }
 
     // if (<condition>) {<consequence>} else {<alternative>}
     return Expression {
         .if_expression = .{ 
+            .allocator = parser.allocator,
             .token = curr_tok,
-            .condition = condition_idx,
+            .condition = condition_ptr,
             .consequence = consequence,
             .alternative = alternative,
         }
@@ -427,24 +408,18 @@ fn parseIfExpression(parser: *Parser) ?Expression {
 
 }
 
-fn parseBlockStatement(parser: *Parser) BlockStatement {
+fn parseBlockStatement(parser: *Parser) ParseError!BlockStatement {
 
     const curr_tok = parser.current_token;
 
     parser.nextToken();
 
-    var block_statements = ArrayList(usize).init(parser.allocator);
+    var block_statements = ArrayList(Statement).init(parser.allocator);
 
     while (!parser.curTokenIs(.Rbrace) and !parser.curTokenIs(.Eof)) : (parser.nextToken()){
 
-        parser.parseStatement() catch {
-            @panic("failed to parse block_statements");
-        };
-
-        block_statements.append(parser.getNodeIdx()) catch {
-            @panic("failed to append blck stmt idx");
-        };
-
+        const stmt = try parser.parseStatement();
+        try block_statements.append(stmt);
     }
 
     return BlockStatement {
@@ -454,19 +429,19 @@ fn parseBlockStatement(parser: *Parser) BlockStatement {
 
 }
 
-fn parseFunctionLiteral(parser: *Parser) ?Expression {
+fn parseFunctionLiteral(parser: *Parser) ParseError!Expression {
     const curr_tok = parser.current_token;
 
-    if (!parser.expectPeek(.Lparen)) return null;
+    if (!parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
 
     const parameters = parser.parseFunctionParameters();
 
     if (!parser.expectPeek(.Lbrace)) {
         if (parameters != null) parameters.?.deinit();
-        return null;
+        return ParseError.ExpectedNextTokenLbrace;
     }
 
-    const body = parser.parseBlockStatement();
+    const body = try parser.parseBlockStatement();
 
     return Expression {
         .fn_literal = .{
@@ -513,29 +488,28 @@ fn parseFunctionParameters(parser: *Parser) ?ArrayList(Identifier) {
 }
 
 
-fn parseCallExpression(parser: *Parser, function: Expression) Expression {
+fn parseCallExpression(parser: *Parser, function: Expression) ParseError!Expression {
     const curr_tok = parser.current_token;
 
-    const arguments = parser.parseCallArguments();
+    const arguments = try parser.parseCallArguments();
 
-    parser.nodes.append(.{ .expression = function }) catch {
-        @panic("Failed to append func expr");
-    };
 
-    const func_idx = parser.getNodeIdx();
+    const func_ptr = try parser.allocator.create(Expression);
+    func_ptr.* = function;
 
     return Expression {
         .call_expression = .{
+            .allocator = parser.allocator,
             .token = curr_tok,
-            .function = func_idx,
+            .function = func_ptr,
             .args = arguments
         }
     };
 }
 
-fn parseCallArguments(parser: *Parser) ArrayList(usize) {
+fn parseCallArguments(parser: *Parser) ParseError!ArrayList(Expression) {
 
-    var args = ArrayList(usize).init(parser.allocator);
+    var args = ArrayList(Expression).init(parser.allocator);
 
     if (parser.peekTokenIs(.Rparen)) {
         parser.nextToken();
@@ -544,32 +518,22 @@ fn parseCallArguments(parser: *Parser) ArrayList(usize) {
 
     parser.nextToken();
 
-    parser.nodes.append(.{ .expression = parser.parseExpression(.Lowest).? }) catch {
-        @panic("Failed to append arg expr");
-    };
+    var arg_expr = try parser.parseExpression(.Lowest);
 
-    args.append(parser.getNodeIdx()) catch {
-        @panic("Failed to append arg expr idx");
-    };
-
+    try args.append(arg_expr);
 
     while (parser.peekTokenIs(.Comma)) {
         parser.nextToken();
         parser.nextToken();
 
-        parser.nodes.append(.{ .expression = parser.parseExpression(.Lowest).? }) catch {
-            @panic("Failed to append arg expr");
-        };
+        arg_expr = try parser.parseExpression(.Lowest);
 
-        args.append(parser.getNodeIdx()) catch {
-            @panic("Failed to append arg expr idx");
-        };
-
+        try args.append(arg_expr);
     }
 
     // TODO: handle if !expectpeek(.Rparent) return null
     if (!parser.expectPeek(.Rparen)) {
-        @panic("NOO Right BRAAXKEt");
+        return ParseError.ExpectedNextTokenRparen;
     }
 
     return args;
@@ -607,24 +571,20 @@ fn peekPrecedence(parser: *Parser) Precedence {
 }
 
 
-pub fn ParseProgram(parser: *Parser, allocator: Allocator) !Program {
+pub fn ParseProgram(parser: *Parser, allocator: Allocator) ParseError!Program {
 
     var program = Program.init(allocator);
 
     while (parser.current_token.kind != Token.Kind.Eof) {
 
-        try parser.parseStatement();
-        try parser.statement_indexes.append(parser.getNodeIdx());
-
+        const stmt = try parser.parseStatement();
+        try program.statements.append(stmt);
         parser.nextToken();
 
     }
 
     // does not clone, parsers arraylists gets deinited by program
     // TODO: make program own parser
-    program.statement_indexes = parser.statement_indexes;
-    program.nodes = parser.nodes;
-    
     return program;
 }
 

@@ -18,7 +18,7 @@ pub const Object = union(enum) {
 
     pub fn deinit(obj: *const Object) void {
 
-        print("Deinitalizing object\n", .{});
+        // print("Deinitalizing object\n", .{});
         switch (obj.*) {
             .return_val_obj => |rvj| {
                 print("Deinitalizing return object\n", .{});
@@ -38,6 +38,8 @@ pub const Object = union(enum) {
 
         switch (obj.*) {
             .function => |fo| {
+
+                print("cloned func\n", .{});
 
                 var params: ?ArrayList(Identifier) = null;
 
@@ -95,7 +97,7 @@ const ReturnObject = struct {
 
 };
 
-const FunctionObject = struct {
+pub const FunctionObject = struct {
     params: ?ArrayList(Identifier),
     body: BlockStatement,
     env: *Environment,
@@ -138,6 +140,7 @@ pub const Environment = struct {
 
         if (maybe_obj) |obj|  {
             
+            print("return clone of env obj\n", .{});
             return try obj.clone();
 
         } else { // if maybe_obj == null
@@ -145,6 +148,7 @@ pub const Environment = struct {
                 maybe_obj = try outer.get(key);
 
                 if (maybe_obj) |obj| {
+                    print("return clone of outer env obj\n", .{});
                     return try obj.clone();
                 }
             } 
