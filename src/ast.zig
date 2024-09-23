@@ -25,7 +25,7 @@ pub const Statement = union(enum) {
         }
     }
 
-    pub fn tokenLiteral(stmt: *Statement) []const u8 {
+    pub fn tokenLiteral(stmt: *const Statement) []const u8 {
         switch (stmt.*) {
             inline else => |*case| return case.token.tokenLiteral(),
         }
@@ -351,6 +351,11 @@ pub const CallExpression = struct {
     pub fn deinit(ce: *const CallExpression) void {
         ce.function.deinit();
         ce.allocator.destroy(ce.function);
+
+        for (ce.args.items) |arg| {
+            arg.deinit();
+        }
+        
         ce.args.deinit();
     }
 
@@ -361,7 +366,7 @@ pub const CallExpression = struct {
 pub const Identifier = struct {
     token: Token,
 
-    pub fn tokenLiteral(ident: *Identifier) []const u8 {
+    pub fn tokenLiteral(ident: *const Identifier) []const u8 {
         return ident.token.tokenLiteral();
     }
 };
