@@ -26,9 +26,9 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
 
     var maybe_result: ?object.Object = null;
 
-    // const prg_str = try program.String();
-    // defer program.allocator.free(prg_str);
-    // print("\nprog str: {s}\n", .{prg_str});
+    const prg_str = try program.String();
+    defer program.allocator.free(prg_str);
+    print("\nprog str: {s}\n", .{prg_str});
 
     for (program.statement_indexes.items) |stmt_idx| {
         maybe_result = try EvalNode(program, env, stmt_idx);
@@ -117,9 +117,9 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     
                     // print("Evaluating ident expr: {s}\n", .{ident_name});
 
-                    // print("getting ident name: {s}\n", .{ident_name});
+                    print("getting ident name: {s}\n", .{ident_name});
 
-                    const maybe_val = env.store.get(ident_name);
+                    const maybe_val = try env.get(ident_name);
 
                     if (maybe_val) |val| {
                         return val;
@@ -163,7 +163,7 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
 
                 .fn_literal => |fl| {
 
-                    var params: ?ArrayList(Identifier) = null;
+                    var params: ?ArrayList(Identifier) = null; // TODO: use slice instead
 
                     const maybe_params = fl.parameters;
 
@@ -171,7 +171,7 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
                     // defer print("\n", .{});
 
                     if (maybe_params) |fl_params| {
-                        params = try fl_params.clone();
+                        params = try fl_params.clone(); // TODO: memcpy to slice
 
                         // for (params.?.items) |*p| {
                         //     print("param: {s}\n", .{p.tokenLiteral()});
@@ -223,11 +223,13 @@ fn EvalNode(program: *Program, env: *Environment, node_idx: usize) EvalError!?ob
 
 fn applyFunction(program: *Program, func_obj: *const Object, args: *ArrayList(Object)) !?Object {
 
+
+    print("\napplying func\n", .{});
+
     const func = func_obj.function;
+    print("function = {}\n", .{func});
     var extendedEnv = func.env.initClosedEnv();
     defer extendedEnv.deinit();
-
-    // print("\napplying func {s}\n", .{});
 
     if (func.params) |params| {
 
@@ -236,7 +238,7 @@ fn applyFunction(program: *Program, func_obj: *const Object, args: *ArrayList(Ob
 
         for (params.items, args.items) |*p, arg| {
 
-            // print("param: {s} = {}\n", .{p.token.literal, arg});
+            print("param: {s} = {}\n", .{p.token.literal, arg});
 
             const name = p.token.tokenLiteral();
             // print("name = {s}\n", .{name});
@@ -247,17 +249,9 @@ fn applyFunction(program: *Program, func_obj: *const Object, args: *ArrayList(Ob
     }
 
     const evaluated = try evalBlockStatement(program, &extendedEnv, &func.body);
+    print("applyFunction evaluated = {?}\n", .{evaluated});
 
-    if (evaluated.? == .return_val_obj) {
-        return evaluated.?.return_val_obj.value.*;
-    } else { 
-        return null;
-    }
-        
-
-    
-
-
+    return evaluated;
 }
 
 
@@ -714,49 +708,50 @@ test "Eval Let stmt" {
 
 }
 
-// test "func object" {
-//
-//     const allocator = std.testing.allocator;
-//     const input = "fn(x) { x + 2 };";
-//
-//     const evaluated = try testEval(allocator, input);
-//     defer evaluated.deinit();
-//
-//     try expect(evaluated == .function);
-//
-// }
+test "func object" {
+
+    const allocator = std.testing.allocator;
+    const input = "fn(x) { x + 2 };";
+
+    const evaluated = (try testEval(allocator, input)).?;
+    defer evaluated.deinit();
+
+    try expect(evaluated == .function);
+
+    try expect(evaluated.function.params.?.items.len == 1);
+}
 
 
-// test "func application" {
-//
-//     const allocator = std.testing.allocator;
-//
-//     const inputs = [_][]const u8{ 
-//         "let identity = fn(x) { x; }; identity(5);",
-//         "let identity = fn(x) { return x; }; identity(5);",
-//         "let double = fn(x) { x * 2; }; double(5);",
-//         "let add = fn(x, y) { x + y; }; add(5, 5);",
-//         "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
-//         "fn(x) { x; }(5)"
-//     };
-//     const answers = [_]i32 { 
-//         5,
-//         5,
-//         10,
-//         10,
-//         20,
-//         5
-//     };
-//
-//     for (inputs, answers) |inp, ans| {
-//         const evaluated = (try testEval(allocator, inp)).?;
-//
-//         expect(ans == evaluated.integer) catch |err| {
-//             print("expected {}, got {}\n", .{
-//                 ans, evaluated.integer
-//             });
-//
-//             return err;
-//         };
-//     }
-// }
+test "func application" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "let identity = fn(x) { x; }; identity(5);",
+        "let identity = fn(x) { return x; }; identity(5);",
+        "let double = fn(x) { x * 2; }; double(5);",
+        "let add = fn(x, y) { x + y; }; add(5, 5);",
+        "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
+        "fn(x) { x; }(5)"
+    };
+    const answers = [_]i32 { 
+        5,
+        5,
+        10,
+        10,
+        20,
+        5
+    };
+
+    for (inputs, answers) |inp, ans| {
+        const evaluated = (try testEval(allocator, inp)).?;
+
+        expect(ans == evaluated.integer) catch |err| {
+            print("expected {}, got {}\n", .{
+                ans, evaluated.integer
+            });
+
+            return err;
+        };
+    }
+}

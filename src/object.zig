@@ -5,6 +5,7 @@ const ArrayList = std.ArrayList;
 const ast = @import("ast.zig");
 const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
+const print = std.debug.print;
 
 const Allocator = std.mem.Allocator;
 
@@ -17,17 +18,51 @@ pub const Object = union(enum) {
 
     pub fn deinit(obj: *const Object) void {
 
-        if (obj.* == .return_val_obj) {
-            
-            obj.return_val_obj.deinit();
+        print("Deinitalizing object\n", .{});
+        switch (obj.*) {
+            .return_val_obj => |rvj| {
+                print("Deinitalizing return object\n", .{});
+                rvj.deinit();
+            },
+            .function => |func| {
+                print("Deinitalizing func object\n", .{});
+                func.deinit();
+            },
+
+            else => {}
+        }
+
+    }
+    
+    pub fn clone(obj: *const Object) !Object {
+
+        switch (obj.*) {
+            .function => |fo| {
+
+                var params: ?ArrayList(Identifier) = null;
+
+                if (fo.params != null) {
+                    params = try fo.params.?.clone();
+                }
+
+                const body = try fo.body.clone();
+
+                return Object {
+                    .function = .{
+                        .params = params,
+                        .body = body,
+                        .env = fo.env,
+                    }
+                };
+
+            },
+            else => {
+                return obj.*;
+            }
 
         }
 
-        if (obj.* == .function) {
-            
-            obj.function.deinit();
 
-        }
 
     }
 
@@ -68,12 +103,14 @@ const FunctionObject = struct {
     fn deinit(fnc_obj: *const FunctionObject) void {
 
         fnc_obj.body.statements.deinit(); // working
+
         if (fnc_obj.params) |params| {
             params.deinit();
         }
         // fnc_obj.env.deinit();
         //
     }
+
 };
 
 pub const Environment = struct {
@@ -93,15 +130,28 @@ pub const Environment = struct {
         };
     }
 
-    pub fn get(env: *Environment, key: []const u8) ?Object {
+    pub fn get(env: *Environment, key: []const u8) !?Object {
 
-        var maybe_obj = env.get(key);
+        //cloooone obj
 
-        if (maybe_obj == null and env.outer != null)  {
-            maybe_obj = env.outer.?.get(key);
+        var maybe_obj = env.store.get(key);
+
+        if (maybe_obj) |obj|  {
+            
+            return try obj.clone();
+
+        } else { // if maybe_obj == null
+            if (env.outer) |outer| { // if env.out != null
+                maybe_obj = try outer.get(key);
+
+                if (maybe_obj) |obj| {
+                    return try obj.clone();
+                }
+            } 
+            
+            return null;
         }
 
-        return maybe_obj;
 
     }
 

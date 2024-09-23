@@ -39,6 +39,7 @@ pub fn HashMap(comptime V: type) type {
                 for (buckets) |bucket| {
                     if (bucket) |entry| {
                         self.allocator.free(entry.key);
+                        entry.val.deinit();
 
                     }
                 }
@@ -69,10 +70,8 @@ pub fn HashMap(comptime V: type) type {
 
             
             if (self.checkCollision(key)) {
-                
-                // print("collision!!!!\n", .{});
+                print("collision!!!!\n", .{});
                 try self.resize();
-
             }
             // print("no collision\n", .{});
 
@@ -86,11 +85,10 @@ pub fn HashMap(comptime V: type) type {
 
             self.buckets.?[b_idx] = Entry {
                 .key = key_str,
-                .val = value
+                .val = value//.clone()
             };
 
             self.n_entries += 1;
-
         }
         pub fn get(self: *Self, key: []const u8) ?V {
 
@@ -166,7 +164,6 @@ pub fn HashMap(comptime V: type) type {
             self.buckets = try self.allocator.alloc(?Entry, new_size);
             
             for (self.buckets.?) |*bucket| {
-        
                 bucket.* = null;
             }
 
