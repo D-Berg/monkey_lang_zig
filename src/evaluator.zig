@@ -30,9 +30,9 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
 
     var maybe_result: ?object.Object = null;
 
-    const prg_str = try program.String();
-    defer program.allocator.free(prg_str);
-    print("\nprog str: {s}\n", .{prg_str});
+    // const prg_str = try program.String();
+    // defer program.allocator.free(prg_str);
+    // print("\nprog str: {s}\n", .{prg_str});
 
     for (program.statements.items) |stmt| {
 
@@ -42,12 +42,12 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
 
             if (result == .return_val_obj) {
 
-                print("got a return obj\n", .{});
+                // print("got a return obj\n", .{});
 
                 defer result.return_val_obj.deinit();
                 const val = result.return_val_obj.value.*;
 
-                print("returning obj = {}\n", .{val});
+                // print("returning obj = {}\n", .{val});
 
                 return val;
             }
@@ -67,7 +67,7 @@ fn EvalStmt(program: *Program, env: *Environment, stmt: *const Statement) EvalEr
             var ident = ls.name;
             const name = ident.tokenLiteral();
 
-            print("Evaluating let stmt: {s}\n", .{name});
+            // print("Evaluating let stmt: {s}\n", .{name});
 
             const val = try EvalExpr(program, env, ls.value);
             defer val.?.deinit(); // deinit because store.put clones val
@@ -83,7 +83,7 @@ fn EvalStmt(program: *Program, env: *Environment, stmt: *const Statement) EvalEr
         },
         .ret_stmt => |rs| {
 
-            print("evaluating  return stmt\n", .{});
+            // print("evaluating  return stmt\n", .{});
             const val = try EvalExpr(program, env, rs.value);
             const res = try program.allocator.create(Object);
             res.* = val.?;
@@ -97,7 +97,7 @@ fn EvalStmt(program: *Program, env: *Environment, stmt: *const Statement) EvalEr
         },
 
         .expr_stmt => |es| {
-            print("evaluating expression stmt\n", .{});
+            // print("evaluating expression stmt\n", .{});
             return try EvalExpr(program, env, es.expression);
         },
 
@@ -114,20 +114,20 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
     switch (expr.*) {
 
         .identifier => |ident| {
-            print("\nEvaluating ident expr\n", .{});
+            // print("\nEvaluating ident expr\n", .{});
             var tok = ident.token;
             const ident_name = tok.tokenLiteral();
             
 
-            print("Retreiving from env: {*}\n", .{env});
+            // print("Retreiving from env: {*}\n", .{env});
             const maybe_val = try env.get(ident_name); // gets a clone of object
 
-            print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
+            // print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
 
             if (maybe_val) |val| {
                 return val;
             } else {
-                print("didnt find: {s}\n", .{ident_name});
+                // print("didnt find: {s}\n", .{ident_name});
                 // TODO: create a eval error
                 // return EvalError.EvalIdentNonExistent;
                 return null;
@@ -136,7 +136,7 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
         },
         .integer_literal => |int_lit| {
 
-            print("eval int lit expr {s}\n", .{int_lit.token.tokenLiteral()});
+            // print("eval int lit expr {s}\n", .{int_lit.token.tokenLiteral()});
 
             return object.Object {
                 .integer = @intCast(int_lit.value),
@@ -145,7 +145,7 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
         }, 
         .boolean_literal => |bool_lit| {
 
-            print("eval boolean lit expr with val {}\n", .{bool_lit.value});
+            // print("eval boolean lit expr with val {}\n", .{bool_lit.value});
             return object.Object {
                 .boolean = bool_lit.value,
             };
@@ -169,7 +169,7 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
 
         .fn_literal => |fl| {
 
-            print("making fn object\n", .{});
+            // print("making fn object\n", .{});
 
             var params: ?ArrayList(Identifier) = null; // TODO: use slice instead
 
@@ -195,7 +195,7 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
         },
 
         .call_expression => |ce| {
-            print("calling func\n", .{});
+            // print("calling func\n", .{});
             const maybe_func = try EvalExpr(program, env, ce.function);
             const func = maybe_func.?;
             defer func.deinit();
@@ -225,14 +225,14 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
 fn applyFunction(program: *Program, func: *const FuncionObject, args: *ArrayList(Object)) !?Object {
 
 
-    print("\napplying func\n", .{});
+    // print("\napplying func\n", .{});
 
     // print("function = {}\n", .{func});
     var extendedEnv = func.env.initClosedEnv();
     defer extendedEnv.deinit();
 
-    print("Extended env has address {*}\n", .{&extendedEnv});
-    print("outer env has adress {*}\n", .{extendedEnv.outer.?});
+    // print("Extended env has address {*}\n", .{&extendedEnv});
+    // print("outer env has adress {*}\n", .{extendedEnv.outer.?});
 
     if (func.params) |params| {
 
@@ -244,18 +244,18 @@ fn applyFunction(program: *Program, func: *const FuncionObject, args: *ArrayList
 
             const name = p.token.tokenLiteral();
 
-            print("putting param: {s} = {} in env {*}\n", .{name, arg, &extendedEnv});
+            // print("putting param: {s} = {} in env {*}\n", .{name, arg, &extendedEnv});
 
             try extendedEnv.store.put(name, arg);
         }
 
     }
 
-    print("printing functions block statements\n", .{});
+    // print("printing functions block statements\n", .{});
     for (func.body.statements.items) |stmt| {
         const stmt_str = try stmt.String(program);
         defer program.allocator.free(stmt_str);
-        print("body smt: {s}\n", .{stmt_str});
+        // print("body smt: {s}\n", .{stmt_str});
 
     }
 
@@ -427,12 +427,12 @@ fn evalBlockStatement(program: *Program, env: *Environment, blck_stmt: *const as
 
     var maybe_result: ?object.Object = null;
 
-    print("evaluating block stmts\n", .{});
-    defer print("finished eval of block\n", .{});
+    // print("evaluating block stmts\n", .{});
+    // defer print("finished eval of block\n", .{});
 
     for (blck_stmt.statements.items) |*stmt| {
 
-        print("\tblck: evaluating {}\n", .{stmt});
+        // print("\tblck: evaluating {}\n", .{stmt});
         maybe_result = try EvalStmt(program, env, stmt);
         
         if (maybe_result) |result| {

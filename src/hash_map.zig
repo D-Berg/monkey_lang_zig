@@ -76,7 +76,7 @@ pub fn HashMap(comptime V: type) type { // TODO: Remove generic
 
             
             if (self.checkCollision(key)) {
-                print("collision!!!!\n", .{});
+                // print("collision!!!!\n", .{});
                 try self.resize();
             }
             // print("no collision\n", .{});

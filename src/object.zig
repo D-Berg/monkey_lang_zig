@@ -21,11 +21,11 @@ pub const Object = union(enum) {
         // print("Deinitalizing object\n", .{});
         switch (obj.*) {
             .return_val_obj => |rvj| {
-                print("Deinitalizing return object\n", .{});
+                // print("Deinitalizing return object\n", .{});
                 rvj.deinit();
             },
             .function => |func| {
-                print("Deinitalizing func object\n", .{});
+                // print("Deinitalizing func object\n", .{});
                 func.deinit();
             },
 
@@ -69,7 +69,7 @@ const ReturnObject = struct {
     value: *const Object,
 
     pub fn deinit(ret_obj: *const ReturnObject) void {
-        print("deinits ret obj\n", .{});
+        // print("deinits ret obj\n", .{});
         ret_obj.value.deinit();
         ret_obj.allocator.destroy(ret_obj.value);
     }
@@ -96,7 +96,7 @@ pub const FunctionObject = struct {
 
     fn deinit(fnc_obj: *const FunctionObject) void {
 
-        print("deinits fn obj, addr: {*}\n", .{fnc_obj});
+        // print("deinits fn obj, addr: {*}\n", .{fnc_obj});
 
         fnc_obj.body.deinit();
 
@@ -113,7 +113,7 @@ pub const FunctionObject = struct {
 
     pub fn clone(fo: *const FunctionObject) Allocator.Error!Object {
 
-        print("cloned func\n", .{});
+        // print("cloned func\n", .{});
 
         var params: ?ArrayList(Identifier) = null;
 
@@ -169,7 +169,7 @@ pub const Environment = struct {
 
         if (maybe_obj) |obj|  {
             
-            print("return clone of env obj\n", .{});
+            // print("return clone of env obj\n", .{});
             return try obj.clone();
 
         } else { // if maybe_obj == null
@@ -177,7 +177,7 @@ pub const Environment = struct {
                 maybe_obj = try outer.get(key);
 
                 if (maybe_obj) |obj| {
-                    print("return clone of outer env obj\n", .{});
+                    // print("return clone of outer env obj\n", .{});
                     return try obj.clone();
                 }
             } 
@@ -189,7 +189,7 @@ pub const Environment = struct {
     }
 
     pub fn deinit(env: *Environment) void {
-        print("deinits env\n", .{});
+        // print("deinits env\n", .{});
         env.store.deinit();
     }
 

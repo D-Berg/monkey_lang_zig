@@ -95,7 +95,7 @@ pub const LetStatement = struct {
     value: *const Expression, //TODO: remove null
 
     pub fn deinit(ls: *const LetStatement) void {
-        print("deinits let stmt\n", .{});
+        // print("deinits let stmt\n", .{});
         ls.token.deinit();
         ls.name.deinit();
         ls.value.deinit();
@@ -342,7 +342,7 @@ pub const IntegerLiteralExpression = struct {
     value: u32,
 
     pub fn deinit(int_lit: *const IntegerLiteralExpression) void {
-        print("deinits int lit expr\n", .{});
+        // print("deinits int lit expr\n", .{});
         int_lit.token.deinit();
     }
 
@@ -575,7 +575,7 @@ pub const Identifier = struct {
     token: Token,
 
     pub fn deinit(ident: *const Identifier) void {
-        print("deinits ident expr\n", .{});
+        // print("deinits ident expr\n", .{});
         ident.token.deinit();
     }
 
