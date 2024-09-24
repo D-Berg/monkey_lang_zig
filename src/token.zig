@@ -22,10 +22,20 @@ pub fn init(allocator: Allocator,kind: Token.Kind, chars: []const u8) Allocator.
 }
 
 pub fn deinit(tok: *const Token) void {
+    std.debug.print("freeing tok '{s}' literal at addr: {*}\n", .{tok.literal, tok.literal});
     tok.allocator.free(tok.literal);
 }
 
-
+pub fn clone(tok: *const Token) !Token {
+    const literal = try tok.allocator.alloc(u8, tok.literal.len);
+    std.mem.copyForwards(u8, literal, tok.literal);
+    
+    return Token {
+        .allocator = tok.allocator,
+        .kind = tok.kind,
+        .literal = literal
+    };
+}
 
 pub fn tokenLiteral(tok: *const Token) []const u8 {
     // std.debug.print("tk_len = {}\n", .{tok.literal_len});

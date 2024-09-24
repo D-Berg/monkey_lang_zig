@@ -193,14 +193,6 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
 
             const body = try fl.body.clone();
 
-            for (body.statements.items) |stmt| {
-
-                const stmt_str = try stmt.String(program);
-                defer program.allocator.free(stmt_str);
-                print("body smt: {s}\n", .{stmt_str});
-
-            }
-
             return Object {
                 .function = .{
                     .params = params,
@@ -500,10 +492,9 @@ fn isTruthy(obj: *const object.Object) bool {
 
 fn testEval(allocator: Allocator, input: []const u8) !?object.Object {
     
-    var lexer = try Lexer.init(allocator, input);
-    defer lexer.deinit();
+    var lexer = Lexer.init(allocator, input);
 
-    var parser = Parser.init(&lexer, allocator);
+    var parser = try Parser.init(&lexer, allocator);
     defer parser.deinit();
 
     var program = try parser.ParseProgram(allocator);
@@ -813,10 +804,9 @@ test "multi func application" {
 
     for (inputs, 0..) |inp, idx| {
 
-        var lexer = try Lexer.init(allocator, inp);
-        defer lexer.deinit();
+        var lexer = Lexer.init(allocator, inp);
 
-        var parser = Parser.init(&lexer, allocator);
+        var parser = try Parser.init(&lexer, allocator);
         defer parser.deinit();
 
         var program = try parser.ParseProgram(allocator);

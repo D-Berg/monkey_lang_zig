@@ -95,6 +95,9 @@ pub const LetStatement = struct {
     value: *const Expression, //TODO: remove null
 
     pub fn deinit(ls: *const LetStatement) void {
+        print("deinits let stmt\n", .{});
+        ls.token.deinit();
+        ls.name.deinit();
         ls.value.deinit();
         ls.allocator.destroy(ls.value);
     }
@@ -113,6 +116,7 @@ pub const ReturnStatement = struct {
     value: *const Expression,
     
     pub fn deinit(rs: *const ReturnStatement) void {
+        rs.token.deinit();
         rs.value.deinit();
         rs.allocator.destroy(rs.value);
     }
@@ -136,6 +140,7 @@ pub const ExpressionStatement = struct {
     expression: *const Expression,
 
     pub fn deinit(es: *const ExpressionStatement) void {
+        es.token.deinit();
         es.expression.deinit();
         es.allocator.destroy(es.expression);
     }
@@ -202,7 +207,6 @@ pub const Expression = union(enum) {
     pub fn deinit(expr: *const Expression) void {
         
         switch (expr.*) {
-            .identifier, .integer_literal, .boolean_literal=> {},
             inline else => |case| case.deinit(),
         }
 
@@ -317,12 +321,21 @@ pub const Expression = union(enum) {
 // TODO: check if need to be public
 pub const IntegerLiteralExpression = struct {
     token: Token,
-    value: u32
+    value: u32,
+
+    pub fn deinit(int_lit: *const IntegerLiteralExpression) void {
+        print("deinits int lit expr\n", .{});
+        int_lit.token.deinit();
+    }
 };
 
 pub const BooleanLiteralExpression = struct {
     token: Token,
-    value: bool
+    value: bool,
+
+    pub fn deinit(bool_lit: *const BooleanLiteralExpression) void {
+        bool_lit.token.deinit();
+    }
 };
 
 pub const PrefixExpression = struct {
@@ -331,6 +344,7 @@ pub const PrefixExpression = struct {
     right: *const Expression,
 
     pub fn deinit(pe: *const PrefixExpression) void {
+        pe.token.deinit();
         pe.right.deinit();
         pe.allocator.destroy(pe.right);
     }
@@ -343,6 +357,7 @@ pub const InfixExpression = struct {
     right: *const Expression,
 
     pub fn deinit(ie: *const InfixExpression) void {
+        ie.token.deinit();
         ie.left.deinit();
         ie.right.deinit();
         ie.allocator.destroy(ie.left);
@@ -362,6 +377,7 @@ pub const IfExpression = struct {
 
     pub fn deinit(ie: *const IfExpression) void {
         
+        ie.token.deinit();
         ie.condition.deinit();
         ie.allocator.destroy(ie.condition);
 
@@ -379,6 +395,7 @@ pub const FnLiteralExpression = struct {
     body: BlockStatement,
 
     pub fn deinit(fe: *const FnLiteralExpression) void {
+        fe.token.deinit();
         if (fe.parameters) |params| {
             params.deinit();
         }
@@ -396,6 +413,7 @@ pub const CallExpression = struct {
     args: ArrayList(Expression),
 
     pub fn deinit(ce: *const CallExpression) void {
+        ce.token.deinit();
         ce.function.deinit();
         ce.allocator.destroy(ce.function);
 
@@ -412,6 +430,11 @@ pub const CallExpression = struct {
 // Identifier
 pub const Identifier = struct {
     token: Token,
+
+    pub fn deinit(ident: *const Identifier) void {
+        print("deinits ident expr", .{});
+        ident.token.deinit();
+    }
 
     pub fn tokenLiteral(ident: *const Identifier) []const u8 {
         return ident.token.tokenLiteral();

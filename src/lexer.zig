@@ -84,6 +84,8 @@ fn GetKindFromKeyWord(word: []const u8) Token.Kind {
 
 }
 
+
+/// Creates a new token
 pub fn NextToken(l: *Lexer) LexError!Token {
 
     const a = l.allocator;
@@ -214,8 +216,7 @@ test "Create Tokens" {
         \\10 != 9;
     ;
 
-    var l = try Lexer.init(allocator, input);
-    defer l.deinit();
+    var l = Lexer.init(allocator, input);
 
     var passed_tests: u32 = 0;
 
@@ -307,7 +308,8 @@ test "Create Tokens" {
 
     for (token_tests, 0..) |expected_token, i| {
 
-        const tok = l.NextToken();
+        const tok = try l.NextToken();
+        defer tok.deinit();
         // print("{s}\n", .{&tok.literal});
 
         expect(tok.kind == expected_token.kind) catch |err| {
@@ -323,7 +325,7 @@ test "Create Tokens" {
             return err;
         };
 
-        expectEqualSlices(u8, &expected_token.literal, &tok.literal) catch |err| {
+        expectEqualSlices(u8, expected_token.literal, tok.literal) catch |err| {
 
             print("token tests {}/{}: Failed, literal wrong, expected='{s}', got='{s}'.\n", .{
                 i, n_tests, expected_token.literal, tok.literal

@@ -205,13 +205,16 @@ pub fn HashMap(comptime V: type) type {
 test "init hashmap" {
     const allocator = std.testing.allocator;
 
-    var token1 = Token.init(.Ident, "a");
+    var token1 = try Token.init(allocator, .Ident, "a");
+    defer token1.deinit();
     const obj1 = Object {.integer = 3};
 
-    var token2 = Token.init(.Ident, "b");
+    var token2 = try Token.init(allocator, .Ident, "b");
+    defer token2.deinit();
     const obj2 = Object {.integer = 4};
 
-    var token3 = Token.init(.Ident, "c");
+    var token3 = try Token.init(allocator,.Ident, "c");
+    defer token3.deinit();
     const obj3 = Object {.integer = 5};
 
     var store = HashMap(Object).init(allocator);
