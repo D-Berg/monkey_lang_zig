@@ -278,6 +278,7 @@ fn parseIdentifier(parser: *Parser) Expression {
 fn parseIntegerLiteral(parser: *Parser) ParseError!Expression {
 
     const maybe_val = std.fmt.parseInt(u32, parser.current_token.tokenLiteral(), 0);
+    // TODO handle overflow
 
     const token = try parser.current_token.clone();
     errdefer token.deinit();

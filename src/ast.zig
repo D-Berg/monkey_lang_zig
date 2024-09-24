@@ -103,9 +103,18 @@ pub const LetStatement = struct {
     }
 
     pub fn clone(ls: *const LetStatement) Allocator.Error!Statement {
-        _ = ls;
         
-        @panic("clone for let stmt not yet implemented");
+        const value_ptr = try ls.allocator.create(Expression);
+        value_ptr.* = try ls.value.clone();
+
+        return Statement{
+            .let_stmt = .{
+                .allocator = ls.allocator,
+                .token = try ls.token.clone(),
+                .name = try ls.name.clone(),
+                .value = value_ptr,
+            }
+        };
 
     }
 };
