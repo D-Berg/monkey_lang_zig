@@ -829,3 +829,31 @@ test "multi func application" {
         }
     }
 }
+
+
+test "eval counter p.150" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let counter = fn(x) { 
+        \\  if (x > 100) {
+        \\      return true; 
+        \\  } else {
+        \\      let foobar = 9999;
+        \\      counter(x + 1);
+        \\  }
+        \\};
+        \\counter(0);
+    ;
+
+    const maybe_eval = try testEval(allocator, input);
+    
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        try expect(evaluated.boolean);
+    } 
+
+    return error.FailedEvalLet;
+
+
+}
