@@ -165,6 +165,8 @@ pub const BlockStatement = struct {
     statements: ArrayList(Statement), 
 
     fn deinit(bs: *const BlockStatement) void {
+        bs.token.deinit();
+
         for (bs.statements.items) |stmt| {
             stmt.deinit();
         }
@@ -397,6 +399,10 @@ pub const FnLiteralExpression = struct {
     pub fn deinit(fe: *const FnLiteralExpression) void {
         fe.token.deinit();
         if (fe.parameters) |params| {
+            for (params.items) |p| {
+                p.deinit();
+
+            }
             params.deinit();
         }
         
