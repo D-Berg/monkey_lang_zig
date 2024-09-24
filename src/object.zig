@@ -35,37 +35,14 @@ pub const Object = union(enum) {
     }
     
     pub fn clone(obj: *const Object) !Object {
-
         switch (obj.*) {
-            .function => |fo| {
-
-                print("cloned func\n", .{});
-
-                var params: ?ArrayList(Identifier) = null;
-
-                if (fo.params != null) {
-                    params = try fo.params.?.clone();
-                }
-
-                const body = try fo.body.clone();
-
-                return Object {
-                    .function = .{
-                        .params = params,
-                        .body = body,
-                        .env = fo.env,
-                    }
-                };
-
-            },
-            else => {
+            .integer, .boolean, .nullable => {
                 return obj.*;
+            }, 
+            inline else => |case| {
+                return case.clone();
             }
-
         }
-
-
-
     }
 
 
@@ -92,7 +69,22 @@ const ReturnObject = struct {
     value: *const Object,
 
     pub fn deinit(ret_obj: *const ReturnObject) void {
+        print("deinits ret obj\n", .{});
+        ret_obj.value.deinit();
         ret_obj.allocator.destroy(ret_obj.value);
+    }
+
+    pub fn clone(ro: *const ReturnObject) Allocator.Error!Object {
+        const value_ptr = try ro.allocator.create(Object);
+        value_ptr.* = try ro.value.clone();
+
+        return Object {
+            .return_val_obj = .{
+                .allocator = ro.allocator,
+                .value = value_ptr,
+            }
+        };
+
     }
 
 };
@@ -104,13 +96,48 @@ pub const FunctionObject = struct {
 
     fn deinit(fnc_obj: *const FunctionObject) void {
 
-        fnc_obj.body.statements.deinit(); // working
+        print("deinits fn obj, addr: {*}\n", .{fnc_obj});
+
+        fnc_obj.body.deinit();
 
         if (fnc_obj.params) |params| {
+
+            for (params.items) |p| {
+                p.deinit();
+            }
             params.deinit();
         }
         // fnc_obj.env.deinit();
         //
+    }
+
+    pub fn clone(fo: *const FunctionObject) Allocator.Error!Object {
+
+        print("cloned func\n", .{});
+
+        var params: ?ArrayList(Identifier) = null;
+
+        if (fo.params) |old_params| {
+
+            params = ArrayList(Identifier).init(old_params.allocator);
+
+            for (old_params.items) |p| {
+
+                try params.?.append(try p.clone());
+
+            }
+        }
+
+        const body = try fo.body.clone();
+
+        return Object {
+            .function = .{
+                .params = params,
+                .body = body,
+                .env = fo.env,
+            }
+        };
+
     }
 
 };
@@ -132,8 +159,10 @@ pub const Environment = struct {
         };
     }
 
+    /// Returns cloned object in env or null.
+    /// First checks its own store, if that returns null, 
+    /// it checks outer.
     pub fn get(env: *Environment, key: []const u8) !?Object {
-
         //cloooone obj
 
         var maybe_obj = env.store.get(key);
@@ -160,6 +189,7 @@ pub const Environment = struct {
     }
 
     pub fn deinit(env: *Environment) void {
+        print("deinits env\n", .{});
         env.store.deinit();
     }
 

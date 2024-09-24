@@ -47,15 +47,15 @@ pub fn start(allocator: Allocator) !void {
         //
         // std.debug.print("Program: {s}\n", .{prog_str});
         //
-        // const maybe_evaluated = try evaluator.Eval(&program, &env);
-        //
-        //
-        // if (maybe_evaluated) |evaluated| {
-        //     defer evaluated.deinit();
-        //     const eval_str = try evaluated.inspect(allocator);
-        //     defer allocator.free(eval_str);
-        //     try stdout.print("evaluated: {s}\n", .{eval_str});
-        // }
+        const maybe_evaluated = try evaluator.Eval(&program, &env);
+
+
+        if (maybe_evaluated) |evaluated| {
+            defer evaluated.deinit();
+            const eval_str = try evaluated.inspect(allocator);
+            defer allocator.free(eval_str);
+            try stdout.print("evaluated: {s}\n", .{eval_str});
+        }
         //
         // var tok = lex.NextToken();
         // while (tok.kind != Token.Kind.Eof) : (tok = lex.NextToken()) {

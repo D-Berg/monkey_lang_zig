@@ -144,15 +144,16 @@ pub const ExpressionStatement = struct {
         es.expression.deinit();
         es.allocator.destroy(es.expression);
     }
+
     pub fn clone(es: *const ExpressionStatement) Allocator.Error!Statement {
         
         const expr_ptr = try es.allocator.create(Expression);
-        expr_ptr.* = es.expression.*;
+        expr_ptr.* = try es.expression.clone();
         
         return Statement {
             .expr_stmt = .{
                 .allocator =  es.allocator,
-                .token = try Token.init(es.allocator, es.token.kind, es.token.tokenLiteral()),
+                .token = try es.token.clone(),
                 .expression = expr_ptr
             }
         };
@@ -164,7 +165,7 @@ pub const BlockStatement = struct {
     token: Token,
     statements: ArrayList(Statement), 
 
-    fn deinit(bs: *const BlockStatement) void {
+    pub fn deinit(bs: *const BlockStatement) void {
         bs.token.deinit();
 
         for (bs.statements.items) |stmt| {
@@ -186,7 +187,7 @@ pub const BlockStatement = struct {
         }
 
         return BlockStatement {
-            .token =  self.token,
+            .token = try self.token.clone(),
             .statements = statements,
         };
 
@@ -210,6 +211,19 @@ pub const Expression = union(enum) {
         
         switch (expr.*) {
             inline else => |case| case.deinit(),
+        }
+
+    }
+
+    pub fn clone(expr: *const Expression) Allocator.Error!Expression {
+
+        switch (expr.*) {
+            .identifier => |ident| {
+                return Expression {
+                    .identifier = try ident.clone()
+                };
+            },
+            inline else => |case| return try case.clone(),
         }
 
     }
@@ -329,6 +343,15 @@ pub const IntegerLiteralExpression = struct {
         print("deinits int lit expr\n", .{});
         int_lit.token.deinit();
     }
+
+    pub fn clone(int_lit_expr: *const IntegerLiteralExpression) !Expression {
+        return Expression {
+            .integer_literal = .{
+                .token = try int_lit_expr.token.clone(),
+                .value = int_lit_expr.value
+            }
+        };
+    }
 };
 
 pub const BooleanLiteralExpression = struct {
@@ -337,6 +360,15 @@ pub const BooleanLiteralExpression = struct {
 
     pub fn deinit(bool_lit: *const BooleanLiteralExpression) void {
         bool_lit.token.deinit();
+    }
+
+    pub fn clone(bool_lit_expr: *const BooleanLiteralExpression) !Expression {
+        return Expression {
+            .boolean_literal = .{
+                .token = try bool_lit_expr.token.clone(),
+                .value = bool_lit_expr.value
+            }
+        };
     }
 };
 
@@ -350,6 +382,21 @@ pub const PrefixExpression = struct {
         pe.right.deinit();
         pe.allocator.destroy(pe.right);
     }
+
+    pub fn clone(pe: *const PrefixExpression) Allocator.Error!Expression {
+        const right_ptr = try pe.allocator.create(Expression);
+        right_ptr.* = try pe.right.clone();
+
+        return Expression {
+            .prefix_expression = .{
+                .allocator = pe.allocator,
+                .token = try pe.token.clone(),
+                .right = right_ptr
+            }
+        };
+        
+    }
+
 };
 
 pub const InfixExpression = struct {
@@ -365,6 +412,26 @@ pub const InfixExpression = struct {
         ie.allocator.destroy(ie.left);
         ie.allocator.destroy(ie.right);
     }
+
+    pub fn clone(ie: *const InfixExpression) Allocator.Error!Expression {
+        const left_ptr = try ie.allocator.create(Expression);
+        left_ptr.* = try ie.left.clone();
+        const right_ptr = try ie.allocator.create(Expression);
+        right_ptr.* = try ie.right.clone();
+        //TODO add err defer when allocating
+
+        return Expression {
+            .infix_expression = .{
+                .allocator = ie.allocator,
+                .token = try ie.token.clone(),
+                .left = left_ptr,
+                .right = right_ptr
+            }
+
+        };
+
+    }
+
 };
 
 
@@ -386,8 +453,30 @@ pub const IfExpression = struct {
         ie.consequence.deinit();
         
         if (ie.alternative) |alt| alt.deinit();
+    }
+
+    pub fn clone(ie: *const IfExpression) Allocator.Error!Expression {
+        const condition_ptr = try ie.allocator.create(Expression);
+        condition_ptr.* = try ie.condition.clone();
+        
+        var new_alt: ?BlockStatement = null;
+        
+        if (ie.alternative) |alt| {
+            new_alt = try alt.clone();
+        } 
+
+        return Expression {
+            .if_expression = .{
+                .allocator = ie.allocator,
+                .token = try ie.token.clone(),
+                .condition = condition_ptr,
+                .consequence = try ie.consequence.clone(),
+                .alternative = new_alt,
+            }
+        };
 
     }
+
 };
 
 // need dealloc
@@ -407,6 +496,27 @@ pub const FnLiteralExpression = struct {
         }
         
         fe.body.deinit();
+    }
+
+    pub fn clone(fe: *const FnLiteralExpression) Allocator.Error!Expression {
+
+        var parameters: ?ArrayList(Identifier) = null;
+        
+        if (fe.parameters) |params| {
+            parameters = ArrayList(Identifier).init(params.allocator);
+            
+            for (params.items) |p| {
+                try parameters.?.append(try p.clone());
+            }
+        }
+
+        return Expression {
+            .fn_literal = .{
+                .token = try fe.token.clone(),
+                .body = try fe.body.clone(),
+                .parameters = parameters,
+            }
+        };
 
     }
 };
@@ -430,6 +540,31 @@ pub const CallExpression = struct {
         ce.args.deinit();
     }
 
+    pub fn clone(ce: *const CallExpression) Allocator.Error!Expression {
+        
+        const func_ptr = try ce.allocator.create(Expression);
+        func_ptr.* = try ce.function.clone();
+        
+        var args = ArrayList(Expression).init(ce.allocator);
+        
+        for (ce.args.items) |arg| {
+            try args.append(try arg.clone());
+
+        }
+
+        return Expression {
+            .call_expression = .{
+                .allocator = ce.allocator,
+                .token = try ce.token.clone(),
+                .function = func_ptr,
+                .args = args
+
+            }
+            
+        };
+
+    }
+
 };
 
 
@@ -438,8 +573,16 @@ pub const Identifier = struct {
     token: Token,
 
     pub fn deinit(ident: *const Identifier) void {
-        print("deinits ident expr", .{});
+        print("deinits ident expr\n", .{});
         ident.token.deinit();
+    }
+
+    pub fn clone(ident: *const Identifier) Allocator.Error!Identifier {
+
+        return Identifier {
+            .token = try ident.token.clone(),
+        };
+
     }
 
     pub fn tokenLiteral(ident: *const Identifier) []const u8 {

@@ -10,7 +10,9 @@ const expect = std.testing.expect;
 
 const m: usize = std.math.pow(usize, 10, 9) + 9;
 
-pub fn HashMap(comptime V: type) type {
+/// A HashMap for Objects using strings as key
+/// Clones value and key
+pub fn HashMap(comptime V: type) type { // TODO: Remove generic
 
     const p = 31;
 
@@ -39,11 +41,12 @@ pub fn HashMap(comptime V: type) type {
             if (self.buckets) |buckets| {
 
                 for (buckets) |bucket| {
+
                     if (bucket) |entry| {
                         self.allocator.free(entry.key);
                         entry.val.deinit();
-
                     }
+
                 }
                     
                 self.allocator.free(buckets);
@@ -55,6 +58,7 @@ pub fn HashMap(comptime V: type) type {
 
         }
 
+        /// Clones the object
         pub fn put(self: *Self, key: []const u8, value: V) Allocator.Error!void {
             
             // print("got key: {s}, value: {}\n", .{key, value});
@@ -87,7 +91,7 @@ pub fn HashMap(comptime V: type) type {
 
             self.buckets.?[b_idx] = Entry {
                 .key = key_str,
-                .val = value//.clone()
+                .val = try value.clone()
             };
 
             self.n_entries += 1;
