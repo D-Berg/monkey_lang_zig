@@ -3,38 +3,33 @@ const Allocator = std.mem.Allocator;
 
 const Token = @This();
 
-// allocator: Allocator,
+allocator: Allocator,
 kind: Kind,
 // TODO: allocate string on heap
-literal: [32:0]u8, // literal can be at most 32 bytes 
-literal_len: usize,
+literal: []const u8, // literal can be at most 32 bytes 
     
-pub fn init(kind: Token.Kind, chars: []const u8) Token {
-    var literal: [32:0]u8 = undefined;
+pub fn init(allocator: Allocator,kind: Token.Kind, chars: []const u8) Allocator.Error!Token {
 
-    // std.debug.print("chars: {s}\n", .{chars});
-    //
-    // std.debug.print("chars_len = {}\n", .{chars.len});
-
-    for (0..literal.len) |i| {
-        literal[i] = 0;
-    }
-    for (0..chars.len) |i| {
-        literal[i] = chars[i];
-    }
+    const literal = try allocator.alloc(u8, chars.len);
     
+    std.mem.copyForwards(u8, literal, chars);
+
     return .{
+        .allocator = allocator,
         .kind = kind, 
         .literal = literal,
-        .literal_len = chars.len
     };
+}
+
+pub fn deinit(tok: *const Token) void {
+    tok.allocator.free(tok.literal);
 }
 
 
 
 pub fn tokenLiteral(tok: *const Token) []const u8 {
     // std.debug.print("tk_len = {}\n", .{tok.literal_len});
-    return tok.literal[0..tok.literal_len];
+    return tok.literal;
 }
 
 pub const Kind = enum {
@@ -78,33 +73,34 @@ pub const Kind = enum {
     Return,
 };
 
+// pub fn GetKindFromStr(str)
 
 // TODO: remove and replace with a switch
-pub const Keywords = struct {
-    
-    words: std.StringHashMap(Token.Kind),
-
-    pub fn init(allocator: Allocator) !Keywords {
-
-        var words = std.StringHashMap(Token.Kind).init(allocator);
-        try words.put("let", Token.Kind.Let);
-        try words.put("fn", Token.Kind.Function);
-        try words.put("true", Token.Kind.True);
-        try words.put("false", Token.Kind.False);
-        try words.put("if", Token.Kind.If);
-        try words.put("else", Token.Kind.Else);
-        try words.put("return", Token.Kind.Return);
-
-        return .{
-            .words = words,
-        };
-        
-    }
-
-    pub fn deinit(keywords: *Keywords) void {
-
-        keywords.words.deinit();
-
-    }
-};
+// pub const Keywords = struct {
+//
+//     words: std.StringHashMap(Token.Kind),
+//
+//     pub fn init(allocator: Allocator) !Keywords {
+//
+//         var words = std.StringHashMap(Token.Kind).init(allocator);
+//         try words.put("let", Token.Kind.Let);
+//         try words.put("fn", Token.Kind.Function);
+//         try words.put("true", Token.Kind.True);
+//         try words.put("false", Token.Kind.False);
+//         try words.put("if", Token.Kind.If);
+//         try words.put("else", Token.Kind.Else);
+//         try words.put("return", Token.Kind.Return);
+//
+//         return .{
+//             .words = words,
+//         };
+//
+//     }
+//
+//     pub fn deinit(keywords: *Keywords) void {
+//
+//         keywords.words.deinit();
+//
+//     }
+// };
 

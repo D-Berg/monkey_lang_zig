@@ -3,17 +3,19 @@ const Token = @import("Token.zig");
 
 const Allocator = std.mem.Allocator;
 
-const Keywords = Token.Keywords;
-
 const print = std.debug.print;
 const log = std.log;
 const expect = std.testing.expect;
 const expectEqualSlices = std.testing.expectEqualSlices;
 
-const TokenError = error {
-    unsupported_char,
-    no_next_token
-};
+// const TokenError = error {
+//     unsupported_char,
+//     no_next_token
+// };
+//
+const LexError = error {
+
+} || Allocator.Error;
 
 const Lexer = @This();
 
@@ -22,13 +24,22 @@ input: []const u8,
 position: usize = 0,
 readPosition: usize = 0,
 ch: u8 = 0,
-key_words: Keywords,
 
-pub fn init(allocator: Allocator, input: []const u8) !Lexer {
+const KeyWordsStr = [7][]const u8 {
+    "let", "fn", "true", "false",
+    "if", "else", "return" 
+};
+
+const KeyWordsKinds = [7]Token.Kind {
+    .Let, .Function, .True, .False, 
+    .If, .Else, .Return
+};
+
+pub fn init(allocator: Allocator, input: []const u8) Lexer {
+
     var l = Lexer {
         .allocator = allocator,
         .input = input,
-        .key_words = try Keywords.init(allocator)
     };
 
     l.readChar();
@@ -36,9 +47,9 @@ pub fn init(allocator: Allocator, input: []const u8) !Lexer {
     return l;
 }
 
-pub fn deinit(l: *Lexer) void {
-    l.key_words.deinit();
-}
+// pub fn deinit(l: *Lexer) void {
+//     l.key_words.deinit();
+// }
 
 fn readChar(l: *Lexer) void {
 
@@ -60,7 +71,22 @@ fn peekChar(l: *Lexer) u8 {
     }
 }
 
-pub fn NextToken(l: *Lexer) Token {
+fn GetKindFromKeyWord(word: []const u8) Token.Kind {
+        
+    for (KeyWordsStr, KeyWordsKinds) |str, kind| {
+
+        if (std.mem.eql(u8, word, str)) { 
+            return kind;
+        }
+    }
+
+    return .Ident;
+
+}
+
+pub fn NextToken(l: *Lexer) LexError!Token {
+
+    const a = l.allocator;
 
     var read_next_char = true; 
 
@@ -77,34 +103,34 @@ pub fn NextToken(l: *Lexer) Token {
                 const ch = l.ch;
                 l.readChar();
                 const eq_str = [2]u8{ ch, l.ch};
-                return Token.init(Token.Kind.Eq, &eq_str);
+                return try Token.init(a, Token.Kind.Eq, &eq_str);
             } else {
-                return Token.init(Token.Kind.Assign, &chars); 
+                return try Token.init(a, Token.Kind.Assign, &chars); 
             }
         },
-        '+' => { return Token.init(Token.Kind.Plus, &chars); },
-        '-' => { return Token.init(Token.Kind.Minus, &chars); },
+        '+' => { return try Token.init(a, Token.Kind.Plus, &chars); },
+        '-' => { return try Token.init(a, Token.Kind.Minus, &chars); },
         '!' => { 
             if (l.peekChar() == '=') {
                 const ch = l.ch;
                 l.readChar();
                 const neq_str = [2]u8{ ch, l.ch };
-                return Token.init(Token.Kind.Neq, &neq_str);
+                return try Token.init(a, Token.Kind.Neq, &neq_str);
             } else {
-                return Token.init(Token.Kind.Bang, &chars); 
+                return try Token.init(a, Token.Kind.Bang, &chars); 
             }
         },
-        '/' => { return Token.init(Token.Kind.Slash, &chars); },
-        '*' => { return Token.init(Token.Kind.Asterisk, &chars); },
-        '<' => { return Token.init(Token.Kind.Lt, &chars); },
-        '>' => { return Token.init(Token.Kind.Gt, &chars); },
-        ';' => { return Token.init(Token.Kind.Semicolon, &chars); },
-        ',' => { return Token.init(Token.Kind.Comma, &chars); },
-        '(' => { return Token.init(Token.Kind.Lparen, &chars); },
-        ')' => { return Token.init(Token.Kind.Rparen, &chars); },
-        '{' => { return Token.init(Token.Kind.Lbrace, &chars); },
-        '}' => { return Token.init(Token.Kind.Rbrace, &chars); },
-        0 => { return Token.init(Token.Kind.Eof, ""); },
+        '/' => { return try Token.init(a, Token.Kind.Slash, &chars); },
+        '*' => { return try Token.init(a, Token.Kind.Asterisk, &chars); },
+        '<' => { return try Token.init(a, Token.Kind.Lt, &chars); },
+        '>' => { return try Token.init(a, Token.Kind.Gt, &chars); },
+        ';' => { return try Token.init(a, Token.Kind.Semicolon, &chars); },
+        ',' => { return try Token.init(a, Token.Kind.Comma, &chars); },
+        '(' => { return try Token.init(a, Token.Kind.Lparen, &chars); },
+        ')' => { return try Token.init(a, Token.Kind.Rparen, &chars); },
+        '{' => { return try Token.init(a, Token.Kind.Lbrace, &chars); },
+        '}' => { return try Token.init(a, Token.Kind.Rbrace, &chars); },
+        0 => { return try Token.init(a, Token.Kind.Eof, ""); },
         else => {
             if (isLetter(l.ch)) {
 
@@ -114,9 +140,9 @@ pub fn NextToken(l: *Lexer) Token {
                 const end = l.position;
 
                 const identifer_str = l.input[start..end];
-                const token_kind = l.key_words.words.get(identifer_str) orelse Token.Kind.Ident;
+                const token_kind = GetKindFromKeyWord(identifer_str);
 
-                return Token.init(token_kind, identifer_str);
+                return try Token.init(a, token_kind, identifer_str);
 
             } if (isDigit(l.ch)) {
                 read_next_char = false;
@@ -126,10 +152,10 @@ pub fn NextToken(l: *Lexer) Token {
                 const end = l.position;
 
                 const number_str = l.input[start..end];
-                return Token.init(Token.Kind.Int, number_str);
+                return try Token.init(a, Token.Kind.Int, number_str);
 
             } else {
-                return Token.init(Token.Kind.Illegal, &chars);
+                return try Token.init(a, Token.Kind.Illegal, &chars);
             }
         }
     }
@@ -194,82 +220,88 @@ test "Create Tokens" {
     var passed_tests: u32 = 0;
 
     const token_tests = [_]Token {
-        Token.init(Token.Kind.Let, "let"),
-        Token.init(Token.Kind.Ident, "five"),
-        Token.init(Token.Kind.Assign, "="),
-        Token.init(Token.Kind.Int, "5"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Let, "let"),
-        Token.init(Token.Kind.Ident, "ten"),
-        Token.init(Token.Kind.Assign, "="),
-        Token.init(Token.Kind.Int, "10"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Let, "let"),
-        Token.init(Token.Kind.Ident, "add"),
-        Token.init(Token.Kind.Assign, "="),
-        Token.init(Token.Kind.Function, "fn"),
-        Token.init(Token.Kind.Lparen, "("),
-        Token.init(Token.Kind.Ident, "x"),
-        Token.init(Token.Kind.Comma, ","),
-        Token.init(Token.Kind.Ident, "y"),
-        Token.init(Token.Kind.Rparen, ")"),
-        Token.init(Token.Kind.Lbrace, "{"),
-        Token.init(Token.Kind.Ident, "x"),
-        Token.init(Token.Kind.Plus, "+"),
-        Token.init(Token.Kind.Ident, "y"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Rbrace, "}"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Let, "let"),
-        Token.init(Token.Kind.Ident, "result"),
-        Token.init(Token.Kind.Assign, "="),
-        Token.init(Token.Kind.Ident, "add"),
-        Token.init(Token.Kind.Lparen, "("),
-        Token.init(Token.Kind.Ident, "five"),
-        Token.init(Token.Kind.Comma, ","),
-        Token.init(Token.Kind.Ident, "ten"),
-        Token.init(Token.Kind.Rparen, ")"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Bang, "!"),
-        Token.init(Token.Kind.Minus, "-"),
-        Token.init(Token.Kind.Slash, "/"),
-        Token.init(Token.Kind.Asterisk, "*"),
-        Token.init(Token.Kind.Int, "5"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Int, "5"),
-        Token.init(Token.Kind.Lt, "<"),
-        Token.init(Token.Kind.Int, "10"),
-        Token.init(Token.Kind.Gt, ">"),
-        Token.init(Token.Kind.Int, "5"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.If, "if"),
-        Token.init(Token.Kind.Lparen, "("),
-        Token.init(Token.Kind.Int, "5"),
-        Token.init(Token.Kind.Lt, "<"),
-        Token.init(Token.Kind.Int, "10"),
-        Token.init(Token.Kind.Rparen, ")"),
-        Token.init(Token.Kind.Lbrace, "{"),
-        Token.init(Token.Kind.Return, "return"),
-        Token.init(Token.Kind.True, "true"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Rbrace, "}"),
-        Token.init(Token.Kind.Else, "else"),
-        Token.init(Token.Kind.Lbrace, "{"),
-        Token.init(Token.Kind.Return, "return"),
-        Token.init(Token.Kind.False, "false"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Rbrace, "}"),
-        Token.init(Token.Kind.Int, "10"),
-        Token.init(Token.Kind.Eq, "=="),
-        Token.init(Token.Kind.Int, "10"),
-        Token.init(Token.Kind.Semicolon, ";"),
-        Token.init(Token.Kind.Int, "10"),
-        Token.init(Token.Kind.Neq, "!="),
-        Token.init(Token.Kind.Int, "9"),
-        Token.init(Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Let, "let"),
+        try Token.init(allocator,Token.Kind.Ident, "five"),
+        try Token.init(allocator,Token.Kind.Assign, "="),
+        try Token.init(allocator,Token.Kind.Int, "5"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Let, "let"),
+        try Token.init(allocator,Token.Kind.Ident, "ten"),
+        try Token.init(allocator,Token.Kind.Assign, "="),
+        try Token.init(allocator,Token.Kind.Int, "10"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Let, "let"),
+        try Token.init(allocator,Token.Kind.Ident, "add"),
+        try Token.init(allocator,Token.Kind.Assign, "="),
+        try Token.init(allocator,Token.Kind.Function, "fn"),
+        try Token.init(allocator,Token.Kind.Lparen, "("),
+        try Token.init(allocator,Token.Kind.Ident, "x"),
+        try Token.init(allocator,Token.Kind.Comma, ","),
+        try Token.init(allocator,Token.Kind.Ident, "y"),
+        try Token.init(allocator,Token.Kind.Rparen, ")"),
+        try Token.init(allocator,Token.Kind.Lbrace, "{"),
+        try Token.init(allocator,Token.Kind.Ident, "x"),
+        try Token.init(allocator,Token.Kind.Plus, "+"),
+        try Token.init(allocator,Token.Kind.Ident, "y"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Rbrace, "}"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Let, "let"),
+        try Token.init(allocator,Token.Kind.Ident, "result"),
+        try Token.init(allocator,Token.Kind.Assign, "="),
+        try Token.init(allocator,Token.Kind.Ident, "add"),
+        try Token.init(allocator,Token.Kind.Lparen, "("),
+        try Token.init(allocator,Token.Kind.Ident, "five"),
+        try Token.init(allocator,Token.Kind.Comma, ","),
+        try Token.init(allocator,Token.Kind.Ident, "ten"),
+        try Token.init(allocator,Token.Kind.Rparen, ")"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Bang, "!"),
+        try Token.init(allocator,Token.Kind.Minus, "-"),
+        try Token.init(allocator,Token.Kind.Slash, "/"),
+        try Token.init(allocator,Token.Kind.Asterisk, "*"),
+        try Token.init(allocator,Token.Kind.Int, "5"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Int, "5"),
+        try Token.init(allocator,Token.Kind.Lt, "<"),
+        try Token.init(allocator,Token.Kind.Int, "10"),
+        try Token.init(allocator,Token.Kind.Gt, ">"),
+        try Token.init(allocator,Token.Kind.Int, "5"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.If, "if"),
+        try Token.init(allocator,Token.Kind.Lparen, "("),
+        try Token.init(allocator,Token.Kind.Int, "5"),
+        try Token.init(allocator,Token.Kind.Lt, "<"),
+        try Token.init(allocator,Token.Kind.Int, "10"),
+        try Token.init(allocator,Token.Kind.Rparen, ")"),
+        try Token.init(allocator,Token.Kind.Lbrace, "{"),
+        try Token.init(allocator,Token.Kind.Return, "return"),
+        try Token.init(allocator,Token.Kind.True, "true"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Rbrace, "}"),
+        try Token.init(allocator,Token.Kind.Else, "else"),
+        try Token.init(allocator,Token.Kind.Lbrace, "{"),
+        try Token.init(allocator,Token.Kind.Return, "return"),
+        try Token.init(allocator,Token.Kind.False, "false"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Rbrace, "}"),
+        try Token.init(allocator,Token.Kind.Int, "10"),
+        try Token.init(allocator,Token.Kind.Eq, "=="),
+        try Token.init(allocator,Token.Kind.Int, "10"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator,Token.Kind.Int, "10"),
+        try Token.init(allocator,Token.Kind.Neq, "!="),
+        try Token.init(allocator,Token.Kind.Int, "9"),
+        try Token.init(allocator,Token.Kind.Semicolon, ";"),
 
-        Token.init(Token.Kind.Eof, ""),
+        try Token.init(allocator,Token.Kind.Eof, ""),
     };
+
+    defer {
+        for (token_tests) |tok| {
+            tok.deinit();
+        }
+    }
 
     const n_tests = token_tests.len;
 

@@ -29,10 +29,10 @@ pub fn start(allocator: Allocator) !void {
         
         if (isExit(line)) break;
 
-        var lex = try Lexer.init(allocator, line);
-        defer lex.deinit();
+        var lex = Lexer.init(allocator, line);
+        // defer lex.deinit();
 
-        var parser = Parser.init(&lex, allocator);
+        var parser = try Parser.init(&lex, allocator);
         defer parser.deinit();
 
         var program = try parser.ParseProgram(allocator);

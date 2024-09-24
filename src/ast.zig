@@ -25,12 +25,21 @@ pub const Statement = union(enum) {
         }
     }
 
+    pub fn clone(stmt: *const Statement) Allocator.Error!Statement {
+        switch (stmt.*) {
+            .blck_stmt => {@panic("should not be called");},
+            inline else => |sub_stmt| {
+                return try sub_stmt.clone();
+            }
+
+        }
+    }
+
     pub fn tokenLiteral(stmt: *const Statement) []const u8 {
         switch (stmt.*) {
             inline else => |*case| return case.token.tokenLiteral(),
         }
     }
-
     pub fn String(stmt: *const Statement, program: *Program) ![]const u8 {
 
         const allocator = program.allocator;
@@ -89,6 +98,13 @@ pub const LetStatement = struct {
         ls.value.deinit();
         ls.allocator.destroy(ls.value);
     }
+
+    pub fn clone(ls: *const LetStatement) Allocator.Error!Statement {
+        _ = ls;
+        
+        @panic("clone for let stmt not yet implemented");
+
+    }
 };
 
 pub const ReturnStatement = struct {
@@ -101,6 +117,17 @@ pub const ReturnStatement = struct {
         rs.allocator.destroy(rs.value);
     }
     // TODO: deinit
+    pub fn clone(rs: *const ReturnStatement) Allocator.Error!Statement {
+        const value_ptr = try rs.allocator.create(Expression);
+        value_ptr.* = rs.value.*;
+        return Statement {
+            .ret_stmt = .{
+                .allocator = rs.allocator,
+                .token = rs.token,
+                .value = value_ptr,
+            }
+        };
+    }
 };
 
 pub const ExpressionStatement = struct {
@@ -112,8 +139,20 @@ pub const ExpressionStatement = struct {
         es.expression.deinit();
         es.allocator.destroy(es.expression);
     }
-    
-    // TODO: deinit
+    pub fn clone(es: *const ExpressionStatement) Allocator.Error!Statement {
+        
+        const expr_ptr = try es.allocator.create(Expression);
+        expr_ptr.* = es.expression.*;
+        
+        return Statement {
+            .expr_stmt = .{
+                .allocator =  es.allocator,
+                .token = try Token.init(es.allocator, es.token.kind, es.token.tokenLiteral()),
+                .expression = expr_ptr
+            }
+        };
+        // @panic("clone for expr stmt not yet implemented");
+    }
 };
 
 pub const BlockStatement = struct {
@@ -130,10 +169,18 @@ pub const BlockStatement = struct {
     }
     
     pub fn clone(self: *const BlockStatement) !BlockStatement {
-        
+
+        var statements = ArrayList(Statement).init(self.statements.allocator);
+
+        for (self.statements.items) |stmt| {
+
+            try statements.append(try stmt.clone());
+
+        }
+
         return BlockStatement {
             .token =  self.token,
-            .statements = try self.statements.clone(),
+            .statements = statements,
         };
 
     }

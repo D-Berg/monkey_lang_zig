@@ -67,13 +67,13 @@ const Precedence = enum {
     }
 };
 
-pub fn init(lexer: *Lexer, allocator: Allocator) Parser {
+pub fn init(lexer: *Lexer, allocator: Allocator) !Parser {
 
     return .{ 
         .allocator = allocator, 
         .lexer = lexer,
-        .current_token = lexer.NextToken(),
-        .peek_token = lexer.NextToken(),
+        .current_token = try lexer.NextToken(),
+        .peek_token = try lexer.NextToken(),
         .errors = ArrayList([]const u8).init(allocator),
     };
 
@@ -111,7 +111,10 @@ fn getNodeIdx(parser: *Parser) usize {
 fn nextToken(parser: *Parser) void {
     // print("current token: {}\n", .{parser.current_token.kind});
     parser.current_token = parser.peek_token;
-    parser.peek_token = parser.lexer.NextToken();
+    parser.peek_token = parser.lexer.NextToken() catch {
+        @panic("Failed to get NextToken");
+
+    };
 }
 
 
