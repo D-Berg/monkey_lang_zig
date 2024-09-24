@@ -110,8 +110,7 @@ fn getNodeIdx(parser: *Parser) usize {
 
 fn nextToken(parser: *Parser) void {
 
-    print("current token: {}\n", .{parser.current_token.kind});
-
+    // print("current token: {}\n", .{parser.current_token.kind});
 
     parser.current_token.deinit();
 

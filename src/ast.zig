@@ -122,12 +122,14 @@ pub const ReturnStatement = struct {
     }
     // TODO: deinit
     pub fn clone(rs: *const ReturnStatement) Allocator.Error!Statement {
+
         const value_ptr = try rs.allocator.create(Expression);
-        value_ptr.* = rs.value.*;
+        value_ptr.* = try rs.value.clone();
+
         return Statement {
             .ret_stmt = .{
                 .allocator = rs.allocator,
-                .token = rs.token,
+                .token = try rs.token.clone(),
                 .value = value_ptr,
             }
         };

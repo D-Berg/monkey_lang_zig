@@ -173,9 +173,6 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
 
             var params: ?ArrayList(Identifier) = null; // TODO: use slice instead
 
-            print("making fn obj\n", .{});
-            // defer print("\n", .{});
-
             // Clone func expr param identifiers to func obj
             if (fl.parameters) |fl_params| {
 
@@ -754,19 +751,19 @@ test "func application" {
 
     const inputs = [_][]const u8{ 
         "let identity = fn(x) { x; }; identity(5);",
-        // "let identity = fn(x) { return x; }; identity(5);",
-        // "let double = fn(x) { x * 2; }; double(5);",
-        // "let add = fn(x, y) { x + y; }; add(5, 5);",
-        // "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
-        // "fn(x) { x; }(5)"
+        "let identity = fn(x) { return x; }; identity(5);",
+        "let double = fn(x) { x * 2; }; double(5);",
+        "let add = fn(x, y) { x + y; }; add(5, 5);",
+        "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
+        "fn(x) { x; }(5)"
     };
     const answers = [_]i32 { 
         5,
-        // 5,
-        // 10,
-        // 10,
-        // 20,
-        // 5
+        5,
+        10,
+        10,
+        20,
+        5
     };
 
     for (inputs, answers) |inp, ans| {
