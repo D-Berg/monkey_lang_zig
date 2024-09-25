@@ -146,10 +146,10 @@ pub const Environment = struct {
         };
     }
 
-    pub fn initClosedEnv(env: *Environment) Environment {
+    pub fn initClosedEnv(outer: *Environment) Environment {
         return Environment {
-            .store =  HashMap(Object).init(env.store.allocator),
-            .outer = env
+            .store =  HashMap(Object).init(outer.store.allocator),
+            .outer = outer
         };
     }
 
