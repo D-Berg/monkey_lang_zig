@@ -30,9 +30,9 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
 
     var maybe_result: ?object.Object = null;
 
-    // const prg_str = try program.String();
-    // defer program.allocator.free(prg_str);
-    // print("\nprog str: {s}\n", .{prg_str});
+    const prg_str = try program.String();
+    defer program.allocator.free(prg_str);
+    print("\nprog str: {s}\n", .{prg_str});
 
     for (program.statements.items) |stmt| {
 
@@ -158,7 +158,12 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
         },
 
         .infix_expression => |ie| {
-            const left = (try EvalExpr(program, env, ie.left)).?;
+            const ie_str = try ie.String();
+            defer ie.allocator.free(ie_str);
+            print("infix_expression = {s}\n", .{ie_str});
+
+            const maybe_left = try EvalExpr(program, env, ie.left);
+            const left = maybe_left.?;
             const right = (try EvalExpr(program, env, ie.right)).?;
             return evalInfixExpression(ie.token.kind, &left, &right);
         },
@@ -171,18 +176,15 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
 
             // print("making fn object\n", .{});
 
-            var params: ?ArrayList(Identifier) = null; // TODO: use slice instead
 
             // Clone func expr param identifiers to func obj
-            if (fl.parameters) |fl_params| {
 
-                params = ArrayList(Identifier).init(program.allocator);
-                
-                for (fl_params.items) |p| {
-                    try params.?.append(try p.clone());
-                }
-
+            var params = ArrayList(Identifier).init(program.allocator);
+            
+            for (fl.parameters.items) |p| {
+                try params.append(try p.clone());
             }
+
 
             return Object {
                 .function = .{
@@ -234,26 +236,23 @@ fn applyFunction(program: *Program, func: *const FuncionObject, args: *ArrayList
     // print("Extended env has address {*}\n", .{&extendedEnv});
     // print("outer env has adress {*}\n", .{extendedEnv.outer.?});
 
-    if (func.params) |params| {
 
-        std.debug.assert(args.items.len == params.items.len);
-        // print("n_params = {}, n_args = {}\n", .{args.items.len, params.items.len});
+    std.debug.assert(args.items.len == func.params.items.len);
+    // print("n_params = {}, n_args = {}\n", .{args.items.len, params.items.len});
 
-        for (params.items, args.items) |*p, arg| {
+    for (func.params.items, args.items) |*p, arg| {
 
+        const name = p.token.tokenLiteral();
 
-            const name = p.token.tokenLiteral();
+        // print("putting param: {s} = {} in env {*}\n", .{name, arg, &extendedEnv});
 
-            // print("putting param: {s} = {} in env {*}\n", .{name, arg, &extendedEnv});
-
-            try extendedEnv.store.put(name, arg);
-        }
-
+        try extendedEnv.store.put(name, arg);
     }
+
 
     // print("printing functions block statements\n", .{});
     for (func.body.statements.items) |stmt| {
-        const stmt_str = try stmt.String(program);
+        const stmt_str = try stmt.String();
         defer program.allocator.free(stmt_str);
         // print("body smt: {s}\n", .{stmt_str});
 
@@ -741,7 +740,7 @@ test "func object" {
 
     try expect(evaluated == .function);
 
-    try expect(evaluated.function.params.?.items.len == 1);
+    try expect(evaluated.function.params.items.len == 1);
 }
 
 
@@ -854,6 +853,5 @@ test "eval counter p.150" {
     } 
 
     return error.FailedEvalLet;
-
 
 }

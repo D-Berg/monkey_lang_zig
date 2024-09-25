@@ -90,7 +90,7 @@ const ReturnObject = struct {
 };
 
 pub const FunctionObject = struct {
-    params: ?ArrayList(Identifier),
+    params: ArrayList(Identifier),
     body: BlockStatement,
     env: *Environment,
 
@@ -100,13 +100,11 @@ pub const FunctionObject = struct {
 
         fnc_obj.body.deinit();
 
-        if (fnc_obj.params) |params| {
 
-            for (params.items) |p| {
-                p.deinit();
-            }
-            params.deinit();
+        for (fnc_obj.params.items) |p| {
+            p.deinit();
         }
+        fnc_obj.params.deinit();
         // fnc_obj.env.deinit();
         //
     }
@@ -115,17 +113,13 @@ pub const FunctionObject = struct {
 
         // print("cloned func\n", .{});
 
-        var params: ?ArrayList(Identifier) = null;
 
-        if (fo.params) |old_params| {
+        var params = ArrayList(Identifier).init(fo.params.allocator);
 
-            params = ArrayList(Identifier).init(old_params.allocator);
+        for (fo.params.items) |p| {
 
-            for (old_params.items) |p| {
+            try params.append(try p.clone());
 
-                try params.?.append(try p.clone());
-
-            }
         }
 
         const body = try fo.body.clone();
@@ -163,8 +157,8 @@ pub const Environment = struct {
     /// First checks its own store, if that returns null, 
     /// it checks outer.
     pub fn get(env: *Environment, key: []const u8) !?Object {
-        //cloooone obj
 
+        // p.146 
         var maybe_obj = env.store.get(key);
 
         if (maybe_obj) |obj|  {

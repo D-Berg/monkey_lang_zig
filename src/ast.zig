@@ -27,11 +27,10 @@ pub const Statement = union(enum) {
 
     pub fn clone(stmt: *const Statement) Allocator.Error!Statement {
         switch (stmt.*) {
-            .blck_stmt => {@panic("should not be called");},
+            .blck_stmt => {@panic("blck_stmt.clone() should maybe not be called");},
             inline else => |sub_stmt| {
                 return try sub_stmt.clone();
             }
-
         }
     }
 
@@ -40,50 +39,12 @@ pub const Statement = union(enum) {
             inline else => |*case| return case.token.tokenLiteral(),
         }
     }
-    pub fn String(stmt: *const Statement, program: *Program) ![]const u8 {
 
-        const allocator = program.allocator;
-
+    /// Calls sub_stmt.String()
+    pub fn String(stmt: *const Statement) Allocator.Error![]const u8 {
         switch (stmt.*) {
-
-            .let_stmt => |*ls| {
-                const value = ls.value;
-                const value_str = try value.String(program);
-                defer program.allocator.free(value_str);
-
-                const str = try std.fmt.allocPrint(allocator, "let {s} = {s};", .{
-                    ls.name.token.tokenLiteral(),
-                    value_str
-                });
-
-                return str;
-
-            },
-
-            .expr_stmt => |*es| {
-                return try es.expression.String(program);
-
-            },
-
-            // TODO .block_stmt
-        
-            .ret_stmt => |*rs| {
-
-                const val_str = try rs.value.String(program);
-                defer allocator.free(val_str);
-
-                const str = try std.fmt.allocPrint(allocator, "return {s};", .{val_str});
-                return str;
-
-            },
-
-            else => {
-                unreachable;
-            }
-
+            inline else => |case| return try case.String(),
         }
-
-
     }
 };
 
@@ -117,6 +78,19 @@ pub const LetStatement = struct {
         };
 
     }
+
+    pub fn String(ls: *const LetStatement) Allocator.Error![]const u8 {
+        const value = ls.value;
+        const value_str = try value.String();
+        defer ls.allocator.free(value_str);
+
+        const str = try std.fmt.allocPrint(ls.allocator, "let {s} = {s};", .{
+            ls.name.tokenLiteral(),
+            value_str
+        });
+
+        return str;
+    }
 };
 
 pub const ReturnStatement = struct {
@@ -143,6 +117,16 @@ pub const ReturnStatement = struct {
             }
         };
     }
+
+    pub fn String(rs: *const ReturnStatement) Allocator.Error![]const u8 {
+
+        const val_str = try rs.value.String();
+        defer rs.allocator.free(val_str);
+
+        const str = try std.fmt.allocPrint(rs.allocator, "return {s};", .{val_str});
+        return str;
+
+    }
 };
 
 pub const ExpressionStatement = struct {
@@ -168,7 +152,11 @@ pub const ExpressionStatement = struct {
                 .expression = expr_ptr
             }
         };
-        // @panic("clone for expr stmt not yet implemented");
+
+    }
+
+    pub fn String(es: *const ExpressionStatement) Allocator.Error![]const u8 {
+        return try es.expression.String();
     }
 };
 
@@ -204,6 +192,26 @@ pub const BlockStatement = struct {
 
     }
     
+    pub fn String(bs: *const BlockStatement) Allocator.Error![]const u8 {
+        var str_len: usize = 0;
+        const allocator = bs.token.allocator;
+        var bs_str = try allocator.alloc(u8, 0);
+
+        for (bs.statements.items) |stmt| {
+
+            const stmt_str = try stmt.String();
+            defer allocator.free(stmt_str);
+
+            bs_str = try allocator.realloc(bs_str, str_len + stmt_str.len);
+
+            @memcpy(bs_str[str_len..(str_len + stmt_str.len)], stmt_str);
+
+            str_len += stmt_str.len;
+        }
+
+        return bs_str;
+
+    }
 };
 
 
@@ -239,108 +247,14 @@ pub const Expression = union(enum) {
 
     }
 
-    fn String(expr: *const Expression, program: *Program) ![]const u8 {
-        
-        const allocator = program.allocator;
-        
+    /// Calls respective sub_expr.String method and returns a string.
+    /// String need to be deallocated by caller.
+    pub fn String(expr: *const Expression) Allocator.Error![]const u8 {
         switch (expr.*) {
-            .prefix_expression => |*pe| {
-                const right_str = try pe.right.String(program);
-                defer allocator.free(right_str);
-
-                return try std.fmt.allocPrint(allocator, "({s}{s})", .{
-                    pe.token.tokenLiteral(), right_str
-                });
-            },
-
-            .infix_expression => |*ie| {
-                const left_str = try ie.left.String(program);
-                defer allocator.free(left_str);
-
-                const right_str = try ie.right.String(program);
-                defer allocator.free(right_str);
-
-                return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{
-                    left_str, ie.token.tokenLiteral(), right_str
-                });
-            },
-
-            // TODO: fix if_expr.string()
-            .if_expression => |*if_expr| {
-                const condition_str = try if_expr.condition.String(program);
-                defer allocator.free(condition_str);
-
-                // TODO: get string for BlockStatement
-                if (if_expr.alternative) |alt| {
-                    _ = alt;
-                    return try std.fmt.allocPrint(allocator, "if {s} cons else alt", .{
-                        condition_str
-                    });
-                } else {
-                    return try std.fmt.allocPrint(allocator, "if {s} conse", .{
-                        condition_str
-                    });
-                }
-
-            },
-
-            .fn_literal => |*fn_lit| {
-                _ = fn_lit;
-                // TODO impl string() for fn_lit
-                return try std.fmt.allocPrint(allocator, "not yet impl for fn", .{});
-
-            },
-
-            .call_expression => |*call_expr| {
-
-                // TODO impl string() for fn_lit
-                const fn_str = try call_expr.function.String(program);
-                defer allocator.free(fn_str);
-
-                var str_len: usize = 0;
-                var args_str = try program.allocator.alloc(u8, 0);
-                defer allocator.free(args_str);
-
-                const n_args = call_expr.args.items.len;
-                
-
-                for (call_expr.args.items, 0..) |arg_expr, i| {
-
-                    const arg_str = try arg_expr.String(program);
-                    defer allocator.free(arg_str);
-                    
-                    
-                    if (i == n_args - 1) {
-                        args_str = try allocator.realloc(args_str, str_len + arg_str.len);
-                        @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
-                        str_len += arg_str.len;
-
-                    } else {
-                        
-                        args_str = try allocator.realloc(args_str, str_len + arg_str.len + 2);
-                        args_str[str_len + arg_str.len] = ',';
-                        args_str[str_len + arg_str.len + 1] = ' ';
-
-                        @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
-                        str_len += arg_str.len + 2;
-
-                
-                    }
-
-                }
-
-                return try std.fmt.allocPrint(allocator, "{s}({s})", .{
-                    fn_str, args_str
-                });
-
-            },
-            inline else => |*case| {
-                const str = try std.fmt.allocPrint(allocator, "{s}", .{case.token.tokenLiteral()});
-                return str;
+            inline else => |case| {
+                return try case.String();
             }
-
         }
-
     }
     
 };
@@ -363,6 +277,11 @@ pub const IntegerLiteralExpression = struct {
             }
         };
     }
+
+    pub fn String(ile: *const IntegerLiteralExpression) Allocator.Error![]const u8 {
+        const str = try std.fmt.allocPrint(ile.token.allocator, "{}", .{ile.value});
+        return str;
+    }
 };
 
 pub const BooleanLiteralExpression = struct {
@@ -380,6 +299,11 @@ pub const BooleanLiteralExpression = struct {
                 .value = bool_lit_expr.value
             }
         };
+    }
+
+    pub fn String(ble: *const BooleanLiteralExpression) Allocator.Error![]const u8 {
+        const str = try std.fmt.allocPrint(ble.token.allocator, "{}", .{ble.value});
+        return str;
     }
 };
 
@@ -406,6 +330,19 @@ pub const PrefixExpression = struct {
             }
         };
         
+    }
+
+    /// Returns a String for PrefixExpression.
+    /// Need to be freed by caller.
+    pub fn String(pe: *const PrefixExpression) Allocator.Error![]const u8 {
+
+        const right_str = try pe.right.String();
+        defer pe.allocator.free(right_str);
+
+        return try std.fmt.allocPrint(pe.allocator, "({s}{s})", .{
+            pe.token.tokenLiteral(), right_str
+        });
+
     }
 
 };
@@ -442,6 +379,20 @@ pub const InfixExpression = struct {
         };
 
     }
+
+    pub fn String(ie: *const InfixExpression) Allocator.Error![]const u8 {
+        const left_str = try ie.left.String();
+        defer ie.allocator.free(left_str);
+
+        const right_str = try ie.right.String();
+        defer ie.allocator.free(right_str);
+
+        return try std.fmt.allocPrint(ie.allocator, "({s} {s} {s})", .{
+            left_str, ie.token.tokenLiteral(), right_str
+        });
+
+    }
+    // TODO add string method
 
 };
 
@@ -488,37 +439,64 @@ pub const IfExpression = struct {
 
     }
 
+    pub fn String(if_expr: *const IfExpression) Allocator.Error![]const u8 {
+                const condition_str = try if_expr.condition.String();
+                defer if_expr.allocator.free(condition_str);
+                
+                const consequence_str = try if_expr.consequence.String();
+                defer if_expr.allocator.free(consequence_str);
+                const l_b = "{";
+                const r_b = "}";
+
+                // TODO: get string for BlockStatement
+                if (if_expr.alternative) |alt| {
+                    const alt_str = try alt.String();
+                    defer if_expr.allocator.free(alt_str);
+
+                    const format = "if ({s}) {s} {s} {s} else {s} {s} {s}";
+                    
+                    return try std.fmt.allocPrint(if_expr.allocator, format, .{
+                        condition_str, 
+                        l_b,consequence_str, r_b,
+                        l_b, alt_str, r_b
+                    });
+
+                } else {
+                    const format = "if ({s}) {s} {s} {s}";
+
+                    return try std.fmt.allocPrint(if_expr.allocator, format, .{
+                        condition_str, 
+                        l_b, consequence_str, r_b
+                    });
+                }
+    }
+
 };
 
 // need dealloc
 pub const FnLiteralExpression = struct {
     token: Token,
-    parameters: ?ArrayList(Identifier),
+    parameters: ArrayList(Identifier), // might be empty
     body: BlockStatement,
 
     pub fn deinit(fe: *const FnLiteralExpression) void {
         fe.token.deinit();
-        if (fe.parameters) |params| {
-            for (params.items) |p| {
-                p.deinit();
 
-            }
-            params.deinit();
+        for (fe.parameters.items) |p| {
+            p.deinit();
         }
+        fe.parameters.deinit();
         
         fe.body.deinit();
     }
 
     pub fn clone(fe: *const FnLiteralExpression) Allocator.Error!Expression {
 
-        var parameters: ?ArrayList(Identifier) = null;
         
-        if (fe.parameters) |params| {
-            parameters = ArrayList(Identifier).init(params.allocator);
-            
-            for (params.items) |p| {
-                try parameters.?.append(try p.clone());
-            }
+        var parameters = ArrayList(Identifier).init(fe.parameters.allocator);
+        
+        for (fe.parameters.items) |p| {
+            try parameters.append(try p.clone());
         }
 
         return Expression {
@@ -530,6 +508,47 @@ pub const FnLiteralExpression = struct {
         };
 
     }
+
+    pub fn String(fle: *const FnLiteralExpression) Allocator.Error![]const u8 {
+        const allocator = fle.token.allocator;
+        
+        var str_len: usize = 0;
+        var params_str = try allocator.alloc(u8, 0);
+        defer allocator.free(params_str);
+
+        const n_params = fle.parameters.items.len;
+        
+        for (fle.parameters.items, 0..) |p, i| {
+
+            const p_str = try p.String();
+            defer allocator.free(p_str);
+            
+            if (i == n_params - 1) {
+                params_str = try allocator.realloc(params_str, str_len + p_str.len);
+                @memcpy(params_str[(str_len)..(str_len + p_str.len)], p_str);
+                str_len += p_str.len;
+            } else {
+                params_str = try allocator.realloc(params_str, str_len + p_str.len + 2);
+                params_str[str_len + p_str.len] = ',';
+                params_str[str_len + p_str.len + 1] = ' ';
+
+                @memcpy(params_str[(str_len)..(str_len + p_str.len)], p_str);
+                str_len += p_str.len + 2;
+            }
+        }
+        
+        const body_str = try fle.body.String();
+        defer allocator.free(body_str);
+
+        const l_b = "{";
+        const r_b = "}";
+
+        return try std.fmt.allocPrint(allocator, "fn({s}) {s} {s} {s}", .{
+            params_str, l_b, body_str, r_b
+        });
+        
+    }
+    
 };
 
 
@@ -576,6 +595,49 @@ pub const CallExpression = struct {
 
     }
 
+    pub fn String(ce: *const CallExpression) Allocator.Error![]const u8 {
+        
+        const fn_str = try ce.function.String();
+        defer ce.allocator.free(fn_str);
+
+        var str_len: usize = 0;
+        var args_str = try ce.allocator.alloc(u8, 0);
+        defer ce.allocator.free(args_str);
+
+        const n_args = ce.args.items.len;
+        
+
+        for (ce.args.items, 0..) |arg_expr, i| {
+
+            const arg_str = try arg_expr.String();
+            defer ce.allocator.free(arg_str);
+            
+            
+            if (i == n_args - 1) {
+                args_str = try ce.allocator.realloc(args_str, str_len + arg_str.len);
+                @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
+                str_len += arg_str.len;
+
+            } else {
+                
+                args_str = try ce.allocator.realloc(args_str, str_len + arg_str.len + 2);
+                args_str[str_len + arg_str.len] = ',';
+                args_str[str_len + arg_str.len + 1] = ' ';
+
+                @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
+                str_len += arg_str.len + 2;
+
+        
+            }
+
+        }
+
+        return try std.fmt.allocPrint(ce.allocator, "{s}({s})", .{
+            fn_str, args_str
+        });
+
+    }
+
 };
 
 
@@ -598,6 +660,10 @@ pub const Identifier = struct {
 
     pub fn tokenLiteral(ident: *const Identifier) []const u8 {
         return ident.token.tokenLiteral();
+    }
+
+    pub fn String(ident: *const Identifier) Allocator.Error![]const u8 {
+        return try std.fmt.allocPrint(ident.token.allocator, "{s}", .{ident.tokenLiteral()});
     }
 };
 
@@ -627,26 +693,24 @@ pub const Program = struct {
         
     }
     
-    pub fn String(program: *Program) ![]const u8 {
+    pub fn String(program: *Program) Allocator.Error![]const u8 {
 
         var str_len: usize = 0;
-        var buffer = try program.allocator.alloc(u8, 0);
+        var prog_str = try program.allocator.alloc(u8, 0);
 
         for (program.statements.items) |stmt| {
 
-            const stmt_str = try stmt.String(program);
+            const stmt_str = try stmt.String();
             defer program.allocator.free(stmt_str);
 
-            buffer = try program.allocator.realloc(buffer, str_len + stmt_str.len);
+            prog_str = try program.allocator.realloc(prog_str, str_len + stmt_str.len);
 
-            @memcpy(buffer[str_len..(str_len + stmt_str.len)], stmt_str);
+            @memcpy(prog_str[str_len..(str_len + stmt_str.len)], stmt_str);
 
             str_len += stmt_str.len;
-
         }
 
-        return buffer;
-
+        return prog_str;
 
     }
 

@@ -461,9 +461,9 @@ fn parseFunctionLiteral(parser: *Parser) ParseError!Expression {
     if (!parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
 
     const parameters = try parser.parseFunctionParameters();
+    errdefer parameters.deinit();
 
     if (!parser.expectPeek(.Lbrace)) {
-        if (parameters != null) parameters.?.deinit();
         return ParseError.ExpectedNextTokenLbrace;
     }
 
@@ -479,7 +479,7 @@ fn parseFunctionLiteral(parser: *Parser) ParseError!Expression {
 
 }
 
-fn parseFunctionParameters(parser: *Parser) ParseError!?ArrayList(Identifier) {
+fn parseFunctionParameters(parser: *Parser) ParseError!ArrayList(Identifier) {
 
     var identifiers = ArrayList(Identifier).init(parser.allocator);
 
@@ -492,24 +492,20 @@ fn parseFunctionParameters(parser: *Parser) ParseError!?ArrayList(Identifier) {
 
     var token = try parser.current_token.clone();
     errdefer token.deinit();
-    identifiers.append(.{ .token = token }) catch {
-        @panic("failed to append identifier");
-    };
+
+    try identifiers.append(.{ .token = token });
 
     while (parser.peekTokenIs(.Comma)) {
         parser.nextToken();
         parser.nextToken();
 
         token = try parser.current_token.clone();
-        identifiers.append(.{ .token = token }) catch {
-            @panic("failed to append identifier");
-        };
-
+        try identifiers.append(.{ .token = token });
     }
 
     if (!parser.expectPeek(.Rparen)) {
         identifiers.deinit();
-        return null; // TODO: replace with err
+        return error.ExpectedNextTokenRparen;
     }
 
     return identifiers;
@@ -1149,11 +1145,11 @@ test "Func Lit Expr" {
 
     const fn_lit = expr.fn_literal;
 
-    try expect(fn_lit.parameters.?.items.len == 2);
+    try expect(fn_lit.parameters.items.len == 2);
 
 
-    var p_1 = fn_lit.parameters.?.items[0];
-    var p_2 = fn_lit.parameters.?.items[1];
+    var p_1 = fn_lit.parameters.items[0];
+    var p_2 = fn_lit.parameters.items[1];
 
 
     try expectEqualStrings("x", p_1.tokenLiteral());
