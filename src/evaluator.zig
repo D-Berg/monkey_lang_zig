@@ -872,29 +872,32 @@ test "multi input fn application" {
         }
     }
 }
-//
-// test "Closures" {
-//     const allocator = std.testing.allocator;
-//
-//     const input = 
-//         \\let newAdder = fn(x) {
-//         \\ fn(y) { x + y; };
-//         \\};
-//         \\
-//         \\let addTwo = newAdder(2);
-//         \\addTwo(2);
-//     ;
-//
-//     const maybe_eval = try testEval(allocator, input);
-//
-//     if (maybe_eval) |evaluated| {
-//         defer evaluated.deinit();
-//         try expect(evaluated.integer == 4);
-//     } 
-//
-//     return error.FailedEvalLet;
-//
-// }
+
+test "Closures" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let newAdder = fn(x) {
+        \\ fn(y) { x + y; };
+        \\};
+        \\
+        \\let addTwo = newAdder(2);
+        \\addTwo(2);
+    ;
+
+    var env = Environment.init(allocator);
+    defer env.deinit();
+
+    const maybe_eval = try testEval(&env, input);
+
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        try expect(evaluated.integer == 4);
+    } 
+
+    return error.FailedEvalLet;
+
+}
 //
 // test "eval counter p.150" {
 //     const allocator = std.testing.allocator;
