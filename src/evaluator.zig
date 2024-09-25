@@ -197,7 +197,7 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
         },
 
         .call_expression => |ce| {
-            // print("calling func\n", .{});
+            print("\ncalling func\n", .{});
             const maybe_func = try EvalExpr(program, env, ce.function);
             const func = maybe_func.?;
             defer func.deinit();
@@ -227,7 +227,7 @@ fn EvalExpr(program: *Program, env: *Environment, expr: *const Expression) EvalE
 fn applyFunction(program: *Program, func: *const FuncionObject, args: *ArrayList(Object)) !?Object {
 
 
-    // print("\napplying func\n", .{});
+    print("\napplying func\n", .{});
 
     // print("function = {}\n", .{func});
     var extendedEnv = func.env.initClosedEnv();
@@ -829,6 +829,28 @@ test "multi func application" {
     }
 }
 
+test "Closures" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let newAdder = fn(x) {
+        \\ fn(y) { x + y; };
+        \\};
+        \\
+        \\let addTwo = newAdder(2);
+        \\addTwo(2);
+    ;
+
+    const maybe_eval = try testEval(allocator, input);
+    
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        try expect(evaluated.integer == 4);
+    } 
+
+    return error.FailedEvalLet;
+
+}
 
 test "eval counter p.150" {
     const allocator = std.testing.allocator;
