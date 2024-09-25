@@ -90,14 +90,15 @@ const ReturnObject = struct {
 };
 
 pub const FunctionObject = struct {
+    allocator: Allocator,
     params: ArrayList(Identifier),
     body: BlockStatement,
     env: *Environment,
 
     fn deinit(fnc_obj: *const FunctionObject) void {
 
-        // print("deinits fn obj, addr: {*}\n", .{fnc_obj});
-
+        print("deinits fn obj, addr: {*}\n", .{fnc_obj});
+        
         fnc_obj.body.deinit();
 
 
@@ -105,13 +106,22 @@ pub const FunctionObject = struct {
             p.deinit();
         }
         fnc_obj.params.deinit();
-        // fnc_obj.env.deinit();
+
+        print("env.outer = {?}\n", .{fnc_obj.env.outer});
+
+        // TODO deinit env if its not the outermost env
+        if (fnc_obj.env.outer != null) {
+            print("deinits func objects env: {*}\n", .{fnc_obj.env});
+            // fnc_obj.env.deinit();
+            fnc_obj.allocator.destroy(fnc_obj.env);
+        }
+        
         //
     }
 
     pub fn clone(fo: *const FunctionObject) Allocator.Error!Object {
 
-        // print("cloned func\n", .{});
+        print("cloned func\n", .{});
 
 
         var params = ArrayList(Identifier).init(fo.params.allocator);
@@ -126,6 +136,7 @@ pub const FunctionObject = struct {
 
         return Object {
             .function = .{
+                .allocator = fo.allocator,
                 .params = params,
                 .body = body,
                 .env = fo.env,
@@ -183,7 +194,7 @@ pub const Environment = struct {
     }
 
     pub fn deinit(env: *Environment) void {
-        // print("deinits env\n", .{});
+        print("deinits env {*}\n", .{env});
         env.store.deinit();
     }
 
