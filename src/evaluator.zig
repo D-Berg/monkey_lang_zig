@@ -203,7 +203,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
         .call_expression => |ce| {
             print("\ncalling func\n", .{});
             const maybe_func = try EvalExpr(ce.function, env);
-            const func = maybe_func.?;
+            var func = maybe_func.?;
             defer func.deinit();
 
             var args = ArrayList(Object).init(ce.allocator);
@@ -228,24 +228,25 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
     }
 }
 
-fn applyFunction(func: *const FuncionObject, args: *ArrayList(Object)) !?Object {
+fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
 
 
     print("\napplying func\n", .{});
 
     // print("function = {}\n", .{func});
 
-    var extendedEnv = try func.allocator.create(Environment);
+    const extendedEnv = try func.allocator.create(Environment);
     extendedEnv.* = func.env.initClosedEnv();
-    
+
+    func.env = extendedEnv;
 
     // defer {
     //     print("closing extendEnv at {*}\n", .{&extendedEnv});
     //     extendedEnv.deinit();
     // }
 
-    print("Creating Extended env, has address {*}\n", .{extendedEnv});
-    print("outer env has adress {*}\n", .{extendedEnv.outer.?});
+    print("Creating Extended env, has address {*}\n", .{func.env});
+    print("outer env has adress {*}\n", .{func.env.outer.?});
 
 
     std.debug.assert(args.items.len == func.params.items.len);
@@ -255,9 +256,9 @@ fn applyFunction(func: *const FuncionObject, args: *ArrayList(Object)) !?Object 
 
         const name = p.token.tokenLiteral();
 
-        print("putting param: {s} = {} in env {*}\n", .{name, arg, extendedEnv});
+        print("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
 
-        try extendedEnv.store.put(name, arg);
+        try func.env.store.put(name, arg);
     }
 
 
@@ -784,40 +785,44 @@ test "func object" {
 }
 
 
-// test "func application" {
-//
-//     const allocator = std.testing.allocator;
-//
-//     const inputs = [_][]const u8{ 
-//         "let identity = fn(x) { x; }; identity(5);",
-//         "let identity = fn(x) { return x; }; identity(5);",
-//         "let double = fn(x) { x * 2; }; double(5);",
-//         "let add = fn(x, y) { x + y; }; add(5, 5);",
-//         "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
-//         "fn(x) { x; }(5)"
-//     };
-//     const answers = [_]i32 { 
-//         5,
-//         5,
-//         10,
-//         10,
-//         20,
-//         5
-//     };
-//
-//     for (inputs, answers) |inp, ans| {
-//         const evaluated = (try testEval(allocator, inp)).?;
-//         defer evaluated.deinit();
-//
-//         expect(ans == evaluated.integer) catch |err| {
-//             print("expected {}, got {}\n", .{
-//                 ans, evaluated.integer
-//             });
-//
-//             return err;
-//         };
-//     }
-// }
+test "func application" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "let identity = fn(x) { x; }; identity(5);",
+        // "let identity = fn(x) { return x; }; identity(5);",
+        // "let double = fn(x) { x * 2; }; double(5);",
+        // "let add = fn(x, y) { x + y; }; add(5, 5);",
+        // "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
+        // "fn(x) { x; }(5)"
+    };
+    const answers = [_]i32 { 
+        5,
+        // 5,
+        // 10,
+        // 10,
+        // 20,
+        // 5
+    };
+
+    for (inputs, answers) |inp, ans| {
+        
+        var env = Environment.init(allocator);
+        defer env.deinit();
+
+        const evaluated = (try testEval(&env, inp)).?;
+        defer evaluated.deinit();
+
+        expect(ans == evaluated.integer) catch |err| {
+            print("expected {}, got {}\n", .{
+                ans, evaluated.integer
+            });
+
+            return err;
+        };
+    }
+}
 //
 //
 // test "multi func application" {

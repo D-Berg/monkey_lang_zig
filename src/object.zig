@@ -112,7 +112,7 @@ pub const FunctionObject = struct {
         // TODO deinit env if its not the outermost env
         if (fnc_obj.env.outer != null) {
             print("deinits func objects env: {*}\n", .{fnc_obj.env});
-            // fnc_obj.env.deinit();
+            fnc_obj.env.deinit();
             fnc_obj.allocator.destroy(fnc_obj.env);
         }
         
