@@ -176,8 +176,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
         .fn_literal => |fl| {
 
-            print("making fn object, fn has env {*}\n", .{env});
-            print("outer env = {?}\n", .{env.outer});
+            // print("outer env = {?}\n", .{env.outer});
 
             // Clone func expr param identifiers to func obj
 
@@ -195,16 +194,24 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
                     .env = env,
                 }
             };
-            print("outer env = {?}\n", .{fn_obj.function.env.outer});
+            // print("outer env = {?}\n", .{fn_obj.function.env.outer});
+            const fn_obj_str = try fn_obj.function.String();
+            defer fn_obj.function.allocator.free(fn_obj_str);
+            
+            print("made {s}\n", .{fn_obj_str});
 
             return fn_obj;
         },
 
         .call_expression => |ce| {
-            print("\ncalling func\n", .{});
             const maybe_func = try EvalExpr(ce.function, env);
             var func = maybe_func.?;
             defer func.deinit();
+
+            const fn_obj_str = try func.function.String();
+            defer func.function.allocator.free(fn_obj_str);
+
+            print("\ncalling func {s}\n", .{fn_obj_str});
 
             var args = ArrayList(Object).init(ce.allocator);
             defer {

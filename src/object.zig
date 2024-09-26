@@ -139,9 +139,26 @@ pub const FunctionObject = struct {
                 .allocator = fo.allocator,
                 .params = params,
                 .body = body,
-                .env = fo.env,
+                .env = fo.env, // TODO clone env if it is enclosed
             }
         };
+
+    }
+
+    /// For debuging
+    pub fn String(fo: *const FunctionObject) Allocator.Error![]const u8 {
+
+        const n_params = fo.params.items.len;
+        
+        if (fo.env.outer) |outer| {
+
+            return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {*}", .{
+                n_params, fo.env, outer
+            });
+        }
+        return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {?}", .{
+            n_params, fo.env, fo.env.outer
+        });
 
     }
 
