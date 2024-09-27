@@ -19,6 +19,8 @@ const ReturnStatement = ast.ReturnStatement;
 
 const Expression = ast.Expression;
 const Identifier = ast.Identifier;
+const PrefixExpression = ast.PrefixExpression;
+const InfixExpression = ast.InfixExpression;
 const FnLiteralExpression = ast.FnLiteralExpression;
 const CallExpression = ast.CallExpression;
 
@@ -155,20 +157,12 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
         }, 
         
-        .prefix_expression => |pe| {
-            const right = (try EvalExpr(pe.right, env)).?; // TODO: handle null case
-            return evalPrefixExpression(pe.token.kind, &right);
+        .prefix_expression => |*pe| {
+            return try EvalPrefixExpr(pe, env);
         },
 
-        .infix_expression => |ie| {
-            const ie_str = try ie.String();
-            defer ie.allocator.free(ie_str);
-            print("infix_expression = {s}\n", .{ie_str});
-
-            const maybe_left = try EvalExpr(ie.left, env);
-            const left = maybe_left.?;
-            const right = (try EvalExpr(ie.right, env)).?;
-            return evalInfixExpression(ie.token.kind, &left, &right);
+        .infix_expression => |*ie| { 
+            return try EvalInfixExpr(ie, env);
         },
 
         .if_expression => |ie| {
@@ -334,32 +328,36 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
 }
 
 
-fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) object.Object {
+fn EvalPrefixExpr(pe: *const PrefixExpression, env: *Environment) EvalError!Object {
+    const operator = pe.token.kind;
+
+    const right = (try EvalExpr(pe.right, env)).?; // TODO: handle null case
+    defer right.deinit();
+
     switch (operator) {
         .Bang => {
-
             // same as evalBangOperatorExpression()
-            switch (right.*) {
+            switch (right) {
 
                 .boolean => |b| {
                     if (b) {
-                        return object.Object { 
+                        return Object { 
                             .boolean = false 
                         };
                     } else {
-                        return object.Object {
+                        return Object {
                             .boolean = true 
                         };
                     }
                 },
 
                 .nullable => {
-                    return object.Object {
+                    return Object {
                         .boolean = true
                     };
                 },
                 else => {
-                    return object.Object {
+                    return Object {
                         .boolean = false 
                     };
                 }
@@ -369,34 +367,43 @@ fn evalPrefixExpression(operator: Token.Kind, right: *const object.Object) objec
         },
 
         .Minus => {
-            if (right.* != .integer) {
-                return object.Object {
+            if (right != .integer) {
+                return Object {
                     .nullable = {}
                 };
             }
 
             const val = right.integer;
 
-            return object.Object {
+            return Object {
                 .integer =  -val
             };
         },
 
         else => {
-            return object.Object {
+            return Object {
                 .nullable = {}
             };
         }
     }
 }
 
-fn evalInfixExpression(
-    operator: Token.Kind, 
-    left: *const object.Object, 
-    right: *const object.Object
-) object.Object {
+fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!object.Object {
+    const operator = ie.token.kind;
 
-    if (left.* == .integer and right.* == .integer) {
+    const ie_str = try ie.String();
+    defer ie.allocator.free(ie_str);
+    print("infix_expression = {s}\n", .{ie_str});
+
+    // TODO: handle null cases
+    const maybe_left = try EvalExpr(ie.left, env);
+    const left = maybe_left.?;
+    defer left.deinit();
+
+    const right = (try EvalExpr(ie.right, env)).?;
+    defer right.deinit();
+
+    if (left == .integer and right == .integer) {
 
         const left_val = left.integer;
         const right_val = right.integer;
@@ -453,7 +460,7 @@ fn evalInfixExpression(
 
     }
 
-    if (left.* == .boolean and right.* == .boolean) {
+    if (left == .boolean and right == .boolean) {
         const left_val = left.boolean;
         const right_val = right.boolean;
 
