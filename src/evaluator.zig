@@ -14,6 +14,7 @@ const Environment = object.Environment;
 
 const Statement = ast.Statement;
 const LetStatement = ast.LetStatement;
+const ReturnStatement = ast.ReturnStatement;
 
 const Expression = ast.Expression;
 
@@ -75,19 +76,8 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
             return null;
 
         },
-        .ret_stmt => |rs| {
-
-            // print("evaluating  return stmt\n", .{});
-            const val = try EvalExpr(rs.value, env);
-            const res = try rs.allocator.create(Object);
-            res.* = val.?;
-
-            return object.Object {
-                .return_val_obj = .{
-                    .allocator = rs.allocator,
-                    .value = res
-                } // somehow this works lol
-            };
+        .ret_stmt => |*rs| {
+            return try EvalRetStmt(rs, env);
         },
 
         .expr_stmt => |es| {
@@ -121,6 +111,21 @@ fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
 
     // TODO: errors p.137
 
+}
+
+fn EvalRetStmt(rs: *const ReturnStatement, env: *Environment) EvalError!Object {
+
+    // print("evaluating  return stmt\n", .{});
+    const val = try EvalExpr(rs.value, env);
+    const res = try rs.allocator.create(Object);
+    res.* = val.?;
+
+    return object.Object {
+        .return_val_obj = .{
+            .allocator = rs.allocator,
+            .value = res
+        } // somehow this works lol
+    };
 }
 
 fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object {
