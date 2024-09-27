@@ -20,6 +20,7 @@ const ReturnStatement = ast.ReturnStatement;
 const Expression = ast.Expression;
 const Identifier = ast.Identifier;
 const FnLiteralExpression = ast.FnLiteralExpression;
+const CallExpression = ast.CallExpression;
 
 const Program = ast.Program;
 const ArrayList = std.ArrayList;
@@ -182,32 +183,9 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
         },
 
-        .call_expression => |ce| {
-            const maybe_func = try EvalExpr(ce.function, env);
-            var func = maybe_func.?;
-            defer func.deinit();
+        .call_expression => |*ce| {
 
-            const fn_obj_str = try func.function.String();
-            defer func.function.allocator.free(fn_obj_str);
-
-            print("\ncalling func {s}\n", .{fn_obj_str});
-
-            var args = ArrayList(Object).init(ce.allocator);
-            defer {
-                for (args.items) |arg| {
-                    arg.deinit();
-                }
-                args.deinit();
-            }
-                
-            // evalExpressions p.144
-            for (ce.args.items) |*arg| {
-                try args.append((try EvalExpr(arg, env)).?);
-            }
-
-
-            return try applyFunction(&func.function, &args);
-
+            return try EvalCallExpr(ce, env);
 
         },
 
@@ -265,6 +243,34 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
         .env = fn_env,
     };
 
+}
+
+fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object {
+
+    const maybe_func = try EvalExpr(ce.function, env);
+    var func = maybe_func.?;
+    defer func.deinit();
+
+    const fn_obj_str = try func.function.String();
+    defer func.function.allocator.free(fn_obj_str);
+
+    print("\ncalling func {s}\n", .{fn_obj_str});
+
+    var args = ArrayList(Object).init(ce.allocator);
+    defer {
+        for (args.items) |arg| {
+            arg.deinit();
+        }
+        args.deinit();
+    }
+        
+    // evalExpressions p.144
+    for (ce.args.items) |*arg| {
+        try args.append((try EvalExpr(arg, env)).?);
+    }
+
+
+    return try applyFunction(&func.function, &args);
 }
 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
