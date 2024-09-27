@@ -101,7 +101,6 @@ pub const FunctionObject = struct {
         
         fnc_obj.body.deinit();
 
-
         for (fnc_obj.params.items) |p| {
             p.deinit();
         }
@@ -143,8 +142,9 @@ pub const FunctionObject = struct {
         // TODO: come up with a better wwayy future me
         if (fo.env.outer != null) {
             // enclosed env
-            new_env = try fo.allocator.create(Environment);
-            new_env.* = try fo.env.clone();
+            new_env = try fo.env.clone();
+            new_env.outer = fo.env.outer;
+
         } else {
             // fo.env is the main env
             new_env = fo.env;
@@ -155,7 +155,7 @@ pub const FunctionObject = struct {
                 .allocator = fo.allocator,
                 .params = params,
                 .body = body,
-                .env = new_env, // TODO clone env if it is enclosed
+                .env = new_env, 
             }
         };
 
@@ -195,14 +195,19 @@ pub const Environment = struct {
         env.store.deinit();
     }
 
-    pub fn clone(env: *Environment) Allocator.Error!Environment {
+    pub fn clone(env: *Environment) Allocator.Error!*Environment {
 
         print("cloning env: {*}\n", .{env});
-        
-        return Environment {
+        var new_env = Environment {
             .store = try env.store.clone(),
             .outer = env.outer,
         };
+        errdefer new_env.deinit();
+
+        const new_env_ptr = try env.store.allocator.create(Environment);
+        new_env_ptr.* = new_env;
+
+        return new_env_ptr;
 
     }
 

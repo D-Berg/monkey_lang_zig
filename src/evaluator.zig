@@ -186,7 +186,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
     }
 }
 
-fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!?Object {
+fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
 
     print("\nEvaluating ident expr\n", .{});
     var tok = ident.token;
@@ -203,8 +203,7 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!?Object 
     } else {
         // print("didnt find: {s}\n", .{ident_name});
         // TODO: create a eval error
-        // return EvalError.EvalIdentNonExistent;
-        return null;
+        return EvalError.EvalIdentNonExistent;
     }
 }
 
@@ -226,8 +225,7 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
     if (env.outer == null)  {
         fn_env = env;
     } else {
-        fn_env = try fl.parameters.allocator.create(Environment);
-        fn_env.* = try env.clone();
+        fn_env = try env.clone();
     }
 
     return FuncionObject {

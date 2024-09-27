@@ -25,6 +25,11 @@ pub fn HashMap() type { // TODO: Remove generic
             // next: ?*Entry = null,
             // previous: ?*Entry,
             
+            fn deinit(entry: *const Entry) void {
+                entry.allocator.free(entry.key);
+                entry.val.deinit();
+            }
+            
             fn clone(entry: *const Entry) Allocator.Error!Entry {
                     
                 const new_key = try entry.allocator.alloc(u8, entry.key.len);
@@ -58,8 +63,7 @@ pub fn HashMap() type { // TODO: Remove generic
                 for (buckets) |bucket| {
 
                     if (bucket) |entry| {
-                        self.allocator.free(entry.key);
-                        entry.val.deinit();
+                        entry.deinit();
                     }
 
                 }
