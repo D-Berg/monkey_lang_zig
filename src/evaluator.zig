@@ -4,14 +4,20 @@ const Allocator = std.mem.Allocator;
 const Token = @import("Token.zig");
 
 const object = @import("object.zig");
-const Object = object.Object;
-const Environment = object.Environment;
 const ast = @import("ast.zig");
-const Statement = ast.Statement;
-const Expression = ast.Expression;
-const Program = ast.Program;
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
+
+const Object = object.Object;
+const Environment = object.Environment;
+
+
+const Statement = ast.Statement;
+const LetStatement = ast.LetStatement;
+
+const Expression = ast.Expression;
+
+const Program = ast.Program;
 const ArrayList = std.ArrayList;
 const Identifier = ast.Identifier;
 const FuncionObject = object.FunctionObject;
@@ -65,21 +71,7 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
     switch (stmt.*) {
 
         .let_stmt => |*ls| {
-                
-            var ident = ls.name;
-            const name = ident.tokenLiteral();
-
-            print("Evaluating let stmt: {s}\n", .{name});
-
-            const val = try EvalExpr(ls.value, env);
-            defer val.?.deinit(); // deinit because store.put clones val
-
-            // print("putting ident: {s} with val: {}\n", .{name, val.?});
-            try env.store.put(name, val.?);
-
-            // TODO print env, think key disapear because env lives longer than tokens.
-
-            // TODO: errors p.137
+            try EvalLetStmt(ls, env);
             return null;
 
         },
@@ -108,6 +100,26 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
         }
     }
 
+
+
+}
+
+fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
+
+    var ident = ls.name;
+    const name = ident.tokenLiteral();
+
+    print("Evaluating let stmt: {s}\n", .{name});
+
+    const val = try EvalExpr(ls.value, env);
+    defer val.?.deinit(); // deinit because store.put clones val
+
+    // print("putting ident: {s} with val: {}\n", .{name, val.?});
+    try env.store.put(name, val.?);
+
+    // TODO print env, think key disapear because env lives longer than tokens.
+
+    // TODO: errors p.137
 
 }
 
@@ -937,13 +949,18 @@ test "Closures" {
 //         \\counter(0);
 //     ;
 //
-//     const maybe_eval = try testEval(allocator, input);
+//
+//     var env = Environment.init(allocator);
+//     defer env.deinit();
+//     const maybe_eval = try testEval(&env, input);
 //
 //     if (maybe_eval) |evaluated| {
 //         defer evaluated.deinit();
 //         try expect(evaluated.boolean);
-//     } 
+//     } else {
 //
-//     return error.FailedEvalLet;
+//         return error.FailedEvalLet;
+//
+//     }
 //
 // }
