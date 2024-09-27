@@ -17,10 +17,10 @@ const LetStatement = ast.LetStatement;
 const ReturnStatement = ast.ReturnStatement;
 
 const Expression = ast.Expression;
+const Identifier = ast.Identifier;
 
 const Program = ast.Program;
 const ArrayList = std.ArrayList;
-const Identifier = ast.Identifier;
 const FuncionObject = object.FunctionObject;
 
 const expect = std.testing.expect;
@@ -90,8 +90,6 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
         }
     }
 
-
-
 }
 
 fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
@@ -132,25 +130,9 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
     switch (expr.*) {
 
-        .identifier => |ident| {
-            print("\nEvaluating ident expr\n", .{});
-            var tok = ident.token;
-            const ident_name = tok.tokenLiteral();
-            
+        .identifier => |*ident| {
 
-            print("Retreiving {s} from env: {*}\n", .{ident.tokenLiteral(), env});
-            const maybe_val = try env.get(ident_name); // gets a clone of object
-
-            // print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
-
-            if (maybe_val) |val| {
-                return val;
-            } else {
-                // print("didnt find: {s}\n", .{ident_name});
-                // TODO: create a eval error
-                // return EvalError.EvalIdentNonExistent;
-                return null;
-            }
+            return try EvalIdentExpr(ident, env);
 
         },
         .integer_literal => |int_lit| {
@@ -259,6 +241,28 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
         },
 
+    }
+}
+
+fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!?Object {
+
+    print("\nEvaluating ident expr\n", .{});
+    var tok = ident.token;
+    const ident_name = tok.tokenLiteral();
+    
+
+    print("Retreiving {s} from env: {*}\n", .{ident.tokenLiteral(), env});
+    const maybe_val = try env.get(ident_name); // gets a clone of object
+
+    // print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
+
+    if (maybe_val) |val| {
+        return val;
+    } else {
+        // print("didnt find: {s}\n", .{ident_name});
+        // TODO: create a eval error
+        // return EvalError.EvalIdentNonExistent;
+        return null;
     }
 }
 
