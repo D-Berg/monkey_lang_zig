@@ -12,17 +12,32 @@ const m: usize = std.math.pow(usize, 10, 9) + 9;
 
 /// A HashMap for Objects using strings as key
 /// Clones value and key
-pub fn HashMap(comptime V: type) type { // TODO: Remove generic
+pub fn HashMap() type { // TODO: Remove generic
 
     const p = 31;
 
     return struct {
         const Self = @This();
         const Entry = struct {
+            allocator: Allocator,
             key: []const u8,
-            val: V,
+            val: Object,
             // next: ?*Entry = null,
             // previous: ?*Entry,
+            
+            fn clone(entry: *const Entry) Allocator.Error!Entry {
+                    
+                const new_key = try entry.allocator.alloc(u8, entry.key.len);
+                std.mem.copyForwards(u8, new_key, entry.key);
+                errdefer entry.allocator.free(new_key);
+            
+                return Entry {
+                    .allocator = entry.allocator,
+                    .key = new_key,
+                    .val = try entry.val.clone(),
+                };
+
+            }
         };
 
         allocator: Allocator,
@@ -52,14 +67,38 @@ pub fn HashMap(comptime V: type) type { // TODO: Remove generic
                 self.allocator.free(buckets);
 
             }
+        }
 
-            
-            
+        pub fn clone(self: *Self) Allocator.Error!Self {
+
+            var new_buckets: ?[]?Entry = null;
+
+            if (self.buckets) |old_buckets| {
+
+                new_buckets = try self.allocator.alloc(?Entry, old_buckets.len);
+                
+                for (old_buckets, 0..) |old_bckt, i| {
+                    
+                    if (old_bckt) |old_entry| {
+                        const new_entry = try old_entry.clone();
+                        new_buckets.?[i] = new_entry;
+                    } else {
+                        new_buckets.?[i] = null;
+                    }
+
+                }
+            }
+
+            return Self {
+                .allocator = self.allocator,
+                .buckets = new_buckets,
+                .n_entries = self.n_entries
+            };
 
         }
 
         /// Clones the object
-        pub fn put(self: *Self, key: []const u8, value: V) Allocator.Error!void {
+        pub fn put(self: *Self, key: []const u8, value: Object) Allocator.Error!void {
             
             // print("got key: {s}, value: {}\n", .{key, value});
             
@@ -90,6 +129,7 @@ pub fn HashMap(comptime V: type) type { // TODO: Remove generic
             std.mem.copyForwards(u8, key_str, key);
 
             self.buckets.?[b_idx] = Entry {
+                .allocator = self.allocator,
                 .key = key_str,
                 .val = try value.clone()
             };
@@ -98,7 +138,7 @@ pub fn HashMap(comptime V: type) type { // TODO: Remove generic
         }
 
 
-        pub fn get(self: *Self, key: []const u8) ?V {
+        pub fn get(self: *Self, key: []const u8) ?Object {
 
             const h = hash(key);
             
@@ -221,7 +261,7 @@ test "init hashmap" {
     defer token3.deinit();
     const obj3 = Object {.integer = 5};
 
-    var store = HashMap(Object).init(allocator);
+    var store = HashMap().init(allocator);
     defer store.deinit();
         
     try store.put(token1.tokenLiteral(), obj1);

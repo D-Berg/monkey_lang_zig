@@ -69,7 +69,7 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
             var ident = ls.name;
             const name = ident.tokenLiteral();
 
-            // print("Evaluating let stmt: {s}\n", .{name});
+            print("Evaluating let stmt: {s}\n", .{name});
 
             const val = try EvalExpr(ls.value, env);
             defer val.?.deinit(); // deinit because store.put clones val
@@ -116,7 +116,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
     switch (expr.*) {
 
         .identifier => |ident| {
-            // print("\nEvaluating ident expr\n", .{});
+            print("\nEvaluating ident expr\n", .{});
             var tok = ident.token;
             const ident_name = tok.tokenLiteral();
             
@@ -186,12 +186,22 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
                 try params.append(try p.clone());
             }
 
+            var fn_env: *Environment = undefined;
+
+            // clone env if its an enclosed one
+            if (env.outer == null)  {
+                fn_env = env;
+            } else {
+                fn_env = try fl.parameters.allocator.create(Environment);
+                fn_env.* = try env.clone();
+            }
+
             const fn_obj = Object {
                 .function = .{
                     .allocator = fl.token.allocator,
                     .params = params,
                     .body = try fl.body.clone(),
-                    .env = env,
+                    .env = fn_env,
                 }
             };
             // print("outer env = {?}\n", .{fn_obj.function.env.outer});
@@ -278,6 +288,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
     }
 
     // Failes on new line because BlockStatement has indices to old program
+    print("Evaluating functions blck stmts\n", .{});
     const maybe_evaluated = try evalBlockStatement(&func.body, extendedEnv);
 
     // unwrap
@@ -899,10 +910,15 @@ test "Closures" {
 
     if (maybe_eval) |evaluated| {
         defer evaluated.deinit();
-        try expect(evaluated.integer == 4);
-    } 
+        expect(evaluated.integer == 4) catch |err| {
+            print("exptexted 4, got {}\n", .{evaluated.integer});
+            return err;
+        };
+    } else {
+        print("got null back\n", .{});
+        return error.FailedEvalLet;
+    }
 
-    return error.FailedEvalLet;
 
 }
 //

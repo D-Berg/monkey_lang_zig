@@ -134,12 +134,28 @@ pub const FunctionObject = struct {
 
         const body = try fo.body.clone();
 
+        var new_env: *Environment = undefined;
+
+        // expensive way of doing, but as of 
+        // right now fn objects gets cloned and deinited 
+        // at each fn call and if it has an enclosed env,
+        // the enclosed env get deinited asweell
+        // TODO: come up with a better wwayy future me
+        if (fo.env.outer != null) {
+            // enclosed env
+            new_env = try fo.allocator.create(Environment);
+            new_env.* = try fo.env.clone();
+        } else {
+            // fo.env is the main env
+            new_env = fo.env;
+        }
+
         return Object {
             .function = .{
                 .allocator = fo.allocator,
                 .params = params,
                 .body = body,
-                .env = fo.env, // TODO clone env if it is enclosed
+                .env = new_env, // TODO clone env if it is enclosed
             }
         };
 
@@ -165,18 +181,34 @@ pub const FunctionObject = struct {
 };
 
 pub const Environment = struct {
-    store: HashMap(Object),
+    store: HashMap(),
     outer: ?*Environment = null,
 
     pub fn init(allocator: Allocator) Environment {
         return Environment {
-            .store = HashMap(Object).init(allocator)
+            .store = HashMap().init(allocator)
         };
+    }
+
+    pub fn deinit(env: *Environment) void {
+        print("deinits env {*}\n", .{env});
+        env.store.deinit();
+    }
+
+    pub fn clone(env: *Environment) Allocator.Error!Environment {
+
+        print("cloning env: {*}\n", .{env});
+        
+        return Environment {
+            .store = try env.store.clone(),
+            .outer = env.outer,
+        };
+
     }
 
     pub fn initClosedEnv(outer: *Environment) Environment {
         return Environment {
-            .store =  HashMap(Object).init(outer.store.allocator),
+            .store =  HashMap().init(outer.store.allocator),
             .outer = outer
         };
     }
@@ -210,10 +242,6 @@ pub const Environment = struct {
 
     }
 
-    pub fn deinit(env: *Environment) void {
-        print("deinits env {*}\n", .{env});
-        env.store.deinit();
-    }
 
 };
 
