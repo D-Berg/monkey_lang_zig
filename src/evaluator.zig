@@ -9,6 +9,7 @@ const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
 
 const Object = object.Object;
+const FuncionObject = object.FunctionObject;
 const Environment = object.Environment;
 
 
@@ -18,10 +19,10 @@ const ReturnStatement = ast.ReturnStatement;
 
 const Expression = ast.Expression;
 const Identifier = ast.Identifier;
+const FnLiteralExpression = ast.FnLiteralExpression;
 
 const Program = ast.Program;
 const ArrayList = std.ArrayList;
-const FuncionObject = object.FunctionObject;
 
 const expect = std.testing.expect;
 
@@ -154,7 +155,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
         }, 
         
         .prefix_expression => |pe| {
-            const right = (try EvalExpr(pe.right, env)).?;
+            const right = (try EvalExpr(pe.right, env)).?; // TODO: handle null case
             return evalPrefixExpression(pe.token.kind, &right);
         },
 
@@ -173,43 +174,12 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
             return try evalIfExpression(&ie, env);
         },
 
-        .fn_literal => |fl| {
-
-            // print("outer env = {?}\n", .{env.outer});
-
-            // Clone func expr param identifiers to func obj
-
-            var params = ArrayList(Identifier).init(fl.token.allocator);
-            
-            for (fl.parameters.items) |p| {
-                try params.append(try p.clone());
-            }
-
-            var fn_env: *Environment = undefined;
-
-            // clone env if its an enclosed one
-            if (env.outer == null)  {
-                fn_env = env;
-            } else {
-                fn_env = try fl.parameters.allocator.create(Environment);
-                fn_env.* = try env.clone();
-            }
-
-            const fn_obj = Object {
-                .function = .{
-                    .allocator = fl.token.allocator,
-                    .params = params,
-                    .body = try fl.body.clone(),
-                    .env = fn_env,
-                }
+        .fn_literal => |*fl| {
+                
+            return Object {
+                .function = try EvalFnExpr(fl, env)
             };
-            // print("outer env = {?}\n", .{fn_obj.function.env.outer});
-            const fn_obj_str = try fn_obj.function.String();
-            defer fn_obj.function.allocator.free(fn_obj_str);
-            
-            print("made {s}\n", .{fn_obj_str});
 
-            return fn_obj;
         },
 
         .call_expression => |ce| {
@@ -264,6 +234,37 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!?Object 
         // return EvalError.EvalIdentNonExistent;
         return null;
     }
+}
+
+fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!FuncionObject {
+
+    // print("outer env = {?}\n", .{env.outer});
+
+    // Clone func expr param identifiers to func obj
+
+    var params = ArrayList(Identifier).init(fl.token.allocator);
+    
+    for (fl.parameters.items) |p| {
+        try params.append(try p.clone());
+    }
+
+    var fn_env: *Environment = undefined;
+
+    // clone env if its an enclosed one
+    if (env.outer == null)  {
+        fn_env = env;
+    } else {
+        fn_env = try fl.parameters.allocator.create(Environment);
+        fn_env.* = try env.clone();
+    }
+
+    return FuncionObject {
+        .allocator = fl.token.allocator,
+        .params = params,
+        .body = try fl.body.clone(),
+        .env = fn_env,
+    };
+
 }
 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
