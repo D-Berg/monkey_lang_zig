@@ -103,11 +103,18 @@ fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
 
     print("Evaluating let stmt: {s}\n", .{name});
 
-    const val = try EvalExpr(ls.value, env);
-    defer val.?.deinit(); // deinit because store.put clones val
+    const maybe_val = try EvalExpr(ls.value, env);
+    // defer val.?.deinit(); // deinit because store.put clones val
 
     // print("putting ident: {s} with val: {}\n", .{name, val.?});
-    try env.store.put(name, val.?);
+    //
+    if (maybe_val) |val| {
+        var val_var = val;
+        try env.put(name, &val_var);
+    } else {
+        return EvalError.FailedEvalLet;
+
+    }
 
     // TODO print env, think key disapear because env lives longer than tokens.
 
@@ -125,7 +132,8 @@ fn EvalRetStmt(rs: *const ReturnStatement, env: *Environment) EvalError!Object {
     return object.Object {
         .return_val_obj = .{
             .allocator = rs.allocator,
-            .value = res
+            .value = res,
+            .owner = null
         } // somehow this works lol
     };
 }
@@ -170,9 +178,13 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
         },
 
         .fn_literal => |*fl| {
+
+            const fn_obj_ptr = try env.store.allocator.create(FuncionObject);
+            errdefer env.store.allocator.destroy(fn_obj_ptr);
+            fn_obj_ptr.* = try EvalFnExpr(fl, env);
                 
             return Object {
-                .function = try EvalFnExpr(fl, env)
+                .function = fn_obj_ptr,
             };
 
         },
@@ -194,17 +206,24 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
     var tok = ident.token;
     const ident_name = tok.tokenLiteral();
 
-    print("Retreiving {s} from env: {*}\n", .{ident.tokenLiteral(), env});
-    const maybe_val = try env.get(ident_name); // gets a clone of object
+    const maybe_val = env.get(ident_name); // gets a clone of object
 
     // print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
 
     if (maybe_val) |val| {
+        print("Retreived {s} = {}\n", .{ident_name, val});
         return val;
     } else {
         // print("didnt find: {s}\n", .{ident_name});
         // TODO: create a eval error
-        return EvalError.EvalIdentNonExistent;
+
+
+        print("couldnt find {s} in {*}\n", .{ident_name, env});
+        print("env cointains:\n", .{});
+        env.printEnv();
+        
+        @panic("Failed EvalIDentExpr");
+        // return EvalError.EvalIdentNonExistent;
     }
 }
 
@@ -220,20 +239,21 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
         try params.append(try p.clone());
     }
 
-    var fn_env: *Environment = undefined;
-
-    // clone env if its an enclosed one
-    if (env.outer == null)  {
-        fn_env = env;
-    } else {
-        fn_env = try env.clone();
-    }
+    // var fn_env: *Environment = undefined;
+    //
+    // // clone env if its an enclosed one
+    // if (env.outer == null)  {
+    //     fn_env = env;
+    // } else {
+    //     fn_env = try env.clone();
+    // }
 
     return FuncionObject {
         .allocator = fl.token.allocator,
         .params = params,
         .body = try fl.body.clone(),
-        .env = fn_env,
+        .env = env,
+        .owner = null
     };
 
 }
@@ -245,7 +265,7 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
     defer func.deinit();
 
     const fn_obj_str = try func.function.String();
-    defer func.function.allocator.free(fn_obj_str);
+    // defer func.function.allocator.free(fn_obj_str);
 
     print("\ncalling func {s}\n", .{fn_obj_str});
 
@@ -263,13 +283,14 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
     }
 
 
-    return try applyFunction(&func.function, &args);
+    return try applyFunction(func.function, &args);
 }
 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
 
 
     print("\napplying func\n", .{});
+    defer print("funished applying func\n", .{});
 
     // print("function = {}\n", .{func});
 
@@ -296,7 +317,10 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
 
         print("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
 
-        try func.env.store.put(name, arg);
+        // TODO: Clone arg since its deinited
+        
+        var cloned_arg = try arg.clone();
+        try func.env.put(name, &cloned_arg);
     }
 
 
@@ -971,6 +995,7 @@ test "eval counter p.150" {
         \\counter(0);
     ;
 
+    // let counter = fn(x) { if (x > 100) { return true; } else { let foobar = 9999; counter(x + 1); } };
 
     var env = Environment.init(allocator);
     defer env.deinit();
@@ -980,9 +1005,7 @@ test "eval counter p.150" {
         defer evaluated.deinit();
         try expect(evaluated.boolean);
     } else {
-
         return error.FailedEvalLet;
-
     }
 
 }
