@@ -13,6 +13,8 @@ pub fn main() !void {
     var n_leaks: u32 = 0;
     const passed = "\u{001b}[32mpassed\u{001b}[0m";
     const failed = "\u{001b}[31mfailed\u{001b}[0m";
+    // TODO: take arg if leaks should be checked
+    // const leaked = true;
 
     for (builtin.test_functions, 0..) |t, i| {
         if (i == 0) continue;
