@@ -15,6 +15,7 @@ const m: usize = std.math.pow(usize, 10, 9) + 9;
 pub fn HashMap() type { // TODO: Remove generic
 
     const p = 31;
+    const INITIAL_CAP = 16;
 
     return struct {
         const Self = @This();
@@ -46,10 +47,11 @@ pub fn HashMap() type { // TODO: Remove generic
         allocator: Allocator,
         n_entries: usize = 0,
         buckets: []?ArrayList(Entry),
+        capacity: usize,
 
         pub fn init(allocator: Allocator) Allocator.Error!Self {
             
-            var buckets = try allocator.alloc(?ArrayList(Entry), 2);
+            var buckets = try allocator.alloc(?ArrayList(Entry), INITIAL_CAP);
             
             for (0..buckets.len) |i| {
                 buckets[i] = null;
@@ -58,6 +60,7 @@ pub fn HashMap() type { // TODO: Remove generic
             return Self {
                 .allocator = allocator,
                 .buckets = buckets, // TODO change default size
+                .capacity = buckets.len,
             };
         }
 
@@ -113,7 +116,7 @@ pub fn HashMap() type { // TODO: Remove generic
         /// takes ownership of the objects
         pub fn put(self: *Self, key: []const u8, value: Object) Allocator.Error!void {
             
-            print("got key: {s}, value: {}\n", .{key, value});
+            // print("got key: {s}, value: {}\n", .{key, value});
             
             // TODO if collisions increase buckets until no collision
             // TODO:
@@ -133,12 +136,12 @@ pub fn HashMap() type { // TODO: Remove generic
             const maybe_bucket = self.buckets[b_idx];
             
             if (maybe_bucket) |bucket| {
-                print("bucket not empty\n", .{});
+                // print("bucket not empty\n", .{});
 
                 for (bucket.items, 0..) |entry, i| {
                     
                     if (std.mem.eql(u8, new_entry.key, entry.key)) {
-                        print("key already exists, updading entry\n", .{});
+                        // print("key already exists, updading entry\n", .{});
                         entry.deinit(); 
                         bucket.items[i] = new_entry;
                         return;
@@ -147,16 +150,18 @@ pub fn HashMap() type { // TODO: Remove generic
 
                 }
 
-                print("appending to existing bucket\n", .{});
+                // print("appending to existing bucket\n", .{});
                 
                 try self.buckets[b_idx].?.append(new_entry);
+                self.capacity += self.buckets[b_idx].?.capacity;
                 self.n_entries += 1;
             
             } else {
 
-                print("bucket is empty, filling bucket\n", .{});
+                // print("bucket is empty, filling bucket\n", .{});
                 var bucket = ArrayList(Entry).init(self.allocator);
                 try bucket.append(new_entry);
+                self.capacity += bucket.capacity;
                 self.buckets[b_idx] = bucket;
                 
                 self.n_entries += 1;
@@ -234,46 +239,46 @@ pub fn HashMap() type { // TODO: Remove generic
         // }
 
         
-        fn resize(self: *Self) Allocator.Error!void {
-            const new_size = self.buckets.?.len * 2;
-
-            const old_n_entries = self.n_entries;
-            
-            
-            print("\nresizing from {} to {} buckets\n", .{self.buckets.?.len, new_size});
-            defer print("resize successfull\n", .{});
-
-            self.printHM();
-            
-            self.n_entries = 0;
-
-            const old_buckets = self.buckets.?;
-            self.buckets = try self.allocator.alloc(?Entry, new_size);
-            
-            for (self.buckets.?) |*bucket| {
-                bucket.* = null;
-            }
-
-            for (old_buckets) |maybe_entry| {
-                    
-                if (maybe_entry) |entry| {
-
-                    // TODO: what the fuck happens if we collide when resizing??
-                    try self.put(entry.key, entry.val);
-                    self.allocator.free(entry.key);
-
-                }
-
-            }
-
-            std.debug.assert(self.n_entries == old_n_entries);
-
-            
-            self.allocator.free(old_buckets);
-            
-            self.printHM();
-
-        }
+        // fn resize(self: *Self) Allocator.Error!void {
+        //     const new_size = self.buckets.?.len * 2;
+        //
+        //     const old_n_entries = self.n_entries;
+        //
+        //
+        //     print("\nresizing from {} to {} buckets\n", .{self.buckets.?.len, new_size});
+        //     defer print("resize successfull\n", .{});
+        //
+        //     self.printHM();
+        //
+        //     self.n_entries = 0;
+        //
+        //     const old_buckets = self.buckets.?;
+        //     self.buckets = try self.allocator.alloc(?Entry, new_size);
+        //
+        //     for (self.buckets.?) |*bucket| {
+        //         bucket.* = null;
+        //     }
+        //
+        //     for (old_buckets) |maybe_entry| {
+        //
+        //         if (maybe_entry) |entry| {
+        //
+        //             // TODO: what the fuck happens if we collide when resizing??
+        //             try self.put(entry.key, entry.val);
+        //             self.allocator.free(entry.key);
+        //
+        //         }
+        //
+        //     }
+        //
+        //     std.debug.assert(self.n_entries == old_n_entries);
+        //
+        //
+        //     self.allocator.free(old_buckets);
+        //
+        //     self.printHM();
+        //
+        // }
 
         pub fn printHM(self: *Self) void {
             print("store has {} entries\n", .{self.n_entries});

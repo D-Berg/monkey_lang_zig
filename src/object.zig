@@ -263,19 +263,19 @@ pub const Environment = struct {
     pub fn get(env: *Environment, key: []const u8) ?Object {
 
         // p.146 
-        print("Retreiving {s} from env: {*}\n", .{key, env});
+        // print("Retreiving {s} from env: {*}\n", .{key, env});
         var maybe_obj_ptr = env.store.get(key);
 
         if (maybe_obj_ptr) |obj_ptr|  {
             
             // print("return clone of env obj\n", .{});
-            print("found {s} in env {*}\n", .{key, env});
+            // print("found {s} in env {*}\n", .{key, env});
             return obj_ptr;
 
         } else { // if maybe_obj == null
             if (env.outer) |outer| { // if env.out != null
             
-                print("didnt find {s} in enclosed, checking outer env\n", .{key});
+                // print("didnt find {s} in enclosed, checking outer env\n", .{key});
                 maybe_obj_ptr = outer.get(key);
 
                 if (maybe_obj_ptr) |obj_ptr| {

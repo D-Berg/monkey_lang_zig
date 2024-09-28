@@ -43,9 +43,9 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
 
     const prg_str = try program.String();
     defer program.allocator.free(prg_str);
-    print("\nprog str: {s}\n", .{prg_str});
+    // print("\nprog str: {s}\n", .{prg_str});
 
-    print("main env {*}\n", .{env});
+    // print("main env {*}\n", .{env});
 
     for (program.statements.items) |stmt| {
 
@@ -101,7 +101,7 @@ fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
     var ident = ls.name;
     const name = ident.tokenLiteral();
 
-    print("Evaluating let stmt: {s}\n", .{name});
+    // print("Evaluating let stmt: {s}\n", .{name});
 
     const maybe_val = try EvalExpr(ls.value, env);
     // defer val.?.deinit(); // deinit because store.put clones val
@@ -202,7 +202,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 /// Retrieves a cloned obj from env 
 fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
 
-    print("\nEvaluating ident expr\n", .{});
+    // print("\nEvaluating ident expr\n", .{});
     var tok = ident.token;
     const ident_name = tok.tokenLiteral();
 
@@ -211,7 +211,7 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
     // print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
 
     if (maybe_val) |val| {
-        print("Retreived {s} = {}\n", .{ident_name, val});
+        // print("Retreived {s} = {}\n", .{ident_name, val});
         return val;
     } else {
         // print("didnt find: {s}\n", .{ident_name});
@@ -264,10 +264,10 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
     var func = maybe_func.?;
     defer func.deinit();
 
-    const fn_obj_str = try func.function.String();
+    // const fn_obj_str = try func.function.String();
     // defer func.function.allocator.free(fn_obj_str);
 
-    print("\ncalling func {s}\n", .{fn_obj_str});
+    // print("\ncalling func {s}\n", .{fn_obj_str});
 
     var args = ArrayList(Object).init(ce.allocator);
     defer {
@@ -289,8 +289,8 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
 
 
-    print("\napplying func\n", .{});
-    defer print("funished applying func\n", .{});
+    // print("\napplying func\n", .{});
+    // defer print("funished applying func\n", .{});
 
     // print("function = {}\n", .{func});
 
@@ -304,8 +304,8 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     //     extendedEnv.deinit();
     // }
 
-    print("Creating Extended env, has address {*}\n", .{func.env});
-    print("outer env has adress {*}\n", .{func.env.outer.?});
+    // print("Creating Extended env, has address {*}\n", .{func.env});
+    // print("outer env has adress {*}\n", .{func.env.outer.?});
 
 
     std.debug.assert(args.items.len == func.params.items.len);
@@ -315,7 +315,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
         const name = p.token.tokenLiteral();
 
-        print("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
+        // print("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
 
         // TODO: Clone arg since its deinited
         
@@ -333,7 +333,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     }
 
     // Failes on new line because BlockStatement has indices to old program
-    print("Evaluating functions blck stmts\n", .{});
+    // print("Evaluating functions blck stmts\n", .{});
     const maybe_evaluated = try evalBlockStatement(&func.body, extendedEnv);
 
     // unwrap
@@ -416,7 +416,7 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
 
     const ie_str = try ie.String();
     defer ie.allocator.free(ie_str);
-    print("infix_expression = {s}\n", .{ie_str});
+    // print("infix_expression = {s}\n", .{ie_str});
 
     // TODO: handle null cases
     const maybe_left = try EvalExpr(ie.left, env);
@@ -985,7 +985,7 @@ test "eval counter p.150" {
 
     const input = 
         \\let counter = fn(x) { 
-        \\  if (x > 1) {
+        \\  if (x > 100) {
         \\      return true; 
         \\  } else {
         \\      let foobar = 9999;
@@ -995,7 +995,7 @@ test "eval counter p.150" {
         \\counter(0);
     ;
 
-    // let counter = fn(x) { if (x > 100) { return true; } else { let foobar = 9999; counter(x + 1); } };
+    // let counter = fn(x) { if (x > 997) { return x; } else { let foobar = 9999; counter(x + 1); } };
 
     var env = try Environment.init(allocator);
     defer env.deinit();
