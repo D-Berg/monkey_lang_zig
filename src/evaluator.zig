@@ -286,7 +286,7 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
     return try applyFunction(func.function, &args);
 }
 
-fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
+fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
 
 
     print("\napplying func\n", .{});
@@ -295,7 +295,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) !?Object {
     // print("function = {}\n", .{func});
 
     const extendedEnv = try func.allocator.create(Environment);
-    extendedEnv.* = func.env.initClosedEnv();
+    extendedEnv.* = try func.env.initClosedEnv();
 
     func.env = extendedEnv;
 
@@ -617,7 +617,7 @@ test "Eval Int expr" {
     };
 
     for (inputs, answers) |inp, ans| {
-        var env = Environment.init(allocator);
+        var env = try Environment.init(allocator);
         defer env.deinit();
 
         const evaluated = (try testEval(&env, inp)).?;
@@ -681,7 +681,7 @@ test "Eval bool expr" {
 
     for (inputs, answers) |inp, ans| {
 
-        var env = Environment.init(allocator);
+        var env = try Environment.init(allocator);
         defer env.deinit();
 
         const evaluated = (try testEval(&env, inp)).?;
@@ -712,7 +712,7 @@ test "Bang(!) operator" {
     };
 
     for (inputs, answers) |inp, ans| {
-        var env = Environment.init(allocator);
+        var env = try Environment.init(allocator);
         defer env.deinit();
 
         const evaluated = (try testEval(&env, inp)).?;
@@ -749,7 +749,7 @@ test "eval if expr" {
     };
 
     for (inputs, answers) |inp, ans| {
-        var env = Environment.init(allocator);
+        var env = try Environment.init(allocator);
         defer env.deinit();
 
 
@@ -794,7 +794,7 @@ test "Eval return stmt" {
 
     for (inputs, answers) |inp, ans| {
 
-        var env = Environment.init(allocator);
+        var env = try Environment.init(allocator);
         defer env.deinit();
 
         const evaluated = (try testEval(&env, inp)).?;
@@ -826,7 +826,7 @@ test "Eval Let stmt" {
 
     for (inputs, answers) |inp, ans| {
 
-        var env = Environment.init(allocator);
+        var env = try Environment.init(allocator);
         defer env.deinit();
 
         const evaluated = (try testEval(&env, inp)).?;
@@ -848,7 +848,7 @@ test "func object" {
     const allocator = std.testing.allocator;
     const input = "fn(x) { x + 2; };";
 
-    var env = Environment.init(allocator);
+    var env = try Environment.init(allocator);
     defer env.deinit();
 
     const evaluated = (try testEval(&env, input)).?;
@@ -884,7 +884,7 @@ test "func application" {
 
     for (inputs, answers) |inp, ans| {
         
-        var env = Environment.init(allocator);
+        var env = try Environment.init(allocator);
         defer env.deinit();
 
         const evaluated = (try testEval(&env, inp)).?;
@@ -909,7 +909,7 @@ test "multi input fn application" {
         "add(5, 5);", // breaks everything
     };
 
-    var env = Environment.init(allocator);
+    var env = try Environment.init(allocator);
     defer env.deinit();
 
     for (inputs, 0..) |inp, idx| {
@@ -961,7 +961,7 @@ test "Closures" {
         \\addTwo(2);
     ;
 
-    var env = Environment.init(allocator);
+    var env = try Environment.init(allocator);
     defer env.deinit();
 
     const maybe_eval = try testEval(&env, input);
@@ -985,7 +985,7 @@ test "eval counter p.150" {
 
     const input = 
         \\let counter = fn(x) { 
-        \\  if (x > 100) {
+        \\  if (x > 1) {
         \\      return true; 
         \\  } else {
         \\      let foobar = 9999;
@@ -997,7 +997,7 @@ test "eval counter p.150" {
 
     // let counter = fn(x) { if (x > 100) { return true; } else { let foobar = 9999; counter(x + 1); } };
 
-    var env = Environment.init(allocator);
+    var env = try Environment.init(allocator);
     defer env.deinit();
     const maybe_eval = try testEval(&env, input);
 

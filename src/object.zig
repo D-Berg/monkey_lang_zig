@@ -193,9 +193,9 @@ pub const Environment = struct {
     store: HashMap(),
     outer: ?*Environment = null,
 
-    pub fn init(allocator: Allocator) Environment {
+    pub fn init(allocator: Allocator) Allocator.Error!Environment {
         return Environment {
-            .store = HashMap().init(allocator)
+            .store = try HashMap().init(allocator)
         };
     }
 
@@ -233,9 +233,9 @@ pub const Environment = struct {
     //
     // }
 
-    pub fn initClosedEnv(outer: *Environment) Environment {
+    pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
         return Environment {
-            .store =  HashMap().init(outer.store.allocator),
+            .store = try HashMap().init(outer.store.allocator),
             .outer = outer
         };
     }

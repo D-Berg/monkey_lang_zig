@@ -22,8 +22,6 @@ pub fn HashMap() type { // TODO: Remove generic
             allocator: Allocator,
             key: []const u8,
             val: Object,
-            // next: ?*Entry = null,
-            // previous: ?*Entry,
             
             fn deinit(entry: *const Entry) void {
                 entry.allocator.free(entry.key);
@@ -47,30 +45,41 @@ pub fn HashMap() type { // TODO: Remove generic
 
         allocator: Allocator,
         n_entries: usize = 0,
-        buckets: ?[]?Entry = null,
+        buckets: []?ArrayList(Entry),
 
-        pub fn init(allocator: Allocator) Self {
+        pub fn init(allocator: Allocator) Allocator.Error!Self {
+            
+            var buckets = try allocator.alloc(?ArrayList(Entry), 2);
+            
+            for (0..buckets.len) |i| {
+                buckets[i] = null;
+            }
 
             return Self {
-                .allocator = allocator
+                .allocator = allocator,
+                .buckets = buckets, // TODO change default size
             };
         }
-        
+
         pub fn deinit(self: *Self) void {
 
-            if (self.buckets) |buckets| {
 
-                for (buckets) |bucket| {
+            for (self.buckets) |maybe_bucket| {
 
-                    if (bucket) |entry| {
+                if (maybe_bucket) |bucket| {
+                    
+                    for (bucket.items) |entry| {
                         entry.deinit();
                     }
-
-                }
                     
-                self.allocator.free(buckets);
+                    bucket.deinit();
+                    
+                }
 
             }
+                    
+            self.allocator.free(self.buckets);
+
         }
 
         // pub fn clone(self: *Self) Allocator.Error!Self {
@@ -104,43 +113,58 @@ pub fn HashMap() type { // TODO: Remove generic
         /// takes ownership of the objects
         pub fn put(self: *Self, key: []const u8, value: Object) Allocator.Error!void {
             
-            // print("got key: {s}, value: {}\n", .{key, value});
+            print("got key: {s}, value: {}\n", .{key, value});
             
-            if (self.buckets == null) {
-
-                self.buckets = try self.allocator.alloc(?Entry, 2);
-
-                for (self.buckets.?) |*bucket| {
-                    bucket.* = null;
-                }
-            }
-
             // TODO if collisions increase buckets until no collision
             // TODO:
+            const new_key_str = try self.allocator.alloc(u8, key.len);
+            std.mem.copyForwards(u8, new_key_str, key);
+        
+            const new_entry = Entry {
+                .allocator = self.allocator,
+                .key = new_key_str,
+                .val = value
+            };
+            errdefer new_entry.deinit();
 
+            const h = hash(key);
+            const b_idx = h % self.buckets.len;
+
+            const maybe_bucket = self.buckets[b_idx];
             
-            if (self.checkCollision(key)) {
-                // print("collision!!!!\n", .{});
-                try self.resize();
-                try self.put(key, value);
+            if (maybe_bucket) |bucket| {
+                print("bucket not empty\n", .{});
+
+                for (bucket.items, 0..) |entry, i| {
+                    
+                    if (std.mem.eql(u8, new_entry.key, entry.key)) {
+                        print("key already exists, updading entry\n", .{});
+                        entry.deinit(); 
+                        bucket.items[i] = new_entry;
+                        return;
+                    }
+
+
+                }
+
+                print("appending to existing bucket\n", .{});
+                
+                try self.buckets[b_idx].?.append(new_entry);
+                self.n_entries += 1;
+            
+            } else {
+
+                print("bucket is empty, filling bucket\n", .{});
+                var bucket = ArrayList(Entry).init(self.allocator);
+                try bucket.append(new_entry);
+                self.buckets[b_idx] = bucket;
+                
+                self.n_entries += 1;
             }
             // print("no collision\n", .{});
 
-            const h = hash(key);
+            // print("putting {s} entry in {}\n", .{key, b_idx});
 
-            const b_idx = h % self.buckets.?.len;
-            print("putting {s} entry in {}\n", .{key, b_idx});
-            
-            const key_str = try self.allocator.alloc(u8, key.len);
-            std.mem.copyForwards(u8, key_str, key);
-
-            self.buckets.?[b_idx] = Entry {
-                .allocator = self.allocator,
-                .key = key_str,
-                .val = value
-            };
-
-            self.n_entries += 1;
         }
 
 
@@ -148,26 +172,20 @@ pub fn HashMap() type { // TODO: Remove generic
 
             const h = hash(key);
             
-            if (self.buckets) |buckets| {
                 
-                const maybe_entry = buckets[h % buckets.len];
-                
-                if (maybe_entry) |entry| {
-                    
+            const maybe_bucket = self.buckets[h % self.buckets.len];
+
+            if (maybe_bucket) |bucket| {
+
+                for (bucket.items) |entry| {
                     if (std.mem.eql(u8, entry.key, key)) {
                         return entry.val;
                     } 
-
-                    return null;
-                
-                } else {
-                    return null;
                 }
-                
 
-            } else {
-                return null;
-            }
+            } 
+
+            return null;
 
         }
         // TODO: delete
@@ -186,33 +204,34 @@ pub fn HashMap() type { // TODO: Remove generic
             return h;
         }
 
-        fn checkCollision(self: *Self, key: []const u8) bool{
-
-            // print("CHECKING COLL\n", .{});
-
-            const b_idx = hash(key) % self.buckets.?.len;
-
-            const maybe_entry = self.buckets.?[b_idx];
-
-            if (maybe_entry) |entry| { 
-                
-                // print("entry is not empty, new key = {s}, old key = {s}\n", .{key, entry.key});
-
-                
-                if (std.mem.eql(u8, entry.key, key)) { // no collision
-                    // we want to update value
-                    return false;
-                }
-
-                return true;
-
-            } else {
-                // bucket is empty 
-                return false; // no collision
-            }
-
-
-        }
+        // fn checkCollision(self: *Self, key: []const u8) bool{
+        //
+        //     print("CHECKING collision for {s}\n", .{key});
+        //
+        //     const b_idx = hash(key) % self.buckets.len;
+        //
+        //     const maybe_entry = self.buckets[b_idx];
+        //
+        //     if (maybe_entry) |entry| { 
+        //
+        //         print("entry = {}\n", .{entry});
+        //
+        //         // print("bucket is not empty, new key = {s}, old key = {s}\n", .{key, entry.key});
+        //
+        //         if (std.mem.eql(u8, entry.key, key)) { // no collision
+        //             // we want to update value
+        //             return false;
+        //         }
+        //
+        //         return true;
+        //
+        //     } else {
+        //         // bucket is empty 
+        //         return false; // no collision
+        //     }
+        //
+        //
+        // }
 
         
         fn resize(self: *Self) Allocator.Error!void {
@@ -259,12 +278,12 @@ pub fn HashMap() type { // TODO: Remove generic
         pub fn printHM(self: *Self) void {
             print("store has {} entries\n", .{self.n_entries});
 
-            if (self.buckets) |buckets| {
 
-                for (buckets) |maybe_entry| {
+            for (self.buckets) |maybe_bucket| {
 
-                    if (maybe_entry) |entry| {
-                        
+                if (maybe_bucket) |bucket| {
+                    
+                    for (bucket.items) |entry| {
                         print("key: {s}, val: {}\n", .{entry.key, entry.val});
 
                     }
@@ -272,6 +291,7 @@ pub fn HashMap() type { // TODO: Remove generic
                 }
 
             }
+
 
         }
 
@@ -298,7 +318,7 @@ test "init hashmap" {
     defer token3.deinit();
     const obj3 = Object {.integer = 5};
 
-    var store = HashMap().init(allocator);
+    var store = try HashMap().init(allocator);
     defer store.deinit();
         
     try store.put(token1.tokenLiteral(), obj1);
@@ -306,7 +326,12 @@ test "init hashmap" {
     try store.put(token3.tokenLiteral(), obj3);
 
     try expect(store.get(token1.tokenLiteral()).?.integer == obj1.integer);
+    try expect(store.n_entries == 3);
     
+    store.printHM();
+
+    try store.put(token1.tokenLiteral(), Object {.integer = 100});
+    store.printHM();
     
     // try store.put(obj);
 

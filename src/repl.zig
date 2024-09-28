@@ -18,7 +18,7 @@ pub fn start(allocator: Allocator) !void {
 
     var buffer: [buffer_size]u8 = undefined;
 
-    var env = Environment.init(allocator);
+    var env = try Environment.init(allocator);
     defer env.deinit();
 
     while (true) {
