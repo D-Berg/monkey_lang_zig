@@ -106,7 +106,7 @@ pub const FunctionObject = struct {
         }
         fnc_obj.params.deinit();
 
-        print("env.outer = {?}\n", .{fnc_obj.env.outer});
+        // print("env.outer = {?}\n", .{fnc_obj.env.outer});
 
         // TODO deinit env if its not the outermost env
         if (fnc_obj.env.outer != null) {
@@ -120,8 +120,7 @@ pub const FunctionObject = struct {
 
     pub fn clone(fo: *const FunctionObject) Allocator.Error!Object {
 
-        print("cloned func\n", .{});
-
+        print("cloning func {*}\n", .{fo});
 
         var params = ArrayList(Identifier).init(fo.params.allocator);
 
