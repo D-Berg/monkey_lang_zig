@@ -189,6 +189,8 @@ pub const FunctionObject = struct {
 
 };
 
+
+// Move to its own file
 pub const Environment = struct {
     store: HashMap(),
     outer: ?*Environment = null,

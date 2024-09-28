@@ -1,0 +1,11 @@
+let counter = fn(x) {
+    if (x > 997) { 
+        return x; 
+    } else {
+        let foobar = 9999;
+        counter(x + 1);
+    } 
+};
+
+counter(0);
+
