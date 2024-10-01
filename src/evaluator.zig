@@ -265,7 +265,7 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
 
     const maybe_func = try EvalExpr(ce.function, env);
     const func = maybe_func.?;
-    // defer func.deinit();
+    defer func.deinit(); // only deinit if fnc dont have a owner
 
     // const fn_obj_str = try func.function.String();
     // defer func.function.allocator.free(fn_obj_str);
@@ -872,20 +872,20 @@ test "func application" {
     const allocator = std.testing.allocator;
 
     const inputs = [_][]const u8{ 
-        // "let identity = fn(x) { x; }; identity(5);",
-        // "let identity = fn(x) { return x; }; identity(5);",
-        // "let double = fn(x) { x * 2; }; double(5);",
-        // "let add = fn(x, y) { x + y; }; add(5, 5);",
-        // "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
-        // "fn(x) { x; }(5)"
+        "let identity = fn(x) { x; }; identity(5);",
+        "let identity = fn(x) { return x; }; identity(5);",
+        "let double = fn(x) { x * 2; }; double(5);",
+        "let add = fn(x, y) { x + y; }; add(5, 5);",
+        "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", // breaks everything
+        "fn(x) { x; }(5)"
     };
     const answers = [_]i32 { 
-        // 5,
-        // 5,
-        // 10,
-        // 10,
-        // 20,
-        // 5
+        5,
+        5,
+        10,
+        10,
+        20,
+        5
     };
 
     for (inputs, answers) |inp, ans| {

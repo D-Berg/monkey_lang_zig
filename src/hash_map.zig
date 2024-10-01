@@ -31,8 +31,12 @@ pub fn HashMap() type { // TODO: Remove generic
                 
                 switch (entry.val) {
                     .function => |fnc_obj| {
+                    
+                        print("deinits function obj entry\n", .{});
                 
                         fnc_obj.body.deinit();
+
+                        
 
                         for (fnc_obj.params.items) |param| {
                             param.deinit();

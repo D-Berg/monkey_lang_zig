@@ -21,14 +21,16 @@ pub const Object = union(enum) {
         // print("Deinitalizing object\n", .{});
         switch (obj.*) {
             .return_val_obj => |rvj| {
-                // print("Deinitalizing return object\n", .{});
+                print("Deinitalizing return object\n", .{});
                 rvj.deinit();
             },
             .function => |func| {
-                print("Deinitalizing func object\n", .{});
-                // _ = func;
-                func.deinit();
-                func.allocator.destroy(func);
+                print("trying to deinitalizing func object\n", .{});
+                // is only deinited if func_obj dont have a owner
+                if (func.owner == null) {
+                    func.deinit();
+                    func.allocator.destroy(func);
+                }
             },
 
             else => {}
