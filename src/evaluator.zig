@@ -46,7 +46,7 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
     defer program.allocator.free(prg_str);
     // print("\nprog str: {s}\n", .{prg_str});
 
-    // print("main env {*}\n", .{env});
+    print("main env {*}\n", .{env});
 
     for (program.statements.items) |stmt| {
 
@@ -102,7 +102,7 @@ fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
     var ident = ls.name;
     const name = ident.tokenLiteral();
 
-    // print("Evaluating let stmt: {s}\n", .{name});
+    print("Evaluating let stmt: {s}\n", .{name});
 
     const maybe_val = try EvalExpr(ls.value, env);
     // defer val.?.deinit(); // deinit because store.put clones val
@@ -183,6 +183,8 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
             const fn_obj_ptr = try env.store.allocator.create(FuncionObject);
             errdefer env.store.allocator.destroy(fn_obj_ptr);
             fn_obj_ptr.* = try EvalFnExpr(fl, env);
+
+            print("created fn obj {*}\n", .{fn_obj_ptr});
                 
             return Object {
                 .function = fn_obj_ptr,
@@ -262,8 +264,8 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
 fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object {
 
     const maybe_func = try EvalExpr(ce.function, env);
-    var func = maybe_func.?;
-    defer func.deinit();
+    const func = maybe_func.?;
+    // defer func.deinit();
 
     // const fn_obj_str = try func.function.String();
     // defer func.function.allocator.free(fn_obj_str);
@@ -290,8 +292,8 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
 
 
-    // print("\napplying func\n", .{});
-    // defer print("funished applying func\n", .{});
+    print("\napplying func {*}\n", .{func});
+    defer print("funished applying func {*}\n", .{func});
 
     // print("function = {}\n", .{func});
 
@@ -301,11 +303,11 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     func.env = extendedEnv;
 
     // defer {
-    //     print("closing extendEnv at {*}\n", .{&extendedEnv});
+    //     print("closing extendEnv at {*}\n", .{extendedEnv});
     //     extendedEnv.deinit();
     // }
 
-    // print("Creating Extended env, has address {*}\n", .{func.env});
+    print("Creating Extended env, has address {*}\n", .{func.env});
     // print("outer env has adress {*}\n", .{func.env.outer.?});
 
 

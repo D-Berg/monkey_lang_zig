@@ -62,6 +62,7 @@ pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!voi
     
     switch (val.*) {
         .function => {
+            print("putting fnc obj {*} in env {*}\n", .{val.function, env});
             val.function.owner = env;
         },
 

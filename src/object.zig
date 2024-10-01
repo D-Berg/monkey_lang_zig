@@ -107,23 +107,35 @@ pub const FunctionObject = struct {
 
         // TODO: only deinit if obj dont have a owner
 
-        print("deinits fn obj, addr: {*}\n", .{fnc_obj});
+        print("trying to deinit fn obj, addr: {*}\n", .{fnc_obj});
 
-        fnc_obj.body.deinit();
+        if (fnc_obj.owner) |owner| {
+            
+            print("dont deinits fnc_obj {*} since its owned by {*}\n", .{fnc_obj, owner});
 
-        for (fnc_obj.params.items) |p| {
-            p.deinit();
+        } else {
+
+            // Only deinit if fnc_obj dont have a owner
+                
+            print("func_obj dont have a owner, deinits\n", .{});
+    
+            fnc_obj.body.deinit();
+
+            for (fnc_obj.params.items) |p| {
+                p.deinit();
+            }
+            fnc_obj.params.deinit();
+
+            // print("env.outer = {?}\n", .{fnc_obj.env.outer});
+
+            // TODO deinit env if its not the outermost env
+            if (fnc_obj.env.outer != null) {
+                print("deinits func objects env: {*}\n", .{fnc_obj.env});
+                fnc_obj.env.deinit();
+                fnc_obj.allocator.destroy(fnc_obj.env);
+            }
         }
-        fnc_obj.params.deinit();
-
-        // print("env.outer = {?}\n", .{fnc_obj.env.outer});
-
-        // TODO deinit env if its not the outermost env
-        if (fnc_obj.env.outer != null) {
-            print("deinits func objects env: {*}\n", .{fnc_obj.env});
-            fnc_obj.env.deinit();
-            fnc_obj.allocator.destroy(fnc_obj.env);
-        }
+        
 
         //
     }

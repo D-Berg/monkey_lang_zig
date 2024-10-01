@@ -26,7 +26,36 @@ pub fn HashMap() type { // TODO: Remove generic
             
             fn deinit(entry: *const Entry) void {
                 entry.allocator.free(entry.key);
-                entry.val.deinit();
+                
+                print("deinits entry:\n", .{});
+                
+                switch (entry.val) {
+                    .function => |fnc_obj| {
+                
+                        fnc_obj.body.deinit();
+
+                        for (fnc_obj.params.items) |param| {
+                            param.deinit();
+                        }
+                        fnc_obj.params.deinit();
+
+                        // print("env.outer = {?}\n", .{fnc_obj.env.outer});
+
+                        // TODO deinit env if its not the outermost env
+                        if (fnc_obj.env.outer != null) {
+                            print("deinits func objects env: {*}\n", .{fnc_obj.env});
+                            fnc_obj.env.deinit();
+                            fnc_obj.allocator.destroy(fnc_obj.env);
+                        }
+                    
+                        fnc_obj.allocator.destroy(fnc_obj);
+
+                    },
+
+                    else => {
+                        entry.val.deinit();
+                    }
+                }
             }
             
             // fn clone(entry: *const Entry) Allocator.Error!Entry {
