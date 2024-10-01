@@ -5,7 +5,7 @@ const Parser = @import("Parser.zig");
 const object = @import("object.zig");
 const evaluator = @import("evaluator.zig");
 
-const Environment = object.Environment;
+const Environment = @import("Environment.zig");
 const print = std.debug.print;
 const expect = std.testing.expect;
 

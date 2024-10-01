@@ -3,7 +3,7 @@ const Lexer = @import("Lexer.zig");
 const Token = @import("Token.zig");
 const Parser = @import("Parser.zig");
 const evaluator = @import("evaluator.zig");
-const Environment = @import("object.zig").Environment;
+const Environment = @import("Environment.zig");
 
 const Allocator = std.mem.Allocator;
 const stdin = std.io.getStdIn().reader();
