@@ -46,47 +46,49 @@ pub fn main() !void {
         try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
         try repl.start(allocator);
-    } 
-
-    if (args.len == 2) {
-
-        const path = args[1];
-
-        const file = try std.fs.cwd().openFile(path, .{});
-        defer file.close();
-
-        const input = try file.readToEndAlloc(allocator, 1024);
-        defer allocator.free(input);
-
-        // print("file = {s}\n", .{input});
-
-        var env = try Environment.init(allocator);
-        defer env.deinit();
-
-
-        var lex = Lexer.init(allocator, input);
-        // defer lex.deinit();
-
-        var parser = try Parser.init(&lex, allocator);
-        defer parser.deinit();
-
-        var program = try parser.ParseProgram(allocator);
-        defer program.deinit();
-
-        const maybe_evaluated = try evaluator.Eval(&program, &env);
-
-
-        if (maybe_evaluated) |evaluated| {
-            defer evaluated.deinit();
-            const eval_str = try evaluated.inspect(allocator);
-            defer allocator.free(eval_str);
-            try stdout.print("evaluated: {s}\n", .{eval_str});
-        }
-
-
     } else {
-        @panic("unsupported number of args");
+
+        if (args.len == 2) {
+
+            const path = args[1];
+
+            const file = try std.fs.cwd().openFile(path, .{});
+            defer file.close();
+
+            const input = try file.readToEndAlloc(allocator, 1024);
+            defer allocator.free(input);
+
+            // print("file = {s}\n", .{input});
+
+            var env = try Environment.init(allocator);
+            defer env.deinit();
+
+
+            var lex = Lexer.init(allocator, input);
+            // defer lex.deinit();
+
+            var parser = try Parser.init(&lex, allocator);
+            defer parser.deinit();
+
+            var program = try parser.ParseProgram(allocator);
+            defer program.deinit();
+
+            const maybe_evaluated = try evaluator.Eval(&program, &env);
+
+
+            if (maybe_evaluated) |evaluated| {
+                defer evaluated.deinit();
+                const eval_str = try evaluated.inspect(allocator);
+                defer allocator.free(eval_str);
+                try stdout.print("evaluated: {s}\n", .{eval_str});
+            }
+
+
+        } else {
+            @panic("unsupported number of args");
+        }
     }
+
 
 }
 
