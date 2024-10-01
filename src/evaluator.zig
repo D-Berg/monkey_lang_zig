@@ -903,55 +903,55 @@ test "func application" {
     }
 }
 
-// test "multi input fn application" {
-//
-//     const allocator = std.testing.allocator;
-//
-//     const inputs = [_][]const u8{ 
-//         "let add = fn(x, y) { x + y; };",
-//         "add(5, 5);", // breaks everything
-//     };
-//
-//     var env = try Environment.init(allocator);
-//     defer env.deinit();
-//
-//     for (inputs, 0..) |inp, idx| {
-//
-//         var lexer = Lexer.init(allocator, inp);
-//
-//         var parser = try Parser.init(&lexer, allocator);
-//         defer parser.deinit();
-//
-//         var program = try parser.ParseProgram(allocator);
-//         defer program.deinit();
-//
-//         const evaluated = try Eval(&program, &env);
-//         defer {
-//             if (evaluated != null) evaluated.?.deinit();
-//         }
-//
-//         if (idx == 0) {
-//             expect(evaluated == null) catch |err| {
-//                 print("expected null, got {?}\n", .{
-//                     evaluated
-//                 });
-//
-//                 return err;
-//             };
-//         }
-//
-//         if (idx == 1) {
-//             expect(evaluated.? == .integer) catch |err| {
-//                 print("expected integer, got {?}\n", .{
-//                     evaluated
-//                 });
-//
-//                 return err;
-//             };
-//         }
-//     }
-// }
-//
+test "multi input fn application" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{ 
+        "let add = fn(x, y) { x + y; };",
+        "add(5, 5);", // breaks everything
+    };
+
+    var env = try Environment.init(allocator);
+    defer env.deinit();
+
+    for (inputs, 0..) |inp, idx| {
+
+        var lexer = Lexer.init(allocator, inp);
+
+        var parser = try Parser.init(&lexer, allocator);
+        defer parser.deinit();
+
+        var program = try parser.ParseProgram(allocator);
+        defer program.deinit();
+
+        const evaluated = try Eval(&program, &env);
+        defer {
+            if (evaluated != null) evaluated.?.deinit();
+        }
+
+        if (idx == 0) {
+            expect(evaluated == null) catch |err| {
+                print("expected null, got {?}\n", .{
+                    evaluated
+                });
+
+                return err;
+            };
+        }
+
+        if (idx == 1) {
+            expect(evaluated.? == .integer) catch |err| {
+                print("expected integer, got {?}\n", .{
+                    evaluated
+                });
+
+                return err;
+            };
+        }
+    }
+}
+
 // test "Closures" {
 //     const allocator = std.testing.allocator;
 //
