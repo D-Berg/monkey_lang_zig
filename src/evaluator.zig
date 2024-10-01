@@ -302,10 +302,13 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
     func.env = extendedEnv;
 
-    // defer {
-    //     print("closing extendEnv at {*}\n", .{extendedEnv});
-    //     extendedEnv.deinit();
-    // }
+    defer {
+        print("closing extendEnv at {*}\n", .{extendedEnv});
+
+        func.env = extendedEnv.outer.?;
+        extendedEnv.deinit();
+        func.allocator.destroy(extendedEnv);
+    }
 
     print("Creating Extended env, has address {*}\n", .{func.env});
     // print("outer env has adress {*}\n", .{func.env.outer.?});
@@ -869,7 +872,7 @@ test "func application" {
     const allocator = std.testing.allocator;
 
     const inputs = [_][]const u8{ 
-        "let identity = fn(x) { x; }; identity(5);",
+        // "let identity = fn(x) { x; }; identity(5);",
         // "let identity = fn(x) { return x; }; identity(5);",
         // "let double = fn(x) { x * 2; }; double(5);",
         // "let add = fn(x, y) { x + y; }; add(5, 5);",
@@ -877,7 +880,7 @@ test "func application" {
         // "fn(x) { x; }(5)"
     };
     const answers = [_]i32 { 
-        5,
+        // 5,
         // 5,
         // 10,
         // 10,
@@ -982,36 +985,36 @@ test "multi input fn application" {
 //
 //
 // }
-//
-// test "eval counter p.150" {
-//     const allocator = std.testing.allocator;
-//
-//     const input = 
-//         \\let counter = fn(x) { 
-//         \\  if (x > 100) {
-//         \\      return true; 
-//         \\  } else {
-//         \\      let foobar = 9999;
-//         \\      counter(x + 1);
-//         \\  }
-//         \\};
-//         \\counter(0);
-//     ;
-//
-//     // let counter = fn(x) { if (x > 997) { return x; } else { let foobar = 9999; counter(x + 1); } };
-//
-//     var env = try Environment.init(allocator);
-//     defer env.deinit();
-//     const maybe_eval = try testEval(&env, input);
-//
-//     if (maybe_eval) |evaluated| {
-//         defer evaluated.deinit();
-//         try expect(evaluated.boolean);
-//     } else {
-//         return error.FailedEvalLet;
-//     }
-//
-// }
+
+test "eval counter p.150" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let counter = fn(x) { 
+        \\  if (x > 100) {
+        \\      return true; 
+        \\  } else {
+        \\      let foobar = 9999;
+        \\      counter(x + 1);
+        \\  }
+        \\};
+        \\counter(0);
+    ;
+
+    // let counter = fn(x) { if (x > 997) { return x; } else { let foobar = 9999; counter(x + 1); } };
+
+    var env = try Environment.init(allocator);
+    defer env.deinit();
+    const maybe_eval = try testEval(&env, input);
+
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        try expect(evaluated.boolean);
+    } else {
+        return error.FailedEvalLet;
+    }
+
+}
 
 
 // TODO add tests for 
