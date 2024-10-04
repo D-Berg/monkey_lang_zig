@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const print = std.debug.print;
+const log = std.log;
 
 const Object = @import("object.zig").Object;
 const HashMap = @import("hash_map.zig").HashMap;
@@ -22,6 +23,7 @@ pub fn deinit(env: *Environment) void {
 
     if (env.rc == 0 or env.isMainEnv()) {
 
+        defer log.debug("deinited env {*}\n", .{env});
         const allocator = env.store.allocator;
         env.store.deinit();
             
@@ -30,10 +32,9 @@ pub fn deinit(env: *Environment) void {
             if (!outer.isMainEnv()) outer.deinit(); // try to deinit outer
             allocator.destroy(env);
         }
-        print("deinited env\n", .{});
 
     } else {
-        print("didnt deinit env {*} since its referenced by {} others\n", .{env, env.rc});
+        log.debug("didnt deinit env {*} since its referenced by {} others\n", .{env, env.rc});
     }
 
 
