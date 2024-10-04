@@ -9,6 +9,7 @@ const Environment = @This();
 
 store: HashMap(),
 outer: ?*Environment = null,
+rc: usize = 0,
 
 pub fn init(allocator: Allocator) Allocator.Error!Environment {
     return Environment {
@@ -59,12 +60,11 @@ pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
 }
 
 pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!void {
-
     
     switch (val.*) {
         .function => {
             print("putting fnc obj {*} in env {*}\n", .{val.function, env});
-            val.function.owner = env;
+            val.function.rc += 1;
         },
 
         // TODO fill out more
@@ -105,6 +105,5 @@ pub fn get(env: *Environment, key: []const u8) ?Object {
         
         return null;
     }
-
 
 }

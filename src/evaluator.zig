@@ -256,7 +256,6 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
         .params = params,
         .body = try fl.body.clone(),
         .env = env,
-        .owner = null
     };
 
 }

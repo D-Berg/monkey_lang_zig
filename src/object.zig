@@ -27,11 +27,11 @@ pub const Object = union(enum) {
             .function => |func| {
                 print("trying to deinitalizing func object\n", .{});
                 // is only deinited if func_obj dont have a owner
-                if (func.owner == null) {
+                if (func.rc == 0) {
                     func.deinit();
                     func.allocator.destroy(func);
                 } else {
-                    print("did not deinit func {*}, cause its owned by {*}\n", .{func, func.owner.?});
+                    print("did not deinit func {*}, cause its referenced by {} other\n", .{func, func.rc});
                 }
             },
 
@@ -105,7 +105,7 @@ pub const FunctionObject = struct {
     params: ArrayList(Identifier),
     body: BlockStatement,
     env: *Environment,
-    owner: ?*Environment, // the env that owns the object have the responsebility to destroy it, if null it should deallocate
+    rc: usize = 0, // the env that owns the object have the responsebility to destroy it, if null it should deallocate
 
     pub fn deinit(fnc_obj: *const FunctionObject) void {
 
@@ -113,15 +113,15 @@ pub const FunctionObject = struct {
 
         print("trying to deinit fn obj, addr: {*}\n", .{fnc_obj});
 
-        if (fnc_obj.owner) |owner| {
+        if (fnc_obj.rc != 0) {
             
-            print("dont deinits fnc_obj {*} since its owned by {*}\n", .{fnc_obj, owner});
+            print("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{fnc_obj, fnc_obj.rc});
 
         } else {
 
             // Only deinit if fnc_obj dont have a owner
                 
-            print("func_obj dont have a owner, deinits\n", .{});
+            print("func_obj ref count is {} , deinits\n", .{fnc_obj.rc});
     
             fnc_obj.body.deinit();
 
@@ -130,29 +130,16 @@ pub const FunctionObject = struct {
             }
             fnc_obj.params.deinit();
 
-            // print("env.outer = {?}\n", .{fnc_obj.env.outer});
-
-            // TODO deinit env if its not the outermost env
-            if (fnc_obj.env.outer) |outer| {
+            if (fnc_obj.env.outer) |_| {
                 print("deinits func objects enclosed env: {*}\n", .{fnc_obj.env});
-
-                var old_outer = outer;
-                
-                // deinit ouer if its an enclosed env
-                while (old_outer.outer != null) {
-                    const temp = old_outer.outer.?;
-                    old_outer.deinit();
-                    fnc_obj.allocator.destroy(old_outer);
-                    old_outer = temp;
-                }
-                
-                
+                fnc_obj.env.rc -= 1;
                 fnc_obj.env.deinit();
                 fnc_obj.allocator.destroy(fnc_obj.env);
 
             } else {
 
                 print("func env.outer = null. dont deinits its env\n", .{});
+                // since its the main env
 
             }
         }
