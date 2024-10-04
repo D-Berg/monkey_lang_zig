@@ -209,6 +209,7 @@ pub const FunctionObject = struct {
     // }
 
     /// For debuging
+    /// Caller need to deinit returned str
     pub fn String(fo: *const FunctionObject) Allocator.Error![]const u8 {
 
         const n_params = fo.params.items.len;
