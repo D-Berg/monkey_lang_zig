@@ -19,11 +19,22 @@ pub fn init(allocator: Allocator) Allocator.Error!Environment {
 
 pub fn deinit(env: *Environment) void {
     print("trying to deinit env {*}\n", .{env});
-    env.store.deinit();
 
-    if (env.outer) |outer| {
-        outer.rc -= 1;
+    if (env.rc == 0 or env.outer == null) {
+
+        const allocator = env.store.allocator;
+        env.store.deinit();
+            
+        if (env.outer) |outer| {
+            outer.rc -= 1;
+            allocator.destroy(env);
+        }
+
+    } else {
+        print("didnt deinit env {*} since its referenced by {} others\n", .{env, env.rc});
     }
+
+
 }
 
 pub fn printEnv(env: *Environment) void {
