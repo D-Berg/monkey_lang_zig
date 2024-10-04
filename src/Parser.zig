@@ -233,6 +233,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
         .Lparen => parser.parseGroupedExpression(),
         .If => parser.parseIfExpression(),
         .Function => try parser.parseFunctionLiteral(),
+        .String => parser.parseStringLiteral(),
         inline else => |kind| {
             print("No prefix func for {}\n", .{kind});
             return ParseError.NoPrefixFunction;
@@ -565,6 +566,19 @@ fn parseCallArguments(parser: *Parser) ParseError!ArrayList(Expression) {
     return args;
 
 }
+
+fn parseStringLiteral(parser: *Parser) ParseError!Expression {
+    const tok = try parser.current_token.clone();
+
+    return Expression {
+        .string_expression = .{
+            .token = tok,
+            .value = tok.literal
+        }
+    };
+
+} 
+
 //
 fn curTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.current_token.kind == kind;
@@ -1172,7 +1186,6 @@ test "Call expression" {
     // const input = "add(1, 2 * 3, 4 + 5);";
     const input = "add(1, 2 * 3, add(5, 5));";
 
-
     var lexer = Lexer.init(allocator, input);
 
     var parser = try Parser.init(&lexer, allocator);
@@ -1198,6 +1211,38 @@ test "Call expression" {
 
     try expect(expr.call_expression.args.items.len == 3);
 
+}
+
+test "String Expr" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\"hello world"
+    ;
+
+    const answer = "hello world";
+
+    var lexer = Lexer.init(allocator, input);
+
+    var parser = try Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    const n_stmts = program.statements.items.len;
+
+    try expect(n_stmts == 1);
+
+    const stmt = program.statements.items[0];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr = stmt.expr_stmt.expression.*;
+
+    try expect(expr == .string_expression);
+
+    try expectEqualStrings(answer, expr.string_expression.value);
 }
 //
 // test "Parsing Errors" {
