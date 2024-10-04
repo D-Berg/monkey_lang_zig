@@ -1,6 +1,8 @@
 // TODO make evaluator file upercase
 const std = @import("std");
 const print = std.debug.print;
+const log = std.log;
+
 const Allocator = std.mem.Allocator;
 const Token = @import("Token.zig");
 
@@ -250,6 +252,8 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
     // } else {
     //     fn_env = try env.clone();
     // }
+    
+    env.rc += 1;
 
     return FuncionObject {
         .allocator = fl.token.allocator,
@@ -302,6 +306,11 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
     func.env = extendedEnv;
     func.env.rc += 1;
+
+    if (func.env.outer) |outer| {
+        outer.rc -= 1;
+    }
+
     print("func {*} has env: {*}\n", .{func, func.env});
 
     defer {
