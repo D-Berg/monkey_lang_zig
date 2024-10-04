@@ -301,6 +301,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     print("Creating Extended env, has address {*}\n", .{extendedEnv});
 
     func.env = extendedEnv;
+    func.env.rc += 1;
     print("func {*} has env: {*}\n", .{func, func.env});
 
     defer {
