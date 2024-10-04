@@ -30,6 +30,8 @@ pub const Object = union(enum) {
                 if (func.owner == null) {
                     func.deinit();
                     func.allocator.destroy(func);
+                } else {
+                    print("did not deinit func {*}, cause its owned by {*}\n", .{func, func.owner.?});
                 }
             },
 
@@ -105,7 +107,7 @@ pub const FunctionObject = struct {
     env: *Environment,
     owner: ?*Environment, // the env that owns the object have the responsebility to destroy it, if null it should deallocate
 
-    fn deinit(fnc_obj: *const FunctionObject) void {
+    pub fn deinit(fnc_obj: *const FunctionObject) void {
 
         // TODO: only deinit if obj dont have a owner
 
@@ -131,10 +133,27 @@ pub const FunctionObject = struct {
             // print("env.outer = {?}\n", .{fnc_obj.env.outer});
 
             // TODO deinit env if its not the outermost env
-            if (fnc_obj.env.outer != null) {
-                print("deinits func objects env: {*}\n", .{fnc_obj.env});
+            if (fnc_obj.env.outer) |outer| {
+                print("deinits func objects enclosed env: {*}\n", .{fnc_obj.env});
+
+                var old_outer = outer;
+                
+                // deinit ouer if its an enclosed env
+                while (old_outer.outer != null) {
+                    const temp = old_outer.outer.?;
+                    old_outer.deinit();
+                    fnc_obj.allocator.destroy(old_outer);
+                    old_outer = temp;
+                }
+                
+                
                 fnc_obj.env.deinit();
                 fnc_obj.allocator.destroy(fnc_obj.env);
+
+            } else {
+
+                print("func env.outer = null. dont deinits its env\n", .{});
+
             }
         }
         

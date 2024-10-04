@@ -299,18 +299,20 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
     const extendedEnv = try func.allocator.create(Environment);
     extendedEnv.* = try func.env.initClosedEnv();
+    print("Creating Extended env, has address {*}\n", .{extendedEnv});
 
     func.env = extendedEnv;
+    print("func {*} has env: {*}\n", .{func, func.env});
 
     defer {
-        print("closing extendEnv at {*}\n", .{extendedEnv});
+        // print("closing extendEnv at {*}\n", .{extendedEnv});
 
-        func.env = extendedEnv.outer.?;
-        extendedEnv.deinit();
-        func.allocator.destroy(extendedEnv);
+        // func.env = extendedEnv.outer.?;
+        // print("set func {*} env to {*}\n", .{func, func.env});
+        // extendedEnv.deinit();
+        // func.allocator.destroy(extendedEnv);
     }
 
-    print("Creating Extended env, has address {*}\n", .{func.env});
     // print("outer env has adress {*}\n", .{func.env.outer.?});
 
 
@@ -321,7 +323,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
         const name = p.token.tokenLiteral();
 
-        // print("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
+        print("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
 
         // TODO: Clone arg since its deinited
         
@@ -339,7 +341,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     }
 
     // Failes on new line because BlockStatement has indices to old program
-    // print("Evaluating functions blck stmts\n", .{});
+    print("Evaluating functions blck stmts\n", .{});
     const maybe_evaluated = try evalBlockStatement(&func.body, extendedEnv);
 
     // unwrap
@@ -955,36 +957,37 @@ test "multi input fn application" {
     }
 }
 
-// test "Closures" {
-//     const allocator = std.testing.allocator;
-//
-//     const input = 
-//         \\let newAdder = fn(x) {
-//         \\ fn(y) { x + y; };
-//         \\};
-//         \\
-//         \\let addTwo = newAdder(2);
-//         \\addTwo(2);
-//     ;
-//
-//     var env = try Environment.init(allocator);
-//     defer env.deinit();
-//
-//     const maybe_eval = try testEval(&env, input);
-//
-//     if (maybe_eval) |evaluated| {
-//         defer evaluated.deinit();
-//         expect(evaluated.integer == 4) catch |err| {
-//             print("exptexted 4, got {}\n", .{evaluated.integer});
-//             return err;
-//         };
-//     } else {
-//         print("got null back\n", .{});
-//         return error.FailedEvalLet;
-//     }
-//
-//
-// }
+test "Closures" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let newAdder = fn(x) {
+        \\ fn(y) { x + y; };
+        \\};
+        \\
+        \\let addTwo = newAdder(2);
+        \\addTwo(2);
+    ;
+
+    var env = try Environment.init(allocator);
+    defer env.deinit();
+
+    const maybe_eval = try testEval(&env, input);
+
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        expect(evaluated.integer == 4) catch |err| {
+            print("exptexted 4, got {}\n", .{evaluated.integer});
+            return err;
+        };
+    } else {
+        print("got null back\n", .{});
+        return error.FailedEvalLet;
+    }
+
+
+}
+
 
 test "eval counter p.150" {
     const allocator = std.testing.allocator;

@@ -17,7 +17,7 @@ pub fn init(allocator: Allocator) Allocator.Error!Environment {
 }
 
 pub fn deinit(env: *Environment) void {
-    print("deinits env {*}\n", .{env});
+    print("trying to deinit env {*}\n", .{env});
     env.store.deinit();
 }
 
@@ -51,6 +51,7 @@ pub fn printEnv(env: *Environment) void {
 // }
 
 pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
+    print("initializing enclosed env, setting outer to {*}\n", .{outer});
     return Environment {
         .store = try HashMap().init(outer.store.allocator),
         .outer = outer

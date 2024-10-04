@@ -31,27 +31,29 @@ pub fn HashMap() type { // TODO: Remove generic
                 
                 switch (entry.val) {
                     .function => |fnc_obj| {
+                        fnc_obj.owner = null;
+                        fnc_obj.deinit();
                     
-                        print("deinits function obj entry\n", .{});
-                
-                        fnc_obj.body.deinit();
-
-                        
-
-                        for (fnc_obj.params.items) |param| {
-                            param.deinit();
-                        }
-                        fnc_obj.params.deinit();
-
-                        // print("env.outer = {?}\n", .{fnc_obj.env.outer});
-
-                        // TODO deinit env if its not the outermost env
-                        if (fnc_obj.env.outer != null) {
-                            print("deinits func objects env: {*}\n", .{fnc_obj.env});
-                            fnc_obj.env.deinit();
-                            fnc_obj.allocator.destroy(fnc_obj.env);
-                        }
-                    
+                        // print("deinits function obj entry\n", .{});
+                        //
+                        // fnc_obj.body.deinit();
+                        //
+                        //
+                        //
+                        // for (fnc_obj.params.items) |param| {
+                        //     param.deinit();
+                        // }
+                        // fnc_obj.params.deinit();
+                        //
+                        // // print("env.outer = {?}\n", .{fnc_obj.env.outer});
+                        //
+                        // // TODO deinit env if its not the outermost env
+                        // if (fnc_obj.env.outer != null) {
+                        //     print("deinits func objects env: {*}\n", .{fnc_obj.env});
+                        //     fnc_obj.env.deinit();
+                        //     fnc_obj.allocator.destroy(fnc_obj.env);
+                        // }
+                        //
                         fnc_obj.allocator.destroy(fnc_obj);
 
                     },
