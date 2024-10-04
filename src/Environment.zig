@@ -98,6 +98,9 @@ pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!voi
             log.debug("putting fnc obj {*} in env {*}\n", .{val.function, env});
             val.function.rc += 1;
         },
+        .string => {
+            val.string.rc += 1;
+        },
 
         // TODO fill out more
         else => {}

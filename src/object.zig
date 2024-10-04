@@ -16,6 +16,7 @@ pub const Object = union(enum) {
     nullable,
     return_val_obj: ReturnObject,
     function: *FunctionObject,
+    string: *StringObject,
 
     pub fn deinit(obj: *const Object) void {
 
@@ -34,6 +35,12 @@ pub const Object = union(enum) {
                 } else {
                     log.debug("did not deinit func {*}, cause its referenced by {} other\n", .{func, func.rc});
                 }
+            },
+
+            .string => |so| {
+                
+                so.deintit();
+
             },
 
             else => {}
@@ -63,6 +70,12 @@ pub const Object = union(enum) {
             .nullable => {
                 const str = try std.fmt.allocPrint(allocator, "null", .{});
                 return str;
+            },
+            .string => |so| {
+
+                const str = try std.fmt.allocPrint(allocator, "{s}", .{so.value});
+                return str;
+
             },
             inline else => |case| {
                 const str = try std.fmt.allocPrint(allocator, "{}", .{case});
@@ -209,6 +222,22 @@ pub const FunctionObject = struct {
 
     }
 
+};
+
+pub const StringObject = struct {
+    allocator: Allocator, 
+    value: []const u8,
+    rc: usize = 0,
+
+    pub fn deintit(so: *const StringObject) void {
+        if (so.rc == 0) so.allocator.free(so.value);
+    }
+    
+    pub fn clone(so: *const StringObject) Allocator.Error!Object {
+        _ = so;
+        @panic("Clone for StringObject not implemented");
+
+    }
 };
 
 

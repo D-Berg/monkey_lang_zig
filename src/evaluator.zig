@@ -13,6 +13,7 @@ const Parser = @import("Parser.zig");
 
 const Object = object.Object;
 const FuncionObject = object.FunctionObject;
+const StringObject = object.StringObject;
 const Environment = @import("Environment.zig");
 
 
@@ -26,15 +27,18 @@ const PrefixExpression = ast.PrefixExpression;
 const InfixExpression = ast.InfixExpression;
 const FnLiteralExpression = ast.FnLiteralExpression;
 const CallExpression = ast.CallExpression;
+const StringExpression = ast.StringExpression;
 
 const Program = ast.Program;
 const ArrayList = std.ArrayList;
 
 const expect = std.testing.expect;
+const expectEqualStrings = std.testing.expectEqualStrings;
 
 const EvalError = error {
     // TODO: fill this out
     FailedEvalLet,
+    FailedEvalString,
     EvalIdentNonExistent,
 } || Allocator.Error;
 
@@ -116,7 +120,6 @@ fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
         try env.put(name, &val_var);
     } else {
         return EvalError.FailedEvalLet;
-
     }
 
     // TODO print env, think key disapear because env lives longer than tokens.
@@ -200,8 +203,12 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
         },
 
-        .string_expression => {
-            @panic("evalStringExpression is not implemented");
+        .string_expression => |*se|{
+            const str_obj_ptr = try env.store.allocator.create(StringObject);
+            errdefer str_obj_ptr.deintit();
+            str_obj_ptr.* = try EvalStringExpr(se);
+
+            return Object { .string = str_obj_ptr };
         }
 
     }
@@ -586,6 +593,21 @@ fn isTruthy(obj: *const object.Object) bool {
             return true;
         }
     }
+
+}
+
+fn EvalStringExpr(se: *const StringExpression) EvalError!StringObject {
+
+    const allocator = se.token.allocator;
+
+    const str = try allocator.alloc(u8, se.value.len);
+    @memcpy(str, se.value);
+
+    return StringObject {
+        .allocator = allocator,
+        .value = str
+    };
+
 
 }
 
@@ -1029,6 +1051,36 @@ test "eval counter p.150" {
     } else {
         return error.FailedEvalLet;
     }
+
+}
+
+test "String" {
+    
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let greeting = "Hello world!";
+        \\greeting
+    ;
+
+    var env = try Environment.init(allocator);
+    defer env.deinit();
+
+    const maybe_eval = try testEval(&env, input);
+
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        try expect(evaluated == .string);
+
+        const eval_str = try evaluated.inspect(allocator);
+        defer allocator.free(eval_str);
+
+        try expectEqualStrings("Hello world!", eval_str);
+
+    } else {
+        return error.FailedEvalString;
+    }
+
 
 }
 

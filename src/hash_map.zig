@@ -35,28 +35,14 @@ pub fn HashMap() type { // TODO: Remove generic
                         fnc_obj.rc -= 1;
                         fnc_obj.deinit();
                     
-                        // print("deinits function obj entry\n", .{});
-                        //
-                        // fnc_obj.body.deinit();
-                        //
-                        //
-                        //
-                        // for (fnc_obj.params.items) |param| {
-                        //     param.deinit();
-                        // }
-                        // fnc_obj.params.deinit();
-                        //
-                        // // print("env.outer = {?}\n", .{fnc_obj.env.outer});
-                        //
-                        // // TODO deinit env if its not the outermost env
-                        // if (fnc_obj.env.outer != null) {
-                        //     print("deinits func objects env: {*}\n", .{fnc_obj.env});
-                        //     fnc_obj.env.deinit();
-                        //     fnc_obj.allocator.destroy(fnc_obj.env);
-                        // }
-                        //
                         fnc_obj.allocator.destroy(fnc_obj);
 
+                    },
+
+                    .string => |str_obj| {
+                        str_obj.rc -= 1;
+                        str_obj.deintit();
+                        str_obj.allocator.destroy(str_obj);
                     },
 
                     else => {

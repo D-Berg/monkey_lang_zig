@@ -664,9 +664,12 @@ pub const StringExpression = struct {
     }
 
     pub fn String(se: *const StringExpression) Allocator.Error![]const u8 {
-        _ = se;
         
-        @panic("String for StringExpression not implemented");
+        const a = se.token.allocator;
+
+        const str = try a.alloc(u8, se.token.literal.len);
+        @memcpy(str, se.value);
+        return str;
 
     }
 
