@@ -225,6 +225,7 @@ pub const Expression = union(enum) {
     if_expression: IfExpression, // deinit
     fn_literal: FnLiteralExpression, // deinit
     call_expression: CallExpression,
+    string_expression: StringExpression,
 
     pub fn deinit(expr: *const Expression) void {
         
@@ -635,6 +636,37 @@ pub const CallExpression = struct {
         return try std.fmt.allocPrint(ce.allocator, "{s}({s})", .{
             fn_str, args_str
         });
+
+    }
+
+};
+
+pub const StringExpression = struct {
+    token: Token,
+    value: []const u8, // deinited by token.deinit
+
+    pub fn deinit(se: *const StringExpression) void {
+
+        se.token.deinit();
+
+    }   
+
+    pub fn clone(se: *const StringExpression) Allocator.Error!Expression {
+        const cloned_token = try se.token.clone();
+        
+        return Expression {
+            .string_expression = .{
+                .token = cloned_token,
+                .value = cloned_token.literal
+            }
+        };
+
+    }
+
+    pub fn String(se: *const StringExpression) Allocator.Error![]const u8 {
+        _ = se;
+        
+        @panic("String for StringExpression not implemented");
 
     }
 

@@ -200,6 +200,10 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
         },
 
+        .string_expression => {
+            @panic("evalStringExpression is not implemented");
+        }
+
     }
 }
 
