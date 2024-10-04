@@ -39,7 +39,10 @@ pub const Object = union(enum) {
 
             .string => |so| {
                 
-                so.deintit();
+                if (so.rc == 0) {
+                    so.deintit();
+                    so.allocator.destroy(so);
+                }
 
             },
 

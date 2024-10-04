@@ -336,8 +336,8 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     // print("outer env has adress {*}\n", .{func.env.outer.?});
 
 
+    log.debug("n_params = {}, n_args = {}\n", .{func.params.items.len, args.items.len});
     std.debug.assert(args.items.len == func.params.items.len);
-    // print("n_params = {}, n_args = {}\n", .{args.items.len, params.items.len});
 
     for (func.params.items, args.items) |*p, arg| {
 
