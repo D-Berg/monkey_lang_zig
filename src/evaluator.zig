@@ -48,7 +48,7 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
     defer program.allocator.free(prg_str);
     // print("\nprog str: {s}\n", .{prg_str});
 
-    print("main env {*}\n", .{env});
+    log.debug("main env {*}\n", .{env});
 
     for (program.statements.items) |stmt| {
 
@@ -104,7 +104,7 @@ fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
     var ident = ls.name;
     const name = ident.tokenLiteral();
 
-    print("Evaluating let stmt: {s}\n", .{name});
+    log.debug("Evaluating let stmt: {s}\n", .{name});
 
     const maybe_val = try EvalExpr(ls.value, env);
     // defer val.?.deinit(); // deinit because store.put clones val
@@ -186,7 +186,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
             errdefer env.store.allocator.destroy(fn_obj_ptr);
             fn_obj_ptr.* = try EvalFnExpr(fl, env);
 
-            print("created fn obj {*}\n", .{fn_obj_ptr});
+            log.debug("created fn obj {*}\n", .{fn_obj_ptr});
                 
             return Object {
                 .function = fn_obj_ptr,
@@ -223,8 +223,8 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
         // TODO: create a eval error
 
 
-        print("couldnt find {s} in {*}\n", .{ident_name, env});
-        print("env cointains:\n", .{});
+        log.err("couldnt find {s} in {*}\n", .{ident_name, env});
+        log.debug("env cointains:\n", .{});
         env.printEnv();
         
         @panic("Failed EvalIDentExpr");
@@ -295,14 +295,14 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
 
 
-    print("\napplying func {*}\n", .{func});
-    defer print("funished applying func {*}\n", .{func});
+    log.debug("\napplying func {*}\n", .{func});
+    defer log.debug("funished applying func {*}\n", .{func});
 
     // print("function = {}\n", .{func});
 
     const extendedEnv = try func.allocator.create(Environment);
     extendedEnv.* = try func.env.initClosedEnv();
-    print("Creating Extended env, has address {*}\n", .{extendedEnv});
+    log.debug("Creating Extended env, has address {*}\n", .{extendedEnv});
 
     func.env = extendedEnv;
     func.env.rc += 1;
@@ -311,7 +311,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
         outer.rc -= 1;
     }
 
-    print("func {*} has env: {*}\n", .{func, func.env});
+    log.debug("func {*} has env: {*}\n", .{func, func.env});
 
     defer {
         // print("closing extendEnv at {*}\n", .{extendedEnv});
@@ -332,7 +332,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
         const name = p.token.tokenLiteral();
 
-        print("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
+        log.debug("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
 
         // TODO: Clone arg since its deinited
         
@@ -350,7 +350,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     }
 
     // Failes on new line because BlockStatement has indices to old program
-    print("Evaluating functions blck stmts\n", .{});
+    log.debug("Evaluating functions blck stmts\n", .{});
     const maybe_evaluated = try evalBlockStatement(&func.body, extendedEnv);
 
     // unwrap
@@ -917,7 +917,7 @@ test "func application" {
     }
 }
 
-test "multi input fn application" {
+test "multi input fn appl" {
 
     const allocator = std.testing.allocator;
 

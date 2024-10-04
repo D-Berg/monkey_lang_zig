@@ -649,8 +649,6 @@ fn noPrefixParseFunction(parser: *Parser, kind: Token.Kind) !void {
 //
 test "Let Statements" {
 
-    print("testing let statements\n" , .{});
-
     const allocator = std.testing.allocator;
 
     const correct_input = 

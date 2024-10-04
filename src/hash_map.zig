@@ -5,6 +5,7 @@ const Object = object.Object;
 const Token = @import("Token.zig");
 const ArrayList = std.ArrayList;
 const print = std.debug.print;
+const log = std.log;
 const expect = std.testing.expect;
 
 
@@ -27,7 +28,7 @@ pub fn HashMap() type { // TODO: Remove generic
             fn deinit(entry: *const Entry) void {
                 entry.allocator.free(entry.key);
                 
-                print("deinits entry:\n", .{});
+                log.debug("deinits entry:\n", .{});
                 
                 switch (entry.val) {
                     .function => |fnc_obj| {
@@ -316,15 +317,15 @@ pub fn HashMap() type { // TODO: Remove generic
         // }
 
         pub fn printHM(self: *Self) void {
-            print("store has {} entries\n", .{self.n_entries});
 
+            log.debug("store has {} entries\n", .{self.n_entries});
 
             for (self.buckets) |maybe_bucket| {
 
                 if (maybe_bucket) |bucket| {
                     
                     for (bucket.items) |entry| {
-                        print("key: {s}, val: {}\n", .{entry.key, entry.val});
+                        log.debug("key: {s}, val: {}", .{entry.key, entry.val});
 
                     }
 

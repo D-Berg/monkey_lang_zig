@@ -19,7 +19,7 @@ pub fn init(allocator: Allocator) Allocator.Error!Environment {
 }
 
 pub fn deinit(env: *Environment) void {
-    print("trying to deinit env {*}\n", .{env});
+    log.debug("trying to deinit env {*}\n", .{env});
 
     if (env.rc == 0 or env.isMainEnv()) {
 
@@ -81,7 +81,7 @@ pub fn printEnv(env: *Environment) void {
 // }
 
 pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
-    print("initializing enclosed env, setting outer to {*}\n", .{outer});
+    log.debug("initializing enclosed env, setting outer to {*}\n", .{outer});
     const store = try HashMap().init(outer.store.allocator);
 
     outer.rc += 1;
@@ -95,7 +95,7 @@ pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!voi
     
     switch (val.*) {
         .function => {
-            print("putting fnc obj {*} in env {*}\n", .{val.function, env});
+            log.debug("putting fnc obj {*} in env {*}\n", .{val.function, env});
             val.function.rc += 1;
         },
 

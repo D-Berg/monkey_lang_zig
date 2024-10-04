@@ -6,6 +6,7 @@ const ArrayList = std.ArrayList;
 const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
 const print = std.debug.print;
+const log = std.log;
 
 const Allocator = std.mem.Allocator;
 
@@ -21,17 +22,17 @@ pub const Object = union(enum) {
         // print("Deinitalizing object\n", .{});
         switch (obj.*) {
             .return_val_obj => |rvj| {
-                print("Deinitalizing return object\n", .{});
+                log.debug("Deinitalizing return object\n", .{});
                 rvj.deinit();
             },
             .function => |func| {
-                print("trying to deinitalizing func object\n", .{});
+                log.debug("trying to deinitalizing func object\n", .{});
                 // is only deinited if func_obj dont have a owner
                 if (func.rc == 0) {
                     func.deinit();
                     func.allocator.destroy(func);
                 } else {
-                    print("did not deinit func {*}, cause its referenced by {} other\n", .{func, func.rc});
+                    log.debug("did not deinit func {*}, cause its referenced by {} other\n", .{func, func.rc});
                 }
             },
 
@@ -111,17 +112,17 @@ pub const FunctionObject = struct {
 
         // TODO: only deinit if obj dont have a owner
 
-        print("trying to deinit fn obj, addr: {*}\n", .{fnc_obj});
+        log.debug("trying to deinit fn obj, addr: {*}\n", .{fnc_obj});
 
         if (fnc_obj.rc != 0) {
             
-            print("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{fnc_obj, fnc_obj.rc});
+            log.debug("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{fnc_obj, fnc_obj.rc});
 
         } else {
 
             // Only deinit if fnc_obj dont have a owner
                 
-            print("func_obj ref count is {} , deinits\n", .{fnc_obj.rc});
+            log.debug("func_obj ref count is {} , deinits\n", .{fnc_obj.rc});
     
             fnc_obj.body.deinit();
 
@@ -131,14 +132,14 @@ pub const FunctionObject = struct {
             fnc_obj.params.deinit();
 
             if (fnc_obj.env.outer) |_| {
-                print("deinits func objects enclosed env: {*}\n", .{fnc_obj.env});
+                log.debug("deinits func objects enclosed env: {*}\n", .{fnc_obj.env});
                 fnc_obj.env.rc -= 1;
                 fnc_obj.env.deinit();
                 // fnc_obj.allocator.destroy(fnc_obj.env);
 
             } else {
 
-                print("func env.outer = null. dont deinits its env\n", .{});
+                log.debug("func env.outer = null. dont deinits its env\n", .{});
                 // since its the main env
 
             }
