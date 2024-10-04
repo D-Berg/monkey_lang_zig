@@ -132,6 +132,22 @@ pub fn NextToken(l: *Lexer) LexError!Token {
         ')' => { return try Token.init(a, Token.Kind.Rparen, &chars); },
         '{' => { return try Token.init(a, Token.Kind.Lbrace, &chars); },
         '}' => { return try Token.init(a, Token.Kind.Rbrace, &chars); },
+        '"' => { 
+            const position = l.position + 1;
+
+            while (true) { // TODO: fix infinite 
+                l.readChar();
+
+                if (l.ch == '"' or l.ch == 0) {
+                    break;
+                }
+
+            }
+
+            const string = l.input[position..l.position];
+
+            return try Token.init(a, .String, string);
+        },
         0 => { return try Token.init(a, Token.Kind.Eof, ""); },
         else => {
             if (isLetter(l.ch)) {
