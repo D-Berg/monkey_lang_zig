@@ -20,6 +20,10 @@ pub fn init(allocator: Allocator) Allocator.Error!Environment {
 pub fn deinit(env: *Environment) void {
     print("trying to deinit env {*}\n", .{env});
     env.store.deinit();
+
+    if (env.outer) |outer| {
+        outer.rc -= 1;
+    }
 }
 
 pub fn printEnv(env: *Environment) void {
@@ -53,8 +57,11 @@ pub fn printEnv(env: *Environment) void {
 
 pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
     print("initializing enclosed env, setting outer to {*}\n", .{outer});
+    const store = try HashMap().init(outer.store.allocator);
+
+    outer.rc += 1;
     return Environment {
-        .store = try HashMap().init(outer.store.allocator),
+        .store = store,
         .outer = outer
     };
 }
