@@ -49,6 +49,7 @@ pub const Kind = enum {
     // Identifiers + literals
     Ident, // add, foobar, x, y
     Int, // 12221378
+    String,
 
     // operators
     Assign, // = 

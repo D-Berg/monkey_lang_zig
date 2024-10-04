@@ -214,6 +214,8 @@ test "Create Tokens" {
         \\
         \\10 == 10;
         \\10 != 9;
+        \\"foobar"
+        \\"foo bar"
     ;
 
     var l = Lexer.init(allocator, input);
@@ -294,6 +296,9 @@ test "Create Tokens" {
         try Token.init(allocator,Token.Kind.Neq, "!="),
         try Token.init(allocator,Token.Kind.Int, "9"),
         try Token.init(allocator,Token.Kind.Semicolon, ";"),
+        try Token.init(allocator, .String, "foobar"),
+        try Token.init(allocator, .String, "foo bar"),
+
 
         try Token.init(allocator,Token.Kind.Eof, ""),
     };
@@ -321,7 +326,7 @@ test "Create Tokens" {
             print("Token: kind = {}, .literal = '{s}'\n", .{
                 tok.kind, tok.literal
             });
-            print("Error: {}", .{err});
+            print("Error: {}\n", .{err});
             return err;
         };
 
