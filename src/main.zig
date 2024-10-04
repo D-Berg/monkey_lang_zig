@@ -7,6 +7,7 @@ const evaluator = @import("evaluator.zig");
 
 const Environment = @import("Environment.zig");
 const print = std.debug.print;
+const log = std.log;
 const expect = std.testing.expect;
 
 const stdin = std.io.getStdIn().reader();
@@ -34,8 +35,9 @@ pub fn main() !void {
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
+
     for (args, 0..) |arg, i| {
-        print("arg {} = {s}\n", .{i, arg});
+        log.debug("arg {} = {s}\n", .{i, arg});
     }
 
 
