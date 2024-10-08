@@ -1085,6 +1085,35 @@ test "String" {
 }
 
 
+test "String concat" {
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\"Hello" + " " + "World!"
+    ;
+
+
+    var env = try Environment.init(allocator);
+    defer env.deinit();
+
+    const maybe_eval = try testEval(&env, input);
+
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        try expect(evaluated == .string);
+
+        const eval_str = try evaluated.inspect(allocator);
+        defer allocator.free(eval_str);
+
+        try expectEqualStrings("Hello World!", eval_str);
+
+    } else {
+        return error.FailedEvalString;
+    }
+
+}
+
+
 // TODO add tests for 
 //    >> let add = fn(a, b) { a + b };
 //    >> let sub = fn(a, b) { a - b };
