@@ -237,6 +237,7 @@ test "Create Tokens" {
         \\10 != 9;
         \\"foobar"
         \\"foo bar"
+        \\[1, 2];
     ;
 
     var l = Lexer.init(allocator, input);
@@ -319,6 +320,13 @@ test "Create Tokens" {
         try Token.init(allocator, Token.Kind.Semicolon, ";"),
         try Token.init(allocator, .String, "foobar"),
         try Token.init(allocator, .String, "foo bar"),
+        try Token.init(allocator, .Lbracket, "["),
+        try Token.init(allocator, .Int, "1"),
+        try Token.init(allocator, .Comma, ","),
+        try Token.init(allocator, .Int, "2"),
+        try Token.init(allocator, .Rbracket, "]"),
+        try Token.init(allocator, .Semicolon, ";"),
+
 
         try Token.init(allocator, Token.Kind.Eof, ""),
     };

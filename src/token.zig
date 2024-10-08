@@ -64,10 +64,12 @@ pub const Kind = enum {
     Comma,
     Semicolon,
 
-    Lparen,
-    Rparen,
-    Lbrace,
-    Rbrace,
+    Lparen, // (
+    Rparen, // )
+    Lbrace, // {
+    Rbrace, // }
+    Lbracket, // [
+    Rbracket, // ]
 
     // Keywords
     Function,
