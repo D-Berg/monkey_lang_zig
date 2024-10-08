@@ -1,3 +1,4 @@
+//! Built in functions for the monkey programming language
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const object = @import("object.zig");
@@ -11,7 +12,6 @@ pub const BuiltInError = error {
 pub const Kind = enum {
     len,
 };
-
 
 pub fn len(args: *const ArrayList(Object)) BuiltInError!Object {
 
