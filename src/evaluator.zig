@@ -40,7 +40,7 @@ const EvalError = error {
     FailedEvalLet,
     FailedEvalString,
     EvalIdentNonExistent,
-} || Allocator.Error;
+} || Allocator.Error || std.fmt.BufPrintError;
 
 
 /// Returns an Object that needs to be deinitiated or null
@@ -534,6 +534,45 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
         }
     }
 
+
+    if (left == .string and right == .string) {
+        
+        if (operator == .Plus) {
+
+            const left_len = left.string.value.len;
+            const right_len = right.string.value.len;
+            const new_len = left_len + right_len;
+            log.debug("{} + {} = {}", .{left_len, right_len, new_len});
+
+            const allocator = left.string.allocator;
+            
+            const str = try allocator.alloc(u8, new_len);
+            errdefer allocator.free(str);
+
+            @memcpy(str[0..left_len], left.string.value);
+            @memcpy(str[left_len..new_len], right.string.value);
+
+            const str_obj = try allocator.create(StringObject);
+
+            str_obj.* = StringObject {
+                .allocator = allocator,
+                .value = str,
+                .rc = 0,
+            };
+
+            return Object {
+                .string = str_obj
+            };
+
+        } else {
+            var buffer: [1024]u8 = undefined; // Stack allocated
+            const panic_str = try std.fmt.bufPrint(&buffer, "Operand {} is unsuppered for strings", .{operator});
+
+            @panic(panic_str);
+        }
+
+    }
+
     return object.Object { .nullable = {} };
 
 }
@@ -600,6 +639,7 @@ fn EvalStringExpr(se: *const StringExpression) EvalError!StringObject {
 
     const allocator = se.token.allocator;
 
+    // TODO: move to StringObject.init(allocator, str: []const u8)
     const str = try allocator.alloc(u8, se.value.len);
     @memcpy(str, se.value);
 
