@@ -536,39 +536,80 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
 
 
     if (left == .string and right == .string) {
-        
-        if (operator == .Plus) {
 
-            const left_len = left.string.value.len;
-            const right_len = right.string.value.len;
-            const new_len = left_len + right_len;
-            log.debug("{} + {} = {}", .{left_len, right_len, new_len});
+        const left_str = left.string.value;
+        const right_str = right.string.value;
 
-            const allocator = left.string.allocator;
-            
-            const str = try allocator.alloc(u8, new_len);
-            errdefer allocator.free(str);
 
-            @memcpy(str[0..left_len], left.string.value);
-            @memcpy(str[left_len..new_len], right.string.value);
+        switch (operator) {
 
-            const str_obj = try allocator.create(StringObject);
+            .Plus => {
+                const left_len = left.string.value.len;
+                const right_len = right.string.value.len;
+                const new_len = left_len + right_len;
+                log.debug("{} + {} = {}", .{left_len, right_len, new_len});
 
-            str_obj.* = StringObject {
-                .allocator = allocator,
-                .value = str,
-                .rc = 0,
-            };
+                const allocator = left.string.allocator;
+                
+                const str = try allocator.alloc(u8, new_len);
+                errdefer allocator.free(str);
 
-            return Object {
-                .string = str_obj
-            };
+                @memcpy(str[0..left_len], left_str);
+                @memcpy(str[left_len..new_len], left_str);
 
-        } else {
-            var buffer: [1024]u8 = undefined; // Stack allocated
-            const panic_str = try std.fmt.bufPrint(&buffer, "Operand {} is unsuppered for strings", .{operator});
+                const str_obj = try allocator.create(StringObject);
 
-            @panic(panic_str);
+                str_obj.* = StringObject {
+                    .allocator = allocator,
+                    .value = str,
+                    .rc = 0,
+                };
+
+                return Object {
+                    .string = str_obj
+                };
+
+            },
+
+            .Eq => {
+
+                if (std.mem.eql(u8, left_str, right_str)) {
+
+                    return Object {
+                        .boolean = true,
+                    };
+
+                } else {
+                    return Object {
+                        .boolean = false,
+                    };
+                }
+            },
+
+            .Neq => {
+
+                if (std.mem.eql(u8, left_str, right_str)) {
+
+                    return Object {
+                        .boolean = false,
+                    };
+
+                } else {
+                    return Object {
+                        .boolean = true,
+                    };
+                }
+
+            },
+
+            inline else => |op| {
+
+                var buffer: [1024]u8 = undefined; // Stack allocated
+                const panic_str = try std.fmt.bufPrint(&buffer, "Operand {} is unsuppered for strings", .{op});
+
+                @panic(panic_str);
+            }
+
         }
 
     }
