@@ -4,7 +4,6 @@ const ast = @import("ast.zig");
 const Environment = @import("Environment.zig");
 const BuiltIn = @import("BuiltIn.zig");
 
-
 const ArrayList = std.ArrayList;
 const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
@@ -12,7 +11,6 @@ const print = std.debug.print;
 const log = std.log;
 
 const Allocator = std.mem.Allocator;
-
 
 pub const Object = union(enum) {
     integer: i32,
@@ -38,61 +36,52 @@ pub const Object = union(enum) {
                     func.deinit();
                     func.allocator.destroy(func);
                 } else {
-                    log.debug("did not deinit func {*}, cause its referenced by {} other\n", .{func, func.rc});
+                    log.debug("did not deinit func {*}, cause its referenced by {} other\n", .{ func, func.rc });
                 }
             },
 
             .string => |so| {
-                
                 if (so.rc == 0) {
                     so.deintit();
                     so.allocator.destroy(so);
                 }
-
             },
 
-            else => {}
+            else => {},
         }
-
     }
-    
+
     pub fn clone(obj: *const Object) !Object {
         switch (obj.*) {
-            .integer, .boolean, .nullable, .built_in=> {
+            .integer, .boolean, .nullable, .built_in => {
                 return obj.*;
-            }, 
+            },
             .function => {
                 @panic("clone for FunctionObject not yet implemented");
             },
             inline else => |case| {
                 return case.clone();
-            }
+            },
         }
     }
 
-
     /// return string of value, str need to be deallocated by caller
     pub fn inspect(obj: *const Object, allocator: Allocator) ![]const u8 {
-        
         switch (obj.*) {
             .nullable => {
                 const str = try std.fmt.allocPrint(allocator, "null", .{});
                 return str;
             },
             .string => |so| {
-
                 const str = try std.fmt.allocPrint(allocator, "{s}", .{so.value});
                 return str;
-
             },
             inline else => |case| {
                 const str = try std.fmt.allocPrint(allocator, "{}", .{case});
                 return str;
-            }
-
+            },
         }
     }
-
 };
 
 const ReturnObject = struct {
@@ -110,16 +99,12 @@ const ReturnObject = struct {
         const value_ptr = try ro.allocator.create(Object);
         value_ptr.* = try ro.value.clone();
 
-        return Object {
-            .return_val_obj = .{
-                .allocator = ro.allocator,
-                .value = value_ptr,
-                .owner = ro.owner,
-            }
-        };
-
+        return Object{ .return_val_obj = .{
+            .allocator = ro.allocator,
+            .value = value_ptr,
+            .owner = ro.owner,
+        } };
     }
-
 };
 
 pub const FunctionObject = struct {
@@ -136,15 +121,13 @@ pub const FunctionObject = struct {
         log.debug("trying to deinit fn obj, addr: {*}\n", .{fnc_obj});
 
         if (fnc_obj.rc != 0) {
-            
-            log.debug("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{fnc_obj, fnc_obj.rc});
-
+            log.debug("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{ fnc_obj, fnc_obj.rc });
         } else {
 
             // Only deinit if fnc_obj dont have a owner
-                
+
             log.debug("func_obj ref count is {} , deinits\n", .{fnc_obj.rc});
-    
+
             fnc_obj.body.deinit();
 
             for (fnc_obj.params.items) |p| {
@@ -159,13 +142,11 @@ pub const FunctionObject = struct {
                 // fnc_obj.allocator.destroy(fnc_obj.env);
 
             } else {
-
                 log.debug("func env.outer = null. dont deinits its env\n", .{});
                 // since its the main env
 
             }
         }
-        
 
         //
     }
@@ -186,8 +167,8 @@ pub const FunctionObject = struct {
     //
     //     // var new_env: *Environment = undefined;
     //     //
-    //     // // expensive way of doing, but as of 
-    //     // // right now fn objects gets cloned and deinited 
+    //     // // expensive way of doing, but as of
+    //     // // right now fn objects gets cloned and deinited
     //     // // at each fn call and if it has an enclosed env,
     //     // // the enclosed env get deinited asweell
     //     // // TODO: come up with a better wwayy future me
@@ -206,7 +187,7 @@ pub const FunctionObject = struct {
     //             .allocator = fo.allocator,
     //             .params = params,
     //             .body = body,
-    //             .env = fo.env, 
+    //             .env = fo.env,
     //             .owner = fo.owner,
     //         }
     //     };
@@ -216,38 +197,28 @@ pub const FunctionObject = struct {
     /// For debuging
     /// Caller need to deinit returned str
     pub fn String(fo: *const FunctionObject) Allocator.Error![]const u8 {
-
         const n_params = fo.params.items.len;
-        
+
         if (fo.env.outer) |outer| {
-
-            return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {*}", .{
-                n_params, fo.env, outer
-            });
+            return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {*}", .{ n_params, fo.env, outer });
         }
-        return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {?}", .{
-            n_params, fo.env, fo.env.outer
-        });
-
+        return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {?}", .{ n_params, fo.env, fo.env.outer });
     }
-
 };
 
 pub const StringObject = struct {
-    allocator: Allocator, 
+    allocator: Allocator,
     value: []const u8,
     rc: usize = 0,
 
     pub fn deintit(so: *const StringObject) void {
         if (so.rc == 0) so.allocator.free(so.value);
     }
-    
+
     pub fn clone(so: *const StringObject) Allocator.Error!Object {
         _ = so;
         @panic("Clone for StringObject not implemented");
-
     }
 };
-
 
 //

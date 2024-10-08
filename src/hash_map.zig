@@ -8,7 +8,6 @@ const print = std.debug.print;
 const log = std.log;
 const expect = std.testing.expect;
 
-
 const m: usize = std.math.pow(usize, 10, 9) + 9;
 
 /// A HashMap for Objects using strings as key
@@ -24,19 +23,18 @@ pub fn HashMap() type { // TODO: Remove generic
             allocator: Allocator,
             key: []const u8,
             val: Object,
-            
+
             fn deinit(entry: *const Entry) void {
                 entry.allocator.free(entry.key);
-                
+
                 log.debug("deinits entry:\n", .{});
-                
+
                 switch (entry.val) {
                     .function => |fnc_obj| {
                         fnc_obj.rc -= 1;
                         fnc_obj.deinit();
-                    
-                        fnc_obj.allocator.destroy(fnc_obj);
 
+                        fnc_obj.allocator.destroy(fnc_obj);
                     },
 
                     .string => |str_obj| {
@@ -47,10 +45,10 @@ pub fn HashMap() type { // TODO: Remove generic
 
                     else => {
                         entry.val.deinit();
-                    }
+                    },
                 }
             }
-            
+
             // fn clone(entry: *const Entry) Allocator.Error!Entry {
             //
             //     const new_key = try entry.allocator.alloc(u8, entry.key.len);
@@ -72,14 +70,13 @@ pub fn HashMap() type { // TODO: Remove generic
         capacity: usize,
 
         pub fn init(allocator: Allocator) Allocator.Error!Self {
-            
             var buckets = try allocator.alloc(?ArrayList(Entry), INITIAL_CAP);
-            
+
             for (0..buckets.len) |i| {
                 buckets[i] = null;
             }
 
-            return Self {
+            return Self{
                 .allocator = allocator,
                 .buckets = buckets, // TODO change default size
                 .capacity = buckets.len,
@@ -87,24 +84,17 @@ pub fn HashMap() type { // TODO: Remove generic
         }
 
         pub fn deinit(self: *Self) void {
-
-
             for (self.buckets) |maybe_bucket| {
-
                 if (maybe_bucket) |bucket| {
-                    
                     for (bucket.items) |entry| {
                         entry.deinit();
                     }
-                    
+
                     bucket.deinit();
-                    
                 }
-
             }
-                    
-            self.allocator.free(self.buckets);
 
+            self.allocator.free(self.buckets);
         }
 
         // pub fn clone(self: *Self) Allocator.Error!Self {
@@ -137,47 +127,39 @@ pub fn HashMap() type { // TODO: Remove generic
 
         /// takes ownership of the objects
         pub fn put(self: *Self, key: []const u8, value: Object) Allocator.Error!void {
-            
+
             // print("got key: {s}, value: {}\n", .{key, value});
-            
+
             // TODO if collisions increase buckets until no collision
             // TODO:
             const new_key_str = try self.allocator.alloc(u8, key.len);
             std.mem.copyForwards(u8, new_key_str, key);
-        
-            const new_entry = Entry {
-                .allocator = self.allocator,
-                .key = new_key_str,
-                .val = value
-            };
+
+            const new_entry = Entry{ .allocator = self.allocator, .key = new_key_str, .val = value };
             errdefer new_entry.deinit();
 
             const h = hash(key);
             const b_idx = h % self.buckets.len;
 
             const maybe_bucket = self.buckets[b_idx];
-            
+
             if (maybe_bucket) |bucket| {
                 // print("bucket not empty\n", .{});
 
                 for (bucket.items, 0..) |entry, i| {
-                    
                     if (std.mem.eql(u8, new_entry.key, entry.key)) {
                         // print("key already exists, updading entry\n", .{});
-                        entry.deinit(); 
+                        entry.deinit();
                         bucket.items[i] = new_entry;
                         return;
                     }
-
-
                 }
 
                 // print("appending to existing bucket\n", .{});
-                
+
                 try self.buckets[b_idx].?.append(new_entry);
                 self.capacity += self.buckets[b_idx].?.capacity;
                 self.n_entries += 1;
-            
             } else {
 
                 // print("bucket is empty, filling bucket\n", .{});
@@ -185,7 +167,7 @@ pub fn HashMap() type { // TODO: Remove generic
                 try bucket.append(new_entry);
                 self.capacity += bucket.capacity;
                 self.buckets[b_idx] = bucket;
-                
+
                 self.n_entries += 1;
             }
             // print("no collision\n", .{});
@@ -194,29 +176,22 @@ pub fn HashMap() type { // TODO: Remove generic
 
         }
 
-
         pub fn get(self: *Self, key: []const u8) ?Object {
-
             const h = hash(key);
-            
-                
+
             const maybe_bucket = self.buckets[h % self.buckets.len];
 
             if (maybe_bucket) |bucket| {
-
                 for (bucket.items) |entry| {
                     if (std.mem.eql(u8, entry.key, key)) {
                         return entry.val;
-                    } 
+                    }
                 }
-
-            } 
+            }
 
             return null;
-
         }
         // TODO: delete
-    
 
         // https://cp-algorithms.com/string/string-hashing.html
         fn hash(key: []const u8) usize {
@@ -224,10 +199,10 @@ pub fn HashMap() type { // TODO: Remove generic
             var p_pow: usize = 1;
 
             for (key) |c| {
-                h +=  (c * p_pow) % m;
+                h += (c * p_pow) % m;
                 p_pow *= p % m;
             }
-            
+
             return h;
         }
 
@@ -239,7 +214,7 @@ pub fn HashMap() type { // TODO: Remove generic
         //
         //     const maybe_entry = self.buckets[b_idx];
         //
-        //     if (maybe_entry) |entry| { 
+        //     if (maybe_entry) |entry| {
         //
         //         print("entry = {}\n", .{entry});
         //
@@ -253,14 +228,13 @@ pub fn HashMap() type { // TODO: Remove generic
         //         return true;
         //
         //     } else {
-        //         // bucket is empty 
+        //         // bucket is empty
         //         return false; // no collision
         //     }
         //
         //
         // }
 
-        
         // fn resize(self: *Self) Allocator.Error!void {
         //     const new_size = self.buckets.?.len * 2;
         //
@@ -303,63 +277,49 @@ pub fn HashMap() type { // TODO: Remove generic
         // }
 
         pub fn printHM(self: *Self) void {
-
             log.debug("store has {} entries\n", .{self.n_entries});
 
             for (self.buckets) |maybe_bucket| {
-
                 if (maybe_bucket) |bucket| {
-                    
                     for (bucket.items) |entry| {
-                        log.debug("key: {s}, val: {}", .{entry.key, entry.val});
-
+                        log.debug("key: {s}, val: {}", .{ entry.key, entry.val });
                     }
-
                 }
-
             }
-
-
         }
-
     };
-
-
-
 }
-
-
 
 test "init hashmap" {
     const allocator = std.testing.allocator;
 
     var token1 = try Token.init(allocator, .Ident, "a");
     defer token1.deinit();
-    const obj1 = Object {.integer = 3};
+    const obj1 = Object{ .integer = 3 };
 
     var token2 = try Token.init(allocator, .Ident, "b");
     defer token2.deinit();
-    const obj2 = Object {.integer = 4};
+    const obj2 = Object{ .integer = 4 };
 
-    var token3 = try Token.init(allocator,.Ident, "c");
+    var token3 = try Token.init(allocator, .Ident, "c");
     defer token3.deinit();
-    const obj3 = Object {.integer = 5};
+    const obj3 = Object{ .integer = 5 };
 
     var store = try HashMap().init(allocator);
     defer store.deinit();
-        
+
     try store.put(token1.tokenLiteral(), obj1);
     try store.put(token2.tokenLiteral(), obj2);
     try store.put(token3.tokenLiteral(), obj3);
 
     try expect(store.get(token1.tokenLiteral()).?.integer == obj1.integer);
     try expect(store.n_entries == 3);
-    
+
     store.printHM();
 
-    try store.put(token1.tokenLiteral(), Object {.integer = 100});
+    try store.put(token1.tokenLiteral(), Object{ .integer = 100 });
     store.printHM();
-    
+
     // try store.put(obj);
 
     // print("created env store: {any}\n", .{store.buckets.?});

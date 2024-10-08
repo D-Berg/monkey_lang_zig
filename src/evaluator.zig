@@ -17,7 +17,6 @@ const Object = object.Object;
 const FuncionObject = object.FunctionObject;
 const StringObject = object.StringObject;
 
-
 const Statement = ast.Statement;
 const LetStatement = ast.LetStatement;
 const ReturnStatement = ast.ReturnStatement;
@@ -36,7 +35,7 @@ const ArrayList = std.ArrayList;
 const expect = std.testing.expect;
 const expectEqualStrings = std.testing.expectEqualStrings;
 
-const EvalError = error {
+const EvalError = error{
     // TODO: fill this out
     FailedEvalLet,
     FailedEvalString,
@@ -44,18 +43,15 @@ const EvalError = error {
 } || Allocator.Error || std.fmt.BufPrintError || BuiltIn.BuiltInError;
 
 fn getBuiltInFn(str: []const u8) ?BuiltIn.Kind {
-
     if (std.mem.eql(u8, "len", str)) {
         return .len;
-    } 
-    
-    return null;
+    }
 
+    return null;
 }
 
 /// Returns an Object that needs to be deinitiated or null
 pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
-
     var maybe_result: ?object.Object = null;
 
     const prg_str = try program.String();
@@ -65,11 +61,9 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
     log.debug("main env {*}\n", .{env});
 
     for (program.statements.items) |stmt| {
-
         maybe_result = try EvalStmt(&stmt, env);
 
         if (maybe_result) |result| {
-
             if (result == .return_val_obj) {
 
                 // print("got a return obj\n", .{});
@@ -82,20 +76,16 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
                 return val;
             }
         }
-
     }
 
     return maybe_result;
 }
 
 fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object {
-
     switch (stmt.*) {
-
         .let_stmt => |*ls| {
             try EvalLetStmt(ls, env);
             return null;
-
         },
         .ret_stmt => |*rs| {
             return try EvalRetStmt(rs, env);
@@ -108,13 +98,11 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
 
         .blck_stmt => |bs| {
             return try evalBlockStatement(&bs, env);
-        }
+        },
     }
-
 }
 
 fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
-
     var ident = ls.name;
     const name = ident.tokenLiteral();
 
@@ -145,47 +133,37 @@ fn EvalRetStmt(rs: *const ReturnStatement, env: *Environment) EvalError!Object {
     const res = try rs.allocator.create(Object);
     res.* = val.?;
 
-    return object.Object {
-        .return_val_obj = .{
-            .allocator = rs.allocator,
-            .value = res,
-            .owner = null
-        } // somehow this works lol
+    return object.Object{
+        .return_val_obj = .{ .allocator = rs.allocator, .value = res, .owner = null }, // somehow this works lol
     };
 }
 
 fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object {
-
     switch (expr.*) {
-
         .identifier => |*ident| {
-
             return try EvalIdentExpr(ident, env);
-
         },
         .integer_literal => |int_lit| {
 
             // print("eval int lit expr {s}\n", .{int_lit.token.tokenLiteral()});
 
-            return object.Object {
+            return object.Object{
                 .integer = @intCast(int_lit.value),
             };
-
-        }, 
+        },
         .boolean_literal => |bool_lit| {
 
             // print("eval boolean lit expr with val {}\n", .{bool_lit.value});
-            return object.Object {
+            return object.Object{
                 .boolean = bool_lit.value,
             };
+        },
 
-        }, 
-        
         .prefix_expression => |*pe| {
             return try EvalPrefixExpr(pe, env);
         },
 
-        .infix_expression => |*ie| { 
+        .infix_expression => |*ie| {
             return try EvalInfixExpr(ie, env);
         },
 
@@ -194,66 +172,57 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
         },
 
         .fn_literal => |*fl| {
-
             const fn_obj_ptr = try env.store.allocator.create(FuncionObject);
             errdefer env.store.allocator.destroy(fn_obj_ptr);
             fn_obj_ptr.* = try EvalFnExpr(fl, env);
 
             log.debug("created fn obj {*}\n", .{fn_obj_ptr});
-                
-            return Object {
+
+            return Object{
                 .function = fn_obj_ptr,
             };
-
         },
 
         .call_expression => |*ce| {
-
             return try EvalCallExpr(ce, env);
-
         },
 
-        .string_expression => |*se|{
+        .string_expression => |*se| {
             const str_obj_ptr = try env.store.allocator.create(StringObject);
             errdefer str_obj_ptr.deintit();
             str_obj_ptr.* = try EvalStringExpr(se);
 
-            return Object { .string = str_obj_ptr };
-        }
-
+            return Object{ .string = str_obj_ptr };
+        },
     }
 }
 
-
-/// Retrieves a cloned obj from env 
+/// Retrieves a cloned obj from env
 fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
 
     // print("\nEvaluating ident expr\n", .{});
     var tok = ident.token;
     const ident_name = tok.tokenLiteral();
 
-    const maybe_val = env.get(ident_name); 
+    const maybe_val = env.get(ident_name);
 
     // print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
 
     if (maybe_val) |val| {
         // print("Retreived {s} = {}\n", .{ident_name, val});
         return val;
-    } 
+    }
 
     if (getBuiltInFn(ident_name)) |built_in| {
-        return Object {
-            .built_in = built_in
-        };
+        return Object{ .built_in = built_in };
     } else {
         // print("didnt find: {s}\n", .{ident_name});
         // TODO: create a eval error
 
-
-        log.err("couldnt find {s} in {*}\n", .{ident_name, env});
+        log.err("couldnt find {s} in {*}\n", .{ ident_name, env });
         log.debug("env cointains:\n", .{});
         env.printEnv();
-        
+
         @panic("Failed EvalIDentExpr");
         // return EvalError.EvalIdentNonExistent;
     }
@@ -266,7 +235,7 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
     // Clone func expr param identifiers to func obj
 
     var params = ArrayList(Identifier).init(fl.token.allocator);
-    
+
     for (fl.parameters.items) |p| {
         try params.append(try p.clone());
     }
@@ -279,20 +248,18 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
     // } else {
     //     fn_env = try env.clone();
     // }
-    
+
     env.rc += 1;
 
-    return FuncionObject {
+    return FuncionObject{
         .allocator = fl.token.allocator,
         .params = params,
         .body = try fl.body.clone(),
         .env = env,
     };
-
 }
 
 fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object {
-
     const maybe_func = try EvalExpr(ce.function, env);
 
     const func = maybe_func.?;
@@ -310,7 +277,7 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
         }
         args.deinit();
     }
-        
+
     // evalExpressions p.144
     for (ce.args.items) |*arg| {
         try args.append((try EvalExpr(arg, env)).?);
@@ -320,18 +287,12 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
         .built_in => return try BuiltIn.len(&args),
         .function => |func_obj| return try applyFunction(func_obj, &args),
         else => {
-
             @panic("call failed because func is not a function");
-
-        }
-
+        },
     }
-
 }
 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
-
-
     log.debug("\napplying func {*}\n", .{func});
     defer log.debug("funished applying func {*}\n", .{func});
 
@@ -348,7 +309,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
         outer.rc -= 1;
     }
 
-    log.debug("func {*} has env: {*}\n", .{func, func.env});
+    log.debug("func {*} has env: {*}\n", .{ func, func.env });
 
     defer {
         // print("closing extendEnv at {*}\n", .{extendedEnv});
@@ -361,22 +322,19 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
     // print("outer env has adress {*}\n", .{func.env.outer.?});
 
-
-    log.debug("n_params = {}, n_args = {}\n", .{func.params.items.len, args.items.len});
+    log.debug("n_params = {}, n_args = {}\n", .{ func.params.items.len, args.items.len });
     std.debug.assert(args.items.len == func.params.items.len);
 
     for (func.params.items, args.items) |*p, arg| {
-
         const name = p.token.tokenLiteral();
 
-        log.debug("putting param: {s} = {} in env {*}\n", .{name, arg, func.env});
+        log.debug("putting param: {s} = {} in env {*}\n", .{ name, arg, func.env });
 
         // TODO: Clone arg since its deinited
-        
+
         var cloned_arg = try arg.clone();
         try func.env.put(name, &cloned_arg);
     }
-
 
     // print("printing functions block statements\n", .{});
     for (func.body.statements.items) |stmt| {
@@ -392,7 +350,6 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
     // unwrap
     if (maybe_evaluated) |evaluated| {
-
         if (evaluated == .return_val_obj) {
             // TODO: do I need to deinit
             defer evaluated.return_val_obj.deinit();
@@ -401,9 +358,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     }
 
     return maybe_evaluated;
-
 }
-
 
 fn EvalPrefixExpr(pe: *const PrefixExpression, env: *Environment) EvalError!Object {
     const operator = pe.token.kind;
@@ -415,57 +370,40 @@ fn EvalPrefixExpr(pe: *const PrefixExpression, env: *Environment) EvalError!Obje
         .Bang => {
             // same as evalBangOperatorExpression()
             switch (right) {
-
                 .boolean => |b| {
                     if (b) {
-                        return Object { 
-                            .boolean = false 
-                        };
+                        return Object{ .boolean = false };
                     } else {
-                        return Object {
-                            .boolean = true 
-                        };
+                        return Object{ .boolean = true };
                     }
                 },
 
                 .nullable => {
-                    return Object {
-                        .boolean = true
-                    };
+                    return Object{ .boolean = true };
                 },
                 else => {
-                    return Object {
-                        .boolean = false 
-                    };
-                }
-
+                    return Object{ .boolean = false };
+                },
             }
-
         },
 
         .Minus => {
             if (right != .integer) {
-                return Object {
-                    .nullable = {}
-                };
+                return Object{ .nullable = {} };
             }
 
             const val = right.integer;
 
-            return Object {
-                .integer =  -val
-            };
+            return Object{ .integer = -val };
         },
 
         else => {
-            return Object {
-                .nullable = {}
-            };
-        }
+            return Object{ .nullable = {} };
+        },
     }
 }
 
-fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!object.Object {
+fn EvalInfixExpr(ie: *const InfixExpression, env: *Environment) EvalError!object.Object {
     const operator = ie.token.kind;
 
     const ie_str = try ie.String();
@@ -481,60 +419,39 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
     defer right.deinit();
 
     if (left == .integer and right == .integer) {
-
         const left_val = left.integer;
         const right_val = right.integer;
 
         switch (operator) {
             .Plus => {
-                return object.Object { 
-                    .integer = left_val + right_val 
-                };
+                return object.Object{ .integer = left_val + right_val };
             },
             .Minus => {
-                return object.Object { 
-                    .integer = left_val - right_val 
-                };
+                return object.Object{ .integer = left_val - right_val };
             },
             .Asterisk => {
-                return object.Object { 
-                    .integer = left_val * right_val 
-                };
+                return object.Object{ .integer = left_val * right_val };
             },
             .Slash => {
-                return object.Object { 
-                    .integer = @divTrunc(left_val, right_val) 
-                };
+                return object.Object{ .integer = @divTrunc(left_val, right_val) };
             },
             .Lt => {
-                return object.Object {
-                    .boolean = left_val < right_val 
-                };
+                return object.Object{ .boolean = left_val < right_val };
             },
 
             .Gt => {
-                return object.Object {
-                    .boolean = left_val > right_val 
-                };
+                return object.Object{ .boolean = left_val > right_val };
             },
             .Eq => {
-                return object.Object {
-                    .boolean = left_val == right_val 
-                };
+                return object.Object{ .boolean = left_val == right_val };
             },
             .Neq => {
-                return object.Object {
-                    .boolean = left_val != right_val 
-                };
+                return object.Object{ .boolean = left_val != right_val };
             },
             else => {
-                return object.Object {
-                    .nullable = {}
-                };
-            }
-
+                return object.Object{ .nullable = {} };
+            },
         }
-
     }
 
     if (left == .boolean and right == .boolean) {
@@ -543,40 +460,30 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
 
         switch (operator) {
             .Eq => {
-                return object.Object {
-                    .boolean = left_val == right_val
-                };
-
+                return object.Object{ .boolean = left_val == right_val };
             },
             .Neq => {
-                return object.Object {
-                    .boolean = left_val != right_val
-                };
+                return object.Object{ .boolean = left_val != right_val };
             },
             else => {
-                return object.Object { .nullable = {} };
-            }
-
+                return object.Object{ .nullable = {} };
+            },
         }
     }
 
-
     if (left == .string and right == .string) {
-
         const left_str = left.string.value;
         const right_str = right.string.value;
 
-
         switch (operator) {
-
             .Plus => {
                 const left_len = left_str.len;
                 const right_len = right_str.len;
                 const new_len = left_len + right_len;
-                log.debug("{} + {} = {}", .{left_len, right_len, new_len});
+                log.debug("{} + {} = {}", .{ left_len, right_len, new_len });
 
                 const allocator = left.string.allocator;
-                
+
                 const str = try allocator.alloc(u8, new_len);
                 errdefer allocator.free(str);
 
@@ -585,47 +492,37 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
 
                 const str_obj = try allocator.create(StringObject);
 
-                str_obj.* = StringObject {
+                str_obj.* = StringObject{
                     .allocator = allocator,
                     .value = str,
                     .rc = 0,
                 };
 
-                return Object {
-                    .string = str_obj
-                };
-
+                return Object{ .string = str_obj };
             },
 
             .Eq => {
-
                 if (std.mem.eql(u8, left_str, right_str)) {
-
-                    return Object {
+                    return Object{
                         .boolean = true,
                     };
-
                 } else {
-                    return Object {
+                    return Object{
                         .boolean = false,
                     };
                 }
             },
 
             .Neq => {
-
                 if (std.mem.eql(u8, left_str, right_str)) {
-
-                    return Object {
+                    return Object{
                         .boolean = false,
                     };
-
                 } else {
-                    return Object {
+                    return Object{
                         .boolean = true,
                     };
                 }
-
             },
 
             inline else => |op| {
@@ -636,18 +533,14 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
                 const panic_str = try std.fmt.bufPrint(&buffer, "Operand {} is unsuppered for strings", .{op});
 
                 @panic(panic_str);
-            }
-
+            },
         }
-
     }
 
-    return object.Object { .nullable = {} };
-
+    return object.Object{ .nullable = {} };
 }
 
 fn evalBlockStatement(blck_stmt: *const ast.BlockStatement, env: *Environment) EvalError!?object.Object {
-
     var maybe_result: ?object.Object = null;
 
     // print("evaluating block stmts\n", .{});
@@ -657,7 +550,7 @@ fn evalBlockStatement(blck_stmt: *const ast.BlockStatement, env: *Environment) E
 
         // print("\tblck: evaluating {}\n", .{stmt});
         maybe_result = try EvalStmt(stmt, env);
-        
+
         if (maybe_result) |result| {
             if (result != .nullable and result == .return_val_obj) {
                 return result; // p.131
@@ -669,27 +562,20 @@ fn evalBlockStatement(blck_stmt: *const ast.BlockStatement, env: *Environment) E
 }
 
 fn evalIfExpression(if_epxr: *const ast.IfExpression, env: *Environment) EvalError!?object.Object {
-
     const condition = (try EvalExpr(if_epxr.condition, env)).?;
 
     if (isTruthy(&condition)) {
-
         return try evalBlockStatement(&if_epxr.consequence, env);
-
     } else {
-
         if (if_epxr.alternative) |alt| {
             return try evalBlockStatement(&alt, env);
-
         } else {
-            return object.Object { .nullable = {} };
+            return object.Object{ .nullable = {} };
         }
     }
-
 }
 
 fn isTruthy(obj: *const object.Object) bool {
-
     switch (obj.*) {
         .boolean => |b| {
             return b;
@@ -699,29 +585,21 @@ fn isTruthy(obj: *const object.Object) bool {
         },
         else => {
             return true;
-        }
+        },
     }
-
 }
 
 fn EvalStringExpr(se: *const StringExpression) EvalError!StringObject {
-
     const allocator = se.token.allocator;
 
     // TODO: move to StringObject.init(allocator, str: []const u8)
     const str = try allocator.alloc(u8, se.value.len);
     @memcpy(str, se.value);
 
-    return StringObject {
-        .allocator = allocator,
-        .value = str
-    };
-
-
+    return StringObject{ .allocator = allocator, .value = str };
 }
 
 fn testEval(env: *Environment, input: []const u8) !?object.Object {
-    
     const allocator = env.store.allocator;
 
     var lexer = Lexer.init(allocator, input);
@@ -841,27 +719,20 @@ test "Eval bool expr" {
 
         expect(evaluated.boolean == ans) catch |err| {
             print("{s}\n", .{inp});
-            print("Expected {}, got {}\n", .{ans, evaluated.boolean});
+            print("Expected {}, got {}\n", .{ ans, evaluated.boolean });
             return err;
-
         };
     }
-
 }
 
-
 test "Bang(!) operator" {
-
     const allocator = std.testing.allocator;
 
-    const inputs = [_][]const u8{ 
-        "!true", "!false", "!5",
+    const inputs = [_][]const u8{
+        "!true",  "!false",  "!5",
         "!!true", "!!false", "!!5",
     };
-    const answers = [_]bool{ 
-        false, true, false,
-        true, false, true
-    };
+    const answers = [_]bool{ false, true, false, true, false, true };
 
     for (inputs, answers) |inp, ans| {
         var env = try Environment.init(allocator);
@@ -985,18 +856,14 @@ test "Eval Let stmt" {
         defer evaluated.deinit();
 
         expect(ans == evaluated.integer) catch |err| {
-            print("expected {}, got {}\n", .{
-                ans, evaluated.integer
-            });
+            print("expected {}, got {}\n", .{ ans, evaluated.integer });
 
             return err;
         };
     }
-
 }
 
 test "func object" {
-
     const allocator = std.testing.allocator;
     const input = "fn(x) { x + 2; };";
 
@@ -1043,9 +910,7 @@ test "func application" {
         defer evaluated.deinit();
 
         expect(ans == evaluated.integer) catch |err| {
-            print("expected {}, got {}\n", .{
-                ans, evaluated.integer
-            });
+            print("expected {}, got {}\n", .{ ans, evaluated.integer });
 
             return err;
         };
@@ -1053,10 +918,9 @@ test "func application" {
 }
 
 test "multi input fn appl" {
-
     const allocator = std.testing.allocator;
 
-    const inputs = [_][]const u8{ 
+    const inputs = [_][]const u8{
         "let add = fn(x, y) { x + y; };",
         "add(5, 5);", // breaks everything
     };
@@ -1065,7 +929,6 @@ test "multi input fn appl" {
     defer env.deinit();
 
     for (inputs, 0..) |inp, idx| {
-
         var lexer = Lexer.init(allocator, inp);
 
         var parser = try Parser.init(&lexer, allocator);
@@ -1081,9 +944,7 @@ test "multi input fn appl" {
 
         if (idx == 0) {
             expect(evaluated == null) catch |err| {
-                print("expected null, got {?}\n", .{
-                    evaluated
-                });
+                print("expected null, got {?}\n", .{evaluated});
 
                 return err;
             };
@@ -1091,9 +952,7 @@ test "multi input fn appl" {
 
         if (idx == 1) {
             expect(evaluated.? == .integer) catch |err| {
-                print("expected integer, got {?}\n", .{
-                    evaluated
-                });
+                print("expected integer, got {?}\n", .{evaluated});
 
                 return err;
             };
@@ -1104,7 +963,7 @@ test "multi input fn appl" {
 test "Closures" {
     const allocator = std.testing.allocator;
 
-    const input = 
+    const input =
         \\let newAdder = fn(x) {
         \\ fn(y) { x + y; };
         \\};
@@ -1128,15 +987,12 @@ test "Closures" {
         print("got null back\n", .{});
         return error.FailedEvalLet;
     }
-
-
 }
-
 
 test "eval counter p.150" {
     const allocator = std.testing.allocator;
 
-    const input = 
+    const input =
         \\let counter = fn(x) { 
         \\  if (x > 100) {
         \\      return true; 
@@ -1160,14 +1016,12 @@ test "eval counter p.150" {
     } else {
         return error.FailedEvalLet;
     }
-
 }
 
 test "String" {
-    
     const allocator = std.testing.allocator;
 
-    const input = 
+    const input =
         \\let greeting = "Hello world!";
         \\greeting
     ;
@@ -1185,22 +1039,17 @@ test "String" {
         defer allocator.free(eval_str);
 
         try expectEqualStrings("Hello world!", eval_str);
-
     } else {
         return error.FailedEvalString;
     }
-
-
 }
-
 
 test "String concat" {
     const allocator = std.testing.allocator;
 
-    const input = 
+    const input =
         \\"Hello" + " " + "World!"
     ;
-
 
     var env = try Environment.init(allocator);
     defer env.deinit();
@@ -1215,16 +1064,14 @@ test "String concat" {
         defer allocator.free(eval_str);
 
         try expectEqualStrings("Hello World!", eval_str);
-
     } else {
         return error.FailedEvalString;
     }
-
 }
 
 // TODO: Implemtent test for str - str p.158
 
-// TODO add tests for 
+// TODO add tests for
 //    >> let add = fn(a, b) { a + b };
 //    >> let sub = fn(a, b) { a - b };
 //    >> let applyFunc = fn(a, b, func) { func(a, b) };

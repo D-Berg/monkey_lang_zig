@@ -6,17 +6,16 @@ const Token = @This();
 allocator: Allocator,
 kind: Kind,
 // TODO: allocate string on heap
-literal: []const u8, // literal can be at most 32 bytes 
-    
-pub fn init(allocator: Allocator,kind: Token.Kind, chars: []const u8) Allocator.Error!Token {
+literal: []const u8, // literal can be at most 32 bytes
 
+pub fn init(allocator: Allocator, kind: Token.Kind, chars: []const u8) Allocator.Error!Token {
     const literal = try allocator.alloc(u8, chars.len);
-    
+
     std.mem.copyForwards(u8, literal, chars);
 
     return .{
         .allocator = allocator,
-        .kind = kind, 
+        .kind = kind,
         .literal = literal,
     };
 }
@@ -29,12 +28,8 @@ pub fn deinit(tok: *const Token) void {
 pub fn clone(tok: *const Token) Allocator.Error!Token {
     const literal = try tok.allocator.alloc(u8, tok.literal.len);
     std.mem.copyForwards(u8, literal, tok.literal);
-    
-    return Token {
-        .allocator = tok.allocator,
-        .kind = tok.kind,
-        .literal = literal
-    };
+
+    return Token{ .allocator = tok.allocator, .kind = tok.kind, .literal = literal };
 }
 
 pub fn tokenLiteral(tok: *const Token) []const u8 {
@@ -45,14 +40,14 @@ pub fn tokenLiteral(tok: *const Token) []const u8 {
 pub const Kind = enum {
     Illegal,
     Eof,
-    
+
     // Identifiers + literals
     Ident, // add, foobar, x, y
     Int, // 12221378
     String,
 
     // operators
-    Assign, // = 
+    Assign, // =
     Plus, // +
     Minus,
     Bang, // !
@@ -114,4 +109,3 @@ pub const Kind = enum {
 //
 //     }
 // };
-

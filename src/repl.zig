@@ -14,19 +14,16 @@ const prompt = ">> ";
 const buffer_size = 256;
 
 pub fn start(allocator: Allocator) !void {
-
-
     var buffer: [buffer_size]u8 = undefined;
 
     var env = try Environment.init(allocator);
     defer env.deinit();
 
     while (true) {
-
         try stdout.print("{s}", .{prompt});
 
-        const line = try stdin.readUntilDelimiter(&buffer,'\n'); // TODO: handle error better
-        
+        const line = try stdin.readUntilDelimiter(&buffer, '\n'); // TODO: handle error better
+
         if (isExit(line)) break;
 
         var lex = Lexer.init(allocator, line);
@@ -49,7 +46,6 @@ pub fn start(allocator: Allocator) !void {
         //
         const maybe_evaluated = try evaluator.Eval(&program, &env);
 
-
         if (maybe_evaluated) |evaluated| {
             defer evaluated.deinit();
             const eval_str = try evaluated.inspect(allocator);
@@ -62,14 +58,10 @@ pub fn start(allocator: Allocator) !void {
         //     std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.tokenLiteral()});
         // }
     }
-
 }
 
-
 fn isExit(line: []const u8) bool {
-
     const exit = "exit";
     // std.debug.print("{s}", .{line});
     return std.mem.eql(u8, line, exit);
-
 }

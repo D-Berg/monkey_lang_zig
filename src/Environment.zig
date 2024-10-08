@@ -13,55 +13,43 @@ outer: ?*Environment = null,
 rc: usize = 0,
 
 pub fn init(allocator: Allocator) Allocator.Error!Environment {
-    return Environment {
-        .store = try HashMap().init(allocator)
-    };
+    return Environment{ .store = try HashMap().init(allocator) };
 }
 
 pub fn deinit(env: *Environment) void {
     log.debug("trying to deinit env {*}\n", .{env});
 
     if (env.rc == 0 or env.isMainEnv()) {
-
         defer log.debug("deinited env {*}\n", .{env});
         const allocator = env.store.allocator;
         env.store.deinit();
-            
+
         if (env.outer) |outer| {
             outer.rc -= 1;
             if (!outer.isMainEnv()) outer.deinit(); // try to deinit outer
             allocator.destroy(env);
         }
-
     } else {
-        log.debug("didnt deinit env {*} since its referenced by {} others\n", .{env, env.rc});
+        log.debug("didnt deinit env {*} since its referenced by {} others\n", .{ env, env.rc });
     }
-
-
 }
 
 fn isMainEnv(env: *Environment) bool {
-
     if (env.outer == null) {
         return true;
     } else {
         return false;
-
     }
-
 }
 
 pub fn printEnv(env: *Environment) void {
-
     print("printing env {*}\n", .{env});
     env.store.printHM();
 
     if (env.outer) |outer| {
         print("printing outer\n\n", .{});
         outer.printEnv();
-    
     }
-
 }
 
 // pub fn clone(env: *Environment) Allocator.Error!*Environment {
@@ -85,17 +73,13 @@ pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
     const store = try HashMap().init(outer.store.allocator);
 
     outer.rc += 1;
-    return Environment {
-        .store = store,
-        .outer = outer
-    };
+    return Environment{ .store = store, .outer = outer };
 }
 
 pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!void {
-    
     switch (val.*) {
         .function => {
-            log.debug("putting fnc obj {*} in env {*}\n", .{val.function, env});
+            log.debug("putting fnc obj {*} in env {*}\n", .{ val.function, env });
             val.function.rc += 1;
         },
         .string => {
@@ -103,7 +87,7 @@ pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!voi
         },
 
         // TODO fill out more
-        else => {}
+        else => {},
     }
 
     try env.store.put(key, val.*);
@@ -111,24 +95,23 @@ pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!voi
 
 }
 
-/// First checks its own store, if that returns null, 
+/// First checks its own store, if that returns null,
 /// it checks outer.
 /// TODO: remove clone docs
 pub fn get(env: *Environment, key: []const u8) ?Object {
 
-    // p.146 
+    // p.146
     // print("Retreiving {s} from env: {*}\n", .{key, env});
     var maybe_obj_ptr = env.store.get(key);
 
-    if (maybe_obj_ptr) |obj_ptr|  {
-        
+    if (maybe_obj_ptr) |obj_ptr| {
+
         // print("return clone of env obj\n", .{});
         // print("found {s} in env {*}\n", .{key, env});
         return obj_ptr;
-
     } else { // if maybe_obj == null
         if (env.outer) |outer| { // if env.out != null
-        
+
             // print("didnt find {s} in enclosed, checking outer env\n", .{key});
             maybe_obj_ptr = outer.get(key);
 
@@ -136,9 +119,8 @@ pub fn get(env: *Environment, key: []const u8) ?Object {
                 // print("return clone of outer env obj\n", .{});
                 return obj_ptr;
             }
-        } 
-        
+        }
+
         return null;
     }
-
 }
