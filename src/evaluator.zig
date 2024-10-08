@@ -1113,6 +1113,7 @@ test "String concat" {
 
 }
 
+// TODO: Implemtent test for str - str p.158
 
 // TODO add tests for 
 //    >> let add = fn(a, b) { a + b };
