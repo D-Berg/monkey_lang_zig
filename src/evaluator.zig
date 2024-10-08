@@ -10,11 +10,12 @@ const object = @import("object.zig");
 const ast = @import("ast.zig");
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
+const Environment = @import("Environment.zig");
+const BuiltIn = @import("BuiltIn.zig");
 
 const Object = object.Object;
 const FuncionObject = object.FunctionObject;
 const StringObject = object.StringObject;
-const Environment = @import("Environment.zig");
 
 
 const Statement = ast.Statement;
@@ -40,8 +41,17 @@ const EvalError = error {
     FailedEvalLet,
     FailedEvalString,
     EvalIdentNonExistent,
-} || Allocator.Error || std.fmt.BufPrintError;
+} || Allocator.Error || std.fmt.BufPrintError || BuiltIn.BuiltInError;
 
+fn getBuiltInFn(str: []const u8) ?BuiltIn.Kind {
+
+    if (std.mem.eql(u8, "len", str)) {
+        return .len;
+    } 
+    
+    return null;
+
+}
 
 /// Returns an Object that needs to be deinitiated or null
 pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
@@ -229,6 +239,12 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
     if (maybe_val) |val| {
         // print("Retreived {s} = {}\n", .{ident_name, val});
         return val;
+    } 
+
+    if (getBuiltInFn(ident_name)) |built_in| {
+        return Object {
+            .built_in = built_in
+        };
     } else {
         // print("didnt find: {s}\n", .{ident_name});
         // TODO: create a eval error
@@ -278,6 +294,7 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
 fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object {
 
     const maybe_func = try EvalExpr(ce.function, env);
+
     const func = maybe_func.?;
     defer func.deinit(); // only deinit if fnc dont have a owner
 
@@ -299,8 +316,17 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
         try args.append((try EvalExpr(arg, env)).?);
     }
 
+    switch (func) {
+        .built_in => return try BuiltIn.len(&args),
+        .function => |func_obj| return try applyFunction(func_obj, &args),
+        else => {
 
-    return try applyFunction(func.function, &args);
+            @panic("call failed because func is not a function");
+
+        }
+
+    }
+
 }
 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {

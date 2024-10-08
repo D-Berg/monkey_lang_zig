@@ -2,6 +2,9 @@ const std = @import("std");
 const HashMap = @import("hash_map.zig").HashMap;
 const ast = @import("ast.zig");
 const Environment = @import("Environment.zig");
+const BuiltIn = @import("BuiltIn.zig");
+
+
 const ArrayList = std.ArrayList;
 const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
@@ -10,6 +13,7 @@ const log = std.log;
 
 const Allocator = std.mem.Allocator;
 
+
 pub const Object = union(enum) {
     integer: i32,
     boolean: bool,
@@ -17,6 +21,7 @@ pub const Object = union(enum) {
     return_val_obj: ReturnObject,
     function: *FunctionObject,
     string: *StringObject,
+    built_in: BuiltIn.Kind,
 
     pub fn deinit(obj: *const Object) void {
 
@@ -53,7 +58,7 @@ pub const Object = union(enum) {
     
     pub fn clone(obj: *const Object) !Object {
         switch (obj.*) {
-            .integer, .boolean, .nullable => {
+            .integer, .boolean, .nullable, .built_in=> {
                 return obj.*;
             }, 
             .function => {
@@ -245,3 +250,4 @@ pub const StringObject = struct {
 };
 
 
+//
