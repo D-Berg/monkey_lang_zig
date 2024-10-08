@@ -604,6 +604,8 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
 
             inline else => |op| {
 
+                // TODO: make a err for monkey
+
                 var buffer: [1024]u8 = undefined; // Stack allocated
                 const panic_str = try std.fmt.bufPrint(&buffer, "Operand {} is unsuppered for strings", .{op});
 
