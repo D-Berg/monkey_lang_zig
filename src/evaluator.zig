@@ -544,8 +544,8 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
         switch (operator) {
 
             .Plus => {
-                const left_len = left.string.value.len;
-                const right_len = right.string.value.len;
+                const left_len = left_str.len;
+                const right_len = right_str.len;
                 const new_len = left_len + right_len;
                 log.debug("{} + {} = {}", .{left_len, right_len, new_len});
 
@@ -555,7 +555,7 @@ fn EvalInfixExpr( ie: *const InfixExpression, env: *Environment) EvalError!objec
                 errdefer allocator.free(str);
 
                 @memcpy(str[0..left_len], left_str);
-                @memcpy(str[left_len..new_len], left_str);
+                @memcpy(str[left_len..new_len], right_str);
 
                 const str_obj = try allocator.create(StringObject);
 
