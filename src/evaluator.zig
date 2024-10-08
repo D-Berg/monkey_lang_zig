@@ -222,7 +222,7 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
     var tok = ident.token;
     const ident_name = tok.tokenLiteral();
 
-    const maybe_val = env.get(ident_name); // gets a clone of object
+    const maybe_val = env.get(ident_name); 
 
     // print("getting ident name: {s} = {?}\n", .{ident_name, maybe_val});
 

@@ -111,9 +111,9 @@ pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!voi
 
 }
 
-/// Returns cloned object in env or null.
 /// First checks its own store, if that returns null, 
 /// it checks outer.
+/// TODO: remove clone docs
 pub fn get(env: *Environment, key: []const u8) ?Object {
 
     // p.146 
