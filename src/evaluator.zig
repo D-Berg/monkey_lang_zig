@@ -46,13 +46,6 @@ const EvalError = error{
     EvalUnsupportedIndexType
 } || Allocator.Error || std.fmt.BufPrintError || BuiltIn.BuiltInError;
 
-fn getBuiltInFn(str: []const u8) ?BuiltIn.Kind {
-    if (std.mem.eql(u8, "len", str)) {
-        return .len;
-    }
-
-    return null;
-}
 
 /// Returns an Object that needs to be deinitiated or null
 pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
@@ -241,7 +234,7 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
         return val;
     }
 
-    if (getBuiltInFn(ident_name)) |built_in| {
+    if (BuiltIn.getBuiltInFn(ident_name)) |built_in| {
         return Object{ .built_in = built_in };
     } else {
         // print("didnt find: {s}\n", .{ident_name});
@@ -312,7 +305,9 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
     }
 
     switch (func) {
-        .built_in => return try BuiltIn.len(&args),
+        .built_in => |kind| {
+            return try BuiltIn.Execute(kind, &args);
+        },
         .function => |func_obj| return try applyFunction(func_obj, &args),
         else => {
             @panic("call failed because func is not a function");
