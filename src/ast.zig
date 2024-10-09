@@ -656,10 +656,38 @@ pub const ArrayLiteralExpression = struct {
     }
 
     pub fn String(array_lit: *const ArrayLiteralExpression) Allocator.Error![]const u8 {
+        const allocator = array_lit.token.allocator;
 
-        _ = array_lit;
-        @panic("String for array_literal_expr not implemented");
+        var str_len: usize = 0;
+        var elem_str = try allocator.alloc(u8, 0);
+        defer allocator.free(elem_str);
 
+        const n_elem = array_lit.elements.items.len;
+
+        for (array_lit.elements.items, 0..) |elem_expr, i| {
+
+            const e_str = try elem_expr.String();
+            defer allocator.free(e_str);
+            
+            if (i == n_elem - 1) {
+                elem_str = try allocator.realloc(elem_str, str_len + e_str.len);
+                @memcpy(elem_str[(str_len)..(str_len + e_str.len)], e_str);
+                str_len += e_str.len;
+
+            } else {
+                
+                elem_str = try allocator.realloc(elem_str, str_len + e_str.len + 2);
+                elem_str[str_len + e_str.len] = ',';
+                elem_str[str_len + e_str.len + 1] = ' ';
+
+                @memcpy(elem_str[(str_len)..(str_len + e_str.len)], e_str);
+                str_len += e_str.len + 2;
+
+            }
+
+        }
+
+        return try std.fmt.allocPrint(allocator, "[{s}]", .{ elem_str });
     }
 };
 
@@ -710,6 +738,7 @@ pub const Program = struct {
         program.statements.deinit();
     }
 
+    /// String need to be deallocated by caller
     pub fn String(program: *Program) Allocator.Error![]const u8 {
         var str_len: usize = 0;
         var prog_str = try program.allocator.alloc(u8, 0);
