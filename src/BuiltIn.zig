@@ -22,6 +22,12 @@ pub fn len(args: *const ArrayList(Object)) BuiltInError!Object {
             };
         },
 
+        .array => |array| {
+            return Object{
+                .integer = @intCast(array.elements.items.len),
+            };
+        },
+
         else => return error.UnsupportedObjectType,
     }
 }
