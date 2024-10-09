@@ -76,14 +76,19 @@ pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
     return Environment{ .store = store, .outer = outer };
 }
 
+/// Increases some objects ref count and store them in env (hash_map)
 pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!void {
     switch (val.*) {
+        // TODO: use captures
         .function => {
             log.debug("putting fnc obj {*} in env {*}\n", .{ val.function, env });
             val.function.rc += 1;
         },
         .string => {
             val.string.rc += 1;
+        },
+        .array => {
+            val.array.rc += 1;
         },
 
         // TODO fill out more

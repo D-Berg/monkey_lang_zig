@@ -20,6 +20,7 @@ pub const Object = union(enum) {
     function: *FunctionObject,
     string: *StringObject,
     built_in: BuiltIn.Kind,
+    array: *ArrayObject,
 
     pub fn deinit(obj: *const Object) void {
 
@@ -47,6 +48,13 @@ pub const Object = union(enum) {
                 }
             },
 
+            .array => |array| {
+                if (array.rc == 0) {
+                    array.deinit();
+                    array.allocator.destroy(array);
+                }
+            },
+
             else => {},
         }
     }
@@ -66,7 +74,7 @@ pub const Object = union(enum) {
     }
 
     /// return string of value, str need to be deallocated by caller
-    pub fn inspect(obj: *const Object, allocator: Allocator) ![]const u8 {
+    pub fn inspect(obj: *const Object, allocator: Allocator) Allocator.Error![]const u8 {
         switch (obj.*) {
             .nullable => {
                 const str = try std.fmt.allocPrint(allocator, "null", .{});
@@ -75,6 +83,40 @@ pub const Object = union(enum) {
             .string => |so| {
                 const str = try std.fmt.allocPrint(allocator, "{s}", .{so.value});
                 return str;
+            },
+            .array => |array| {
+                
+                var array_str = try allocator.alloc(u8, 0);
+                defer allocator.free(array_str);
+            
+                var str_len: usize = 0;
+
+                const n_elems = array.elements.items.len;
+
+                for (array.elements.items, 0..) |elem, i| {
+
+                    const elem_str = try elem.inspect(allocator);
+                    defer allocator.free(elem_str);
+
+                    if (i != n_elems - 1) {
+                        array_str = try allocator.realloc(array_str, str_len + elem_str.len + 2);
+
+                        @memcpy(array_str[str_len..(str_len + elem_str.len)], elem_str);
+                        
+                        array_str[str_len + elem_str.len] = ',';
+                        array_str[str_len + elem_str.len + 1] = ' ';
+
+                        str_len += elem_str.len + 2;
+                    } else {
+                        array_str = try allocator.realloc(array_str, str_len + elem_str.len);
+                        @memcpy(array_str[str_len..(str_len + elem_str.len)], elem_str);
+                    }
+
+                }
+                
+                const str = try std.fmt.allocPrint(allocator, "[{s}]", .{ array_str });
+                return str;
+
             },
             inline else => |case| {
                 const str = try std.fmt.allocPrint(allocator, "{}", .{case});
@@ -219,6 +261,29 @@ pub const StringObject = struct {
         _ = so;
         @panic("Clone for StringObject not implemented");
     }
+};
+
+pub const ArrayObject = struct {
+    allocator: Allocator,
+    elements: ArrayList(Object),
+    rc: usize = 0,
+
+    pub fn deinit(ao: *const ArrayObject) void {
+        if (ao.rc == 0) {
+            for (ao.elements.items) |elem| {
+                elem.deinit();
+            }
+            ao.elements.deinit();
+        }
+
+    }
+
+    pub fn clone(ao: *const ArrayObject) Allocator.Error!Object {
+        _ = ao;
+        @panic("clone for ArrayObject not implemented");
+
+    }
+
 };
 
 //

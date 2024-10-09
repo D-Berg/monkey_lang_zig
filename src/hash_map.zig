@@ -43,6 +43,12 @@ pub fn HashMap() type { // TODO: Remove generic
                         str_obj.allocator.destroy(str_obj);
                     },
 
+                    .array => |array| {
+                        array.rc -= 1;
+                        array.deinit();
+                        array.allocator.destroy(array);
+                    },
+
                     else => {
                         entry.val.deinit();
                     },

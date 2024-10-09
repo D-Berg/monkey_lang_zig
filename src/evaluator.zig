@@ -16,6 +16,7 @@ const BuiltIn = @import("BuiltIn.zig");
 const Object = object.Object;
 const FuncionObject = object.FunctionObject;
 const StringObject = object.StringObject;
+const ArrayObject = object.ArrayObject;
 
 const Statement = ast.Statement;
 const LetStatement = ast.LetStatement;
@@ -28,6 +29,7 @@ const InfixExpression = ast.InfixExpression;
 const FnLiteralExpression = ast.FnLiteralExpression;
 const CallExpression = ast.CallExpression;
 const StringExpression = ast.StringExpression;
+const ArrayLiteralExpression = ast.ArrayLiteralExpression;
 
 const Program = ast.Program;
 const ArrayList = std.ArrayList;
@@ -195,8 +197,18 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
             return Object{ .string = str_obj_ptr };
         },
         
-        .array_literal_expr => {
-            @panic("eval array_literal_expr not implemented yet");
+        .array_literal_expr => |*ale| {
+
+            const array = try EvalArrayExpr(ale, env);
+
+            const array_ptr = try env.store.allocator.create(ArrayObject);
+            array_ptr.* = array;
+
+            return Object{
+                .array = array_ptr
+            };
+
+
         },
 
         .index_expr => {
@@ -571,6 +583,7 @@ fn evalBlockStatement(blck_stmt: *const ast.BlockStatement, env: *Environment) E
     return maybe_result;
 }
 
+// TODO make uppercase
 fn evalIfExpression(if_epxr: *const ast.IfExpression, env: *Environment) EvalError!?object.Object {
     const condition = (try EvalExpr(if_epxr.condition, env)).?;
 
@@ -583,6 +596,27 @@ fn evalIfExpression(if_epxr: *const ast.IfExpression, env: *Environment) EvalErr
             return object.Object{ .nullable = {} };
         }
     }
+}
+
+fn EvalArrayExpr(array_expr: *const ArrayLiteralExpression, env: *Environment) EvalError!ArrayObject {
+
+    const allocator = env.store.allocator;
+
+    var elements = ArrayList(Object).init(allocator);
+
+    for (array_expr.elements.items) |*elem| {
+
+        const expr = try EvalExpr(elem, env);
+        try elements.append(expr.?); // cant be null because why put let inside an array, right?!?!
+
+    }
+
+    return ArrayObject {
+        .allocator = allocator,
+        .elements = elements,
+    };
+
+
 }
 
 fn isTruthy(obj: *const object.Object) bool {
@@ -1074,6 +1108,30 @@ test "String concat" {
         defer allocator.free(eval_str);
 
         try expectEqualStrings("Hello World!", eval_str);
+    } else {
+        return error.FailedEvalString;
+    }
+}
+
+test "Array Lit" {
+
+    const allocator = std.testing.allocator;
+
+    const input = "[1, 2 * 2, 3 + 3]";
+
+    var env = try Environment.init(allocator);
+    defer env.deinit();
+
+    const maybe_eval = try testEval(&env, input);
+
+    if (maybe_eval) |evaluated| {
+        defer evaluated.deinit();
+        try expect(evaluated == .array);
+
+        const eval_str = try evaluated.inspect(allocator);
+        defer allocator.free(eval_str);
+
+        try expectEqualStrings("[1, 4, 6]", eval_str);
     } else {
         return error.FailedEvalString;
     }
