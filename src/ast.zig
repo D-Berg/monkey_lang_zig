@@ -664,6 +664,7 @@ pub const ArrayLiteralExpression = struct {
 
         const n_elem = array_lit.elements.items.len;
 
+        // Beutiful string handling <3
         for (array_lit.elements.items, 0..) |elem_expr, i| {
 
             const e_str = try elem_expr.String();
@@ -716,6 +717,7 @@ pub const Identifier = struct {
     }
 };
 
+// TODO: Move to its own file
 pub const Program = struct {
     allocator: Allocator,
     statements: ArrayList(Statement), //
