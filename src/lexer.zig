@@ -95,12 +95,8 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 return try Token.init(a, Token.Kind.Assign, &chars);
             }
         },
-        '+' => {
-            return try Token.init(a, Token.Kind.Plus, &chars);
-        },
-        '-' => {
-            return try Token.init(a, Token.Kind.Minus, &chars);
-        },
+        '+' => return try Token.init(a, Token.Kind.Plus, &chars),
+        '-' => return try Token.init(a, Token.Kind.Minus, &chars),
         '!' => {
             if (l.peekChar() == '=') {
                 const ch = l.ch;
@@ -111,36 +107,18 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 return try Token.init(a, Token.Kind.Bang, &chars);
             }
         },
-        '/' => {
-            return try Token.init(a, Token.Kind.Slash, &chars);
-        },
-        '*' => {
-            return try Token.init(a, Token.Kind.Asterisk, &chars);
-        },
-        '<' => {
-            return try Token.init(a, Token.Kind.Lt, &chars);
-        },
-        '>' => {
-            return try Token.init(a, Token.Kind.Gt, &chars);
-        },
-        ';' => {
-            return try Token.init(a, Token.Kind.Semicolon, &chars);
-        },
-        ',' => {
-            return try Token.init(a, Token.Kind.Comma, &chars);
-        },
-        '(' => {
-            return try Token.init(a, Token.Kind.Lparen, &chars);
-        },
-        ')' => {
-            return try Token.init(a, Token.Kind.Rparen, &chars);
-        },
-        '{' => {
-            return try Token.init(a, Token.Kind.Lbrace, &chars);
-        },
-        '}' => {
-            return try Token.init(a, Token.Kind.Rbrace, &chars);
-        },
+        '/' => return try Token.init(a, .Slash, &chars),
+        '*' => return try Token.init(a, .Asterisk, &chars),
+        '<' => return try Token.init(a, .Lt, &chars),
+        '>' => return try Token.init(a, .Gt, &chars),
+        ';' => return try Token.init(a, .Semicolon, &chars),
+        ',' => return try Token.init(a, .Comma, &chars),
+        '(' => return try Token.init(a, .Lparen, &chars),
+        ')' => return try Token.init(a, .Rparen, &chars),
+        '{' => return try Token.init(a, .Lbrace, &chars),
+        '}' => return try Token.init(a, .Rbrace, &chars),
+        '[' => return try Token.init(a, .Lbracket, &chars),
+        ']' => return try Token.init(a, .Rbracket, &chars),
         '"' => {
             const position = l.position + 1;
 
