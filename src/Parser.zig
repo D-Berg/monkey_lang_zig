@@ -1105,6 +1105,38 @@ test "String Expr" {
 
     try expectEqualStrings(answer, expr.string_expression.value);
 }
+
+test "Array Literal" {
+
+    const allocator = std.testing.allocator;
+    const input = "[1, 2 * 2, 3 + 4]";
+
+
+    var lexer = Lexer.init(allocator, input);
+
+    var parser = try Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    const n_stmts = program.statements.items.len;
+
+    try expect(n_stmts == 1);
+
+    const stmt = program.statements.items[0];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr = stmt.expr_stmt.expression.*;
+
+    try expect(expr == .array_literal_expr);
+
+    const n_elements = expr.array_literal_expr.elements.items.len;
+
+    try expect(n_elements == 3);
+
+}
 //
 // test "Parsing Errors" {
 //
