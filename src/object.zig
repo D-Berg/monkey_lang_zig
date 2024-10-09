@@ -258,8 +258,22 @@ pub const StringObject = struct {
     }
 
     pub fn clone(so: *const StringObject) Allocator.Error!Object {
-        _ = so;
-        @panic("Clone for StringObject not implemented");
+
+        const new_val = try so.allocator.alloc(u8, so.value.len);
+        @memcpy(new_val, so.value);
+
+        const so_ptr = try so.allocator.create(StringObject);
+
+        so_ptr.* = StringObject{
+            .allocator = so.allocator,
+            .value = new_val,
+        };
+
+        return Object{
+            .string = so_ptr
+
+        };
+
     }
 };
 
