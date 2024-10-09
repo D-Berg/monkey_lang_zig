@@ -1182,6 +1182,41 @@ test "Array Literal" {
     try expectEqualStrings("[1, (2 * 2), (3 + 4)]", prog_str);
 
 }
+
+test "Index Expr" {
+        
+    const allocator = std.testing.allocator;
+
+    const input = "myArray[1 + 1]";
+
+    var lexer = Lexer.init(allocator, input);
+
+    var parser = try Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    const n_stmts = program.statements.items.len;
+
+    try expect(n_stmts == 1);
+
+    const stmt = program.statements.items[0];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr = stmt.expr_stmt.expression.*;
+
+    try expect(expr == .index_expr);
+    
+    const left = expr.index_expr.left.*;
+    const right = expr.index_expr.right.*;
+
+    try expect(left == .identifier);
+
+    try expect(right == .infix_expression);
+
+}
 //
 // test "Parsing Errors" {
 //
