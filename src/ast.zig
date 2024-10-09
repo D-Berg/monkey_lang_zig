@@ -693,7 +693,7 @@ pub const ArrayLiteralExpression = struct {
     }
 };
 
-const IndexExpression = struct {
+pub const IndexExpression = struct {
     allocator: Allocator,
     token: Token,
     left: *Expression,

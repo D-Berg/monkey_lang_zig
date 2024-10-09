@@ -30,6 +30,7 @@ const FnLiteralExpression = ast.FnLiteralExpression;
 const CallExpression = ast.CallExpression;
 const StringExpression = ast.StringExpression;
 const ArrayLiteralExpression = ast.ArrayLiteralExpression;
+const IndexExpression = ast.IndexExpression;
 
 const Program = ast.Program;
 const ArrayList = std.ArrayList;
@@ -42,6 +43,7 @@ const EvalError = error{
     FailedEvalLet,
     FailedEvalString,
     EvalIdentNonExistent,
+    EvalUnsupportedIndexType
 } || Allocator.Error || std.fmt.BufPrintError || BuiltIn.BuiltInError;
 
 fn getBuiltInFn(str: []const u8) ?BuiltIn.Kind {
@@ -211,9 +213,13 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
         },
 
-        .index_expr => {
-            @panic("eval for index_expr not implemented yet");
+        .index_expr => |*ie| {
+
+            return try EvalIndexExpr(ie, env);
+
+            
         }
+
 
 
     }
@@ -616,6 +622,30 @@ fn EvalArrayExpr(array_expr: *const ArrayLiteralExpression, env: *Environment) E
         .elements = elements,
     };
 
+
+}
+
+fn EvalIndexExpr(ie: *const IndexExpression, env: *Environment) EvalError!Object {
+
+    const left_obj = (try EvalExpr(ie.left, env)).?;
+    defer left_obj.deinit();
+
+    const index_obj = (try EvalExpr(ie.index, env)).?;
+    defer index_obj.deinit();
+
+    if (index_obj == .integer and left_obj == .array) {
+
+        const idx = index_obj.integer;
+        const max = left_obj.array.elements.items.len;
+
+        if (idx < 0 or idx > max) return Object{ .nullable = {} };
+        
+        const idx_usize: usize = @intCast(idx);
+        return left_obj.array.elements.items[idx_usize];
+
+    } else {
+        return error.EvalUnsupportedIndexType;
+    }
 
 }
 
@@ -1135,6 +1165,45 @@ test "Array Lit" {
     } else {
         return error.FailedEvalString;
     }
+}
+
+test "Array Index" {
+
+    const allocator = std.testing.allocator;
+
+    const inputs = [_][]const u8{
+        "[1, 2, 3][0]",
+        "[1, 2 * 2, 3 + 3][1]",
+        "let i = 0; [1][i];",
+        "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]"
+    };
+
+    const answers = [_]i32{
+        1,
+        4, 
+        1,
+        2
+    };
+    
+    for (inputs, answers) |inp, ans| {
+
+        var env = try Environment.init(allocator);
+        defer env.deinit();
+
+        const maybe_eval = try testEval(&env, inp);
+
+        if (maybe_eval) |evaluated| {
+            defer evaluated.deinit();
+
+            try expect(evaluated == .integer);
+            
+            try expect(evaluated.integer == ans);
+
+        } else {
+            return error.FailedEvalString;
+        }
+    }
+
 }
 
 // TODO: Implemtent test for str - str p.158
