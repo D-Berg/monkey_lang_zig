@@ -90,21 +90,21 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 const ch = l.ch;
                 l.readChar();
                 const eq_str = [2]u8{ ch, l.ch };
-                return try Token.init(a, Token.Kind.Eq, &eq_str);
+                return try Token.init(a, .Eq, &eq_str);
             } else {
-                return try Token.init(a, Token.Kind.Assign, &chars);
+                return try Token.init(a, .Assign, &chars);
             }
         },
-        '+' => return try Token.init(a, Token.Kind.Plus, &chars),
-        '-' => return try Token.init(a, Token.Kind.Minus, &chars),
+        '+' => return try Token.init(a, .Plus, &chars),
+        '-' => return try Token.init(a, .Minus, &chars),
         '!' => {
             if (l.peekChar() == '=') {
                 const ch = l.ch;
                 l.readChar();
                 const neq_str = [2]u8{ ch, l.ch };
-                return try Token.init(a, Token.Kind.Neq, &neq_str);
+                return try Token.init(a, .Neq, &neq_str);
             } else {
-                return try Token.init(a, Token.Kind.Bang, &chars);
+                return try Token.init(a, .Bang, &chars);
             }
         },
         '/' => return try Token.init(a, .Slash, &chars),
@@ -135,7 +135,7 @@ pub fn NextToken(l: *Lexer) LexError!Token {
             return try Token.init(a, .String, string);
         },
         0 => {
-            return try Token.init(a, Token.Kind.Eof, "");
+            return try Token.init(a, .Eof, "");
         },
         else => {
             if (isLetter(l.ch)) {
@@ -157,9 +157,9 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 const end = l.position;
 
                 const number_str = l.input[start..end];
-                return try Token.init(a, Token.Kind.Int, number_str);
+                return try Token.init(a, .Int, number_str);
             } else {
-                return try Token.init(a, Token.Kind.Illegal, &chars);
+                return try Token.init(a, .Illegal, &chars);
             }
         },
     }
@@ -306,7 +306,7 @@ test "Create Tokens" {
         try Token.init(allocator, .Semicolon, ";"),
 
 
-        try Token.init(allocator, Token.Kind.Eof, ""),
+        try Token.init(allocator, .Eof, ""),
     };
 
     defer {
