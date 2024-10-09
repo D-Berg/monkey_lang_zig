@@ -47,6 +47,7 @@ const Precedence = enum {
     Product,
     Prefix,
     Call,
+    Index,
     
     fn get(tk: Token.Kind) ?Precedence {
 
@@ -60,6 +61,7 @@ const Precedence = enum {
             .Slash => Precedence.Product,
             .Asterisk => Precedence.Product,
             .Lparen => Precedence.Call,
+            .Lbracket => Precedence.Index,
             else => .Lowest,
         };
 
@@ -245,6 +247,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
         const infix = switch (peek_kind) {
             .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => try parser.parseInfixExpression(left_expr),
             .Lparen => try parser.parseCallExpression(left_expr),
+            .Lbracket => try parser.parseIndexExpression(left_expr),
             else => ParseError.NoPrefixFunction,
         };
 
@@ -575,6 +578,33 @@ fn parseArrayLiteral(parser: *Parser) ParseError!Expression {
             .elements = elements
         }
     };
+}
+
+fn parseIndexExpression(parser: *Parser, left: Expression) ParseError!Expression {
+
+    const curr_tok = try parser.current_token.clone();
+    errdefer curr_tok.deinit();
+
+    parser.nextToken();
+    
+    const index_ptr = try parser.allocator.create(Expression);
+    errdefer parser.allocator.destroy(index_ptr);
+    index_ptr.* = try parser.parseExpression(.Lowest);
+
+    if (!parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
+
+    const left_ptr = try parser.allocator.create(Expression);
+    left_ptr.* = left;
+
+    return Expression {
+        .index_expr = .{
+            .allocator = parser.allocator,
+            .token = curr_tok,
+            .left = left_ptr,
+            .index = index_ptr
+        }
+    };
+
 }
 
 //
@@ -972,6 +1002,8 @@ test "Operator Precedence" {
         "a + add(b * c) + d",
         "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
         "add(a + b + c * d / f + g)",
+        "a * [1, 2, 3, 4][b * c] * d",
+        "add(a * b[2], b[1], 2 * [1, 2][1])",
     };
 
     const answer = [_][]const u8{
@@ -996,6 +1028,8 @@ test "Operator Precedence" {
         "((a + add((b * c))) + d)",
         "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
         "add((((a + b) + ((c * d) / f)) + g))",
+        "((a * ([1, 2, 3, 4][(b * c)])) * d)",
+        "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
     };
 
     for (0..input.len) |i| {
@@ -1210,11 +1244,11 @@ test "Index Expr" {
     try expect(expr == .index_expr);
     
     const left = expr.index_expr.left.*;
-    const right = expr.index_expr.right.*;
+    const index = expr.index_expr.index.*;
 
     try expect(left == .identifier);
 
-    try expect(right == .infix_expression);
+    try expect(index == .infix_expression);
 
 }
 //

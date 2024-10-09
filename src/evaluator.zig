@@ -197,7 +197,13 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
         
         .array_literal_expr => {
             @panic("eval array_literal_expr not implemented yet");
+        },
+
+        .index_expr => {
+            @panic("eval for index_expr not implemented yet");
         }
+
+
     }
 }
 

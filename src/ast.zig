@@ -697,7 +697,7 @@ const IndexExpression = struct {
     allocator: Allocator,
     token: Token,
     left: *Expression,
-    right: *Expression,
+    index: *Expression,
 
     pub fn deinit(ie: *const IndexExpression) void {
         ie.token.deinit();
@@ -705,8 +705,8 @@ const IndexExpression = struct {
         ie.left.deinit();
         ie.allocator.destroy(ie.left);
         
-        ie.right.deinit();
-        ie.allocator.destroy(ie.right);
+        ie.index.deinit();
+        ie.allocator.destroy(ie.index);
     }
 
     pub fn clone(ie: *const IndexExpression) Allocator.Error!Expression {
@@ -722,10 +722,10 @@ const IndexExpression = struct {
         const left_str = try ie.left.String();
         defer ie.allocator.free(left_str);
 
-        const right_str = try ie.right.String();
-        defer ie.allocator.free(right_str);
+        const index_str = try ie.index.String();
+        defer ie.allocator.free(index_str);
 
-        return try std.fmt.allocPrint(ie.allocator, "({s}[{s}])", .{left_str, right_str});
+        return try std.fmt.allocPrint(ie.allocator, "({s}[{s}])", .{left_str, index_str});
     }
 
 };
