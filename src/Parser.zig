@@ -33,6 +33,7 @@ const ParseError = error {
     ExpectedNextTokenLbrace,
     ExpectedNextTokenRparen,
     ExpectedNextTokenLparen,
+    ExpectedNextTokenRbraket, 
     FailedToConvertStringToInt,
     NoPrefixFunction,
     NoInfixFunction
@@ -78,9 +79,9 @@ pub fn init(lexer: *Lexer, allocator: Allocator) !Parser {
 
 pub fn deinit(parser: Parser) void {
 
-    // for (parser.errors.items) |parse_err| {
-    //     parser.allocator.free(parse_err);
-    // }
+    for (parser.errors.items) |parse_err| {
+        parser.allocator.free(parse_err);
+    }
 
     parser.errors.deinit();
 
@@ -103,6 +104,7 @@ fn getNodeIdx(parser: *Parser) usize {
     }
 }
 
+/// Can panic
 fn nextToken(parser: *Parser) void {
 
     // print("current token: {}\n", .{parser.current_token.kind});
@@ -112,12 +114,14 @@ fn nextToken(parser: *Parser) void {
     parser.current_token = parser.peek_token.clone() catch {
         @panic("failed to clone peek token");
     };
+    errdefer parser.current_token.deinit();
 
     parser.peek_token.deinit();
 
     parser.peek_token = parser.lexer.NextToken() catch {
         @panic("Failed to get NextToken");
     };
+    errdefer parser.peek_token.deinit();
 }
 
 fn parseStatement(parser: *Parser) ParseError!Statement {
@@ -223,6 +227,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
         .If => parser.parseIfExpression(),
         .Function => try parser.parseFunctionLiteral(),
         .String => parser.parseStringLiteral(),
+        .Lbracket => parser.parseArrayLiteral(),
         inline else => |kind| {
             print("No prefix func for {}\n", .{kind});
             return ParseError.NoPrefixFunction;
@@ -535,6 +540,41 @@ fn parseStringLiteral(parser: *Parser) ParseError!Expression {
     const tok = try parser.current_token.clone();
 
     return Expression{ .string_expression = .{ .token = tok, .value = tok.literal } };
+}
+
+fn parseArrayLiteral(parser: *Parser) ParseError!Expression {
+
+    const curr_tok = try parser.current_token.clone();
+    errdefer curr_tok.deinit();
+
+    var elements = ArrayList(Expression).init(parser.allocator);
+    errdefer {
+        for (elements.items) |expr| {
+            expr.deinit();
+        }
+        elements.deinit();
+    }
+
+    if (parser.peekTokenIs(.Rbracket)) return Expression{ .array_literal_expr = .{ .token = curr_tok, .elements = elements }};
+
+    parser.nextToken();
+
+    try elements.append(try parser.parseExpression(.Lowest));
+
+    while (parser.peekTokenIs(.Comma)) {
+        parser.nextToken();
+        parser.nextToken(); // TODO: FIx mem leak when forgetting to close array, i.e [1, 2, 3
+        try elements.append(try parser.parseExpression(.Lowest));
+    }
+
+    if (!parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
+
+    return Expression{
+        .array_literal_expr = .{
+            .token = curr_tok,
+            .elements = elements
+        }
+    };
 }
 
 //
@@ -1135,6 +1175,11 @@ test "Array Literal" {
     const n_elements = expr.array_literal_expr.elements.items.len;
 
     try expect(n_elements == 3);
+
+    const prog_str = try program.String();
+    defer allocator.free(prog_str);
+
+    try expectEqualStrings("[1, (2 * 2), (3 + 4)]", prog_str);
 
 }
 //
