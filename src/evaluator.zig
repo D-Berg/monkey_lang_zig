@@ -194,6 +194,10 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 
             return Object{ .string = str_obj_ptr };
         },
+        
+        .array_literal_expr => {
+            @panic("eval array_literal_expr not implemented yet");
+        }
     }
 }
 

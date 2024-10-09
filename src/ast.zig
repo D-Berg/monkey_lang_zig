@@ -7,8 +7,11 @@ const print = std.debug.print;
 const ExprIdx = usize;
 const StateIdx = usize;
 
-pub const Node = union(enum) { statement: Statement, expression: Expression };
+// TODO: remove
+// pub const Node = union(enum) { statement: Statement, expression: Expression };
 
+
+// Statements ---------------------------------------------------------------------
 pub const Statement = union(enum) {
     let_stmt: LetStatement,
     ret_stmt: ReturnStatement,
@@ -186,7 +189,7 @@ pub const BlockStatement = struct {
     }
 };
 
-// Expressions
+// Expressions ----------------------------------------------------------------------
 pub const Expression = union(enum) {
     identifier: Identifier,
     integer_literal: IntegerLiteralExpression,
@@ -197,6 +200,7 @@ pub const Expression = union(enum) {
     fn_literal: FnLiteralExpression, // deinit
     call_expression: CallExpression,
     string_expression: StringExpression,
+    array_literal_expr: ArrayLiteralExpression,
 
     pub fn deinit(expr: *const Expression) void {
         switch (expr.*) {
@@ -629,7 +633,38 @@ pub const StringExpression = struct {
 };
 
 
-// Identifier
+pub const ArrayLiteralExpression = struct {
+    token: Token, // [
+    elements: ArrayList(Expression),
+
+    pub fn deinit(array_lit: *const ArrayLiteralExpression) void {
+
+        array_lit.token.deinit();
+        
+        for (array_lit.elements.items) |expr| {
+            expr.deinit();
+        }
+
+        array_lit.elements.deinit();
+
+    }
+
+    pub fn clone(array_lit: *const ArrayLiteralExpression) Allocator.Error!Expression {
+        _ = array_lit;
+        @panic("clone for array_literal_expr not implemented");
+
+    }
+
+    pub fn String(array_lit: *const ArrayLiteralExpression) Allocator.Error![]const u8 {
+
+        _ = array_lit;
+        @panic("String for array_literal_expr not implemented");
+
+    }
+};
+
+
+// Identifier --------------------------------------------------------------
 pub const Identifier = struct {
     token: Token,
 
