@@ -201,6 +201,7 @@ pub const Expression = union(enum) {
     call_expression: CallExpression,
     string_expression: StringExpression,
     array_literal_expr: ArrayLiteralExpression,
+    index_expr: IndexExpression,
 
     pub fn deinit(expr: *const Expression) void {
         switch (expr.*) {
@@ -690,6 +691,43 @@ pub const ArrayLiteralExpression = struct {
 
         return try std.fmt.allocPrint(allocator, "[{s}]", .{ elem_str });
     }
+};
+
+const IndexExpression = struct {
+    allocator: Allocator,
+    token: Token,
+    left: *Expression,
+    right: *Expression,
+
+    pub fn deinit(ie: *const IndexExpression) void {
+        ie.token.deinit();
+
+        ie.left.deinit();
+        ie.allocator.destroy(ie.left);
+        
+        ie.right.deinit();
+        ie.allocator.destroy(ie.right);
+    }
+
+    pub fn clone(ie: *const IndexExpression) Allocator.Error!Expression {
+        _ = ie;
+
+        @panic("clone for IndexExpression not implemented");
+
+    }
+
+    /// Returns a String that needs to be deallocated by caller.
+    pub fn String(ie: *const IndexExpression) Allocator.Error![]const u8 {
+        
+        const left_str = try ie.left.String();
+        defer ie.allocator.free(left_str);
+
+        const right_str = try ie.right.String();
+        defer ie.allocator.free(right_str);
+
+        return try std.fmt.allocPrint(ie.allocator, "({s}[{s}])", .{left_str, right_str});
+    }
+
 };
 
 
