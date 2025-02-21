@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 // https://www.openmymind.net/Using-A-Custom-Test-Runner-In-Zig/
 
+// set log level for tests
 pub const std_options: std.Options = .{
     .log_level = .warn,
 };
