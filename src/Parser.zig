@@ -107,21 +107,23 @@ fn getNodeIdx(parser: *Parser) usize {
 }
 
 /// Can panic
-fn nextToken(parser: *Parser) void {
+fn nextToken(parser: *Parser) !void {
 
     // print("current token: {}\n", .{parser.current_token.kind});
 
     parser.current_token.deinit();
 
-    parser.current_token = parser.peek_token.clone() catch {
-        @panic("failed to clone peek token");
+    parser.current_token = parser.peek_token.clone() catch |err| {
+        log.err("{}", .{err});
+        return err;
     };
     errdefer parser.current_token.deinit();
 
     parser.peek_token.deinit();
 
-    parser.peek_token = parser.lexer.NextToken() catch {
-        @panic("Failed to get NextToken");
+    parser.peek_token = parser.lexer.NextToken() catch |err| {
+        log.err("{}", .{err});
+        return err;
     };
     errdefer parser.peek_token.deinit();
 }
@@ -140,23 +142,23 @@ fn parseLetStatement(parser: *Parser) ParseError!Statement {
     const token = try parser.current_token.clone();
     errdefer token.deinit();
 
-    if (!parser.expectPeek(Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
+    if (!try parser.expectPeek(Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
 
     const ident_token = try parser.current_token.clone();
     errdefer ident_token.deinit();
 
     const identifier = Identifier{ .token = ident_token };
 
-    if (!parser.expectPeek(Token.Kind.Assign)) return ParseError.ExpectedNextTokenAssign;
+    if (!try parser.expectPeek(Token.Kind.Assign)) return ParseError.ExpectedNextTokenAssign;
 
-    parser.nextToken();
+    try parser.nextToken();
 
     const expr = try parser.parseExpression(.Lowest);
     const expr_ptr = try parser.allocator.create(Expression);
     expr_ptr.* = expr;
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
-        parser.nextToken();
+        try parser.nextToken();
     }
 
     return Statement { 
@@ -175,7 +177,7 @@ fn parseReturnStatement(parser: *Parser) ParseError!Statement {
     const curr_tok = try parser.current_token.clone();
     errdefer curr_tok.deinit();
 
-    parser.nextToken();
+    try parser.nextToken();
 
     const expr = try parser.parseExpression(.Lowest);
 
@@ -183,7 +185,7 @@ fn parseReturnStatement(parser: *Parser) ParseError!Statement {
     expr_ptr.* = expr;
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
-        parser.nextToken();
+        try parser.nextToken();
     }
 
     return Statement { 
@@ -205,7 +207,7 @@ fn parseExpressionStatement(parser: *Parser) ParseError!Statement {
     expr_ptr.* = expr;
 
     if (parser.peekTokenIs(Token.Kind.Semicolon)) {
-        parser.nextToken();
+        try parser.nextToken();
     }
 
     return Statement { 
@@ -242,7 +244,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
 
         const peek_kind = parser.peek_token.kind;
 
-        parser.nextToken();
+        try parser.nextToken();
 
         const infix = switch (peek_kind) {
             .Plus, .Minus, .Asterisk, .Slash, .Gt, .Lt, .Eq, .Neq => try parser.parseInfixExpression(left_expr),
@@ -259,10 +261,8 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
     return left_expr;
 }
 
-fn parseIdentifier(parser: *Parser) Expression {
-    const token = parser.current_token.clone() catch {
-        @panic("Failed to clone ident token");
-    };
+fn parseIdentifier(parser: *Parser) !Expression {
+    const token = try parser.current_token.clone();
     return Expression {
         .identifier = .{
             .token = token,
@@ -316,7 +316,7 @@ fn parsePrefixExpression(parser: *Parser) ParseError!Expression {
     const tok = try parser.current_token.clone();
     errdefer tok.deinit();
 
-    parser.nextToken();
+    try parser.nextToken();
 
     const expr = try parser.parseExpression(.Prefix);
     const expr_ptr = try parser.allocator.create(Expression);
@@ -341,7 +341,7 @@ fn parseInfixExpression(parser: *Parser, left: Expression) ParseError!Expression
 
     const precedence = parser.curPrecedence();
 
-    parser.nextToken();
+    try parser.nextToken();
 
     const right = try parser.parseExpression(precedence);
 
@@ -365,11 +365,11 @@ fn parseInfixExpression(parser: *Parser, left: Expression) ParseError!Expression
 }
 
 fn parseGroupedExpression(parser: *Parser) ParseError!Expression {
-    parser.nextToken();
+    try parser.nextToken();
 
     const expr = try parser.parseExpression(.Lowest);
 
-    if (!parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(.Rparen)) {
         return ParseError.ExpectedNextTokenRparen;
     }
 
@@ -382,15 +382,15 @@ fn parseIfExpression(parser: *Parser) ParseError!Expression {
 
     // print("if curr_tot = {}\n", .{curr_tok.kind});
 
-    if (!parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
+    if (!try parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
 
-    parser.nextToken();
+    try parser.nextToken();
     const condition = try parser.parseExpression(.Lowest);
     // print("if condition = {}\n", .{condition});
 
-    if (!parser.expectPeek(.Rparen)) return ParseError.ExpectedNextTokenRparen;
+    if (!try parser.expectPeek(.Rparen)) return ParseError.ExpectedNextTokenRparen;
 
-    if (!parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
+    if (!try parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
     const consequence = try parser.parseBlockStatement();
 
@@ -399,9 +399,9 @@ fn parseIfExpression(parser: *Parser) ParseError!Expression {
 
     var alternative: ?BlockStatement = null;
     if (parser.peekTokenIs(.Else)) {
-        parser.nextToken();
+        try parser.nextToken();
 
-        if (!parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
+        if (!try parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
         alternative = try parser.parseBlockStatement();
     }
@@ -420,11 +420,11 @@ fn parseBlockStatement(parser: *Parser) ParseError!BlockStatement {
     const curr_tok = try parser.current_token.clone();
     errdefer curr_tok.deinit();
 
-    parser.nextToken();
+    try parser.nextToken();
 
     var block_statements = ArrayList(Statement).init(parser.allocator);
 
-    while (!parser.curTokenIs(.Rbrace) and !parser.curTokenIs(.Eof)) : (parser.nextToken()) {
+    while (!parser.curTokenIs(.Rbrace) and !parser.curTokenIs(.Eof)) : (try parser.nextToken()) {
         const stmt = try parser.parseStatement();
         try block_statements.append(stmt);
     }
@@ -436,12 +436,12 @@ fn parseFunctionLiteral(parser: *Parser) ParseError!Expression {
     const curr_tok = try parser.current_token.clone();
     errdefer curr_tok.deinit();
 
-    if (!parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
+    if (!try parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
 
     const parameters = try parser.parseFunctionParameters();
     errdefer parameters.deinit();
 
-    if (!parser.expectPeek(.Lbrace)) {
+    if (!try parser.expectPeek(.Lbrace)) {
         return ParseError.ExpectedNextTokenLbrace;
     }
 
@@ -458,11 +458,11 @@ fn parseFunctionParameters(parser: *Parser) ParseError!ArrayList(Identifier) {
     var identifiers = ArrayList(Identifier).init(parser.allocator);
 
     if (parser.peekTokenIs(.Rparen)) {
-        parser.nextToken();
+        try parser.nextToken();
         return identifiers;
     }
 
-    parser.nextToken();
+    try parser.nextToken();
 
     var token = try parser.current_token.clone();
     errdefer token.deinit();
@@ -470,14 +470,14 @@ fn parseFunctionParameters(parser: *Parser) ParseError!ArrayList(Identifier) {
     try identifiers.append(.{ .token = token });
 
     while (parser.peekTokenIs(.Comma)) {
-        parser.nextToken();
-        parser.nextToken();
+        try parser.nextToken();
+        try parser.nextToken();
 
         token = try parser.current_token.clone();
         try identifiers.append(.{ .token = token });
     }
 
-    if (!parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(.Rparen)) {
         identifiers.deinit();
         return error.ExpectedNextTokenRparen;
     }
@@ -512,19 +512,19 @@ fn parseCallArguments(parser: *Parser) ParseError!ArrayList(Expression) {
     var args = ArrayList(Expression).init(parser.allocator);
 
     if (parser.peekTokenIs(.Rparen)) {
-        parser.nextToken();
+        try parser.nextToken();
         return args;
     }
 
-    parser.nextToken();
+    try parser.nextToken();
 
     var arg_expr = try parser.parseExpression(.Lowest);
 
     try args.append(arg_expr);
 
     while (parser.peekTokenIs(.Comma)) {
-        parser.nextToken();
-        parser.nextToken();
+        try parser.nextToken();
+        try parser.nextToken();
 
         arg_expr = try parser.parseExpression(.Lowest);
 
@@ -532,7 +532,7 @@ fn parseCallArguments(parser: *Parser) ParseError!ArrayList(Expression) {
     }
 
     // TODO: handle if !expectpeek(.Rparent) return null
-    if (!parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(.Rparen)) {
         return ParseError.ExpectedNextTokenRparen;
     }
 
@@ -560,17 +560,17 @@ fn parseArrayLiteral(parser: *Parser) ParseError!Expression {
 
     if (parser.peekTokenIs(.Rbracket)) return Expression{ .array_literal_expr = .{ .token = curr_tok, .elements = elements }};
 
-    parser.nextToken();
+    try parser.nextToken();
 
     try elements.append(try parser.parseExpression(.Lowest));
 
     while (parser.peekTokenIs(.Comma)) {
-        parser.nextToken();
-        parser.nextToken(); // TODO: FIx mem leak when forgetting to close array, i.e [1, 2, 3
+        try parser.nextToken();
+        try parser.nextToken(); // TODO: FIx mem leak when forgetting to close array, i.e [1, 2, 3
         try elements.append(try parser.parseExpression(.Lowest));
     }
 
-    if (!parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
+    if (!try parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
 
     return Expression{
         .array_literal_expr = .{
@@ -585,13 +585,13 @@ fn parseIndexExpression(parser: *Parser, left: Expression) ParseError!Expression
     const curr_tok = try parser.current_token.clone();
     errdefer curr_tok.deinit();
 
-    parser.nextToken();
+    try parser.nextToken();
     
     const index_ptr = try parser.allocator.create(Expression);
     errdefer parser.allocator.destroy(index_ptr);
     index_ptr.* = try parser.parseExpression(.Lowest);
 
-    if (!parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
+    if (!try parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
 
     const left_ptr = try parser.allocator.create(Expression);
     left_ptr.* = left;
@@ -616,9 +616,9 @@ fn peekTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.peek_token.kind == kind;
 }
 
-fn expectPeek(parser: *Parser, kind: Token.Kind) bool {
+fn expectPeek(parser: *Parser, kind: Token.Kind) !bool {
     if (parser.peekTokenIs(kind)) {
-        parser.nextToken();
+        try parser.nextToken();
         return true;
     } else {
         parser.peekError(kind);
@@ -642,7 +642,7 @@ pub fn ParseProgram(parser: *Parser, allocator: Allocator) ParseError!Program {
     while (parser.current_token.kind != Token.Kind.Eof) {
         const stmt = try parser.parseStatement();
         try program.statements.append(stmt);
-        parser.nextToken();
+        try parser.nextToken();
     }
 
     // does not clone, parsers arraylists gets deinited by program
