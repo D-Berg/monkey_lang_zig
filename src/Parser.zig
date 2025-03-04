@@ -113,18 +113,12 @@ fn nextToken(parser: *Parser) !void {
 
     parser.current_token.deinit();
 
-    parser.current_token = parser.peek_token.clone() catch |err| {
-        log.err("{}", .{err});
-        return err;
-    };
+    parser.current_token = try parser.peek_token.clone();
     errdefer parser.current_token.deinit();
 
     parser.peek_token.deinit();
 
-    parser.peek_token = parser.lexer.NextToken() catch |err| {
-        log.err("{}", .{err});
-        return err;
-    };
+    parser.peek_token = try parser.lexer.NextToken();
     errdefer parser.peek_token.deinit();
 }
 
@@ -134,6 +128,7 @@ fn parseStatement(parser: *Parser) ParseError!Statement {
         .Return => try parser.parseReturnStatement(),
         else => try parser.parseExpressionStatement(),
     };
+    errdefer stmt.deinit();
 
     return stmt;
 }
@@ -148,13 +143,18 @@ fn parseLetStatement(parser: *Parser) ParseError!Statement {
     errdefer ident_token.deinit();
 
     const identifier = Identifier{ .token = ident_token };
+    errdefer identifier.deinit();
 
     if (!try parser.expectPeek(Token.Kind.Assign)) return ParseError.ExpectedNextTokenAssign;
 
     try parser.nextToken();
 
     const expr = try parser.parseExpression(.Lowest);
+    errdefer expr.deinit();
+
     const expr_ptr = try parser.allocator.create(Expression);
+    errdefer parser.allocator.destroy(expr_ptr);
+
     expr_ptr.* = expr;
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
@@ -203,7 +203,10 @@ fn parseExpressionStatement(parser: *Parser) ParseError!Statement {
     errdefer token.deinit();
 
     const expr = try parser.parseExpression(.Lowest);
+    errdefer expr.deinit();
+
     const expr_ptr = try parser.allocator.create(Expression);
+    errdefer parser.allocator.destroy(expr_ptr);
     expr_ptr.* = expr;
 
     if (parser.peekTokenIs(Token.Kind.Semicolon)) {
@@ -233,12 +236,14 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
         .String => parser.parseStringLiteral(),
         .Lbracket => parser.parseArrayLiteral(),
         inline else => |kind| {
-            print("No prefix func for {}\n", .{kind});
+            _ = kind;
+            // TODO: add parsing Error
             return ParseError.NoPrefixFunction;
         }
     };
 
     var left_expr: Expression = try prefix;
+    errdefer left_expr.deinit();
 
     while (!parser.peekTokenIs(.Semicolon) and @intFromEnum(precedence) < @intFromEnum(parser.peekPrecedence())) {
 
@@ -252,10 +257,12 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
             .Lbracket => try parser.parseIndexExpression(left_expr),
             else => ParseError.NoPrefixFunction,
         };
+        errdefer infix.deinit();
 
         // if (infix == ParseError.NoPrefixFunction) return left_expr;
 
         left_expr = infix catch return left_expr;
+        errdefer left_expr.deinit();
     }
 
     return left_expr;
@@ -263,6 +270,7 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
 
 fn parseIdentifier(parser: *Parser) !Expression {
     const token = try parser.current_token.clone();
+    errdefer token.deinit();
     return Expression {
         .identifier = .{
             .token = token,
@@ -344,9 +352,13 @@ fn parseInfixExpression(parser: *Parser, left: Expression) ParseError!Expression
     try parser.nextToken();
 
     const right = try parser.parseExpression(precedence);
+    errdefer right.deinit();
 
     const left_ptr = try parser.allocator.create(Expression);
+    errdefer parser.allocator.destroy(left_ptr);
+
     const right_ptr = try parser.allocator.create(Expression);
+    errdefer parser.allocator.destroy(right_ptr);
 
     left_ptr.* = left;
     right_ptr.* = right;
@@ -386,6 +398,7 @@ fn parseIfExpression(parser: *Parser) ParseError!Expression {
 
     try parser.nextToken();
     const condition = try parser.parseExpression(.Lowest);
+    errdefer condition.deinit();
     // print("if condition = {}\n", .{condition});
 
     if (!try parser.expectPeek(.Rparen)) return ParseError.ExpectedNextTokenRparen;
@@ -393,11 +406,17 @@ fn parseIfExpression(parser: *Parser) ParseError!Expression {
     if (!try parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
     const consequence = try parser.parseBlockStatement();
+    errdefer consequence.deinit();
 
     const condition_ptr = try parser.allocator.create(Expression);
+    errdefer parser.allocator.destroy(condition_ptr);
     condition_ptr.* = condition;
 
     var alternative: ?BlockStatement = null;
+    errdefer {
+        if (alternative) |alt| alt.deinit();
+    }
+
     if (parser.peekTokenIs(.Else)) {
         try parser.nextToken();
 
@@ -417,15 +436,25 @@ fn parseIfExpression(parser: *Parser) ParseError!Expression {
 }
 
 fn parseBlockStatement(parser: *Parser) ParseError!BlockStatement {
+    errdefer {
+        parser.current_token.deinit();
+        parser.peek_token.deinit();
+    }
+
     const curr_tok = try parser.current_token.clone();
     errdefer curr_tok.deinit();
 
     try parser.nextToken();
 
     var block_statements = ArrayList(Statement).init(parser.allocator);
+    errdefer {
+        for (block_statements.items) |stmt| stmt.deinit();
+        block_statements.deinit();
+    }
 
     while (!parser.curTokenIs(.Rbrace) and !parser.curTokenIs(.Eof)) : (try parser.nextToken()) {
         const stmt = try parser.parseStatement();
+        errdefer stmt.deinit();
         try block_statements.append(stmt);
     }
 
@@ -638,9 +667,11 @@ fn peekPrecedence(parser: *Parser) Precedence {
 
 pub fn ParseProgram(parser: *Parser, allocator: Allocator) ParseError!Program {
     var program = Program.init(allocator);
+    errdefer program.deinit();
 
     while (parser.current_token.kind != Token.Kind.Eof) {
         const stmt = try parser.parseStatement();
+        errdefer stmt.deinit();
         try program.statements.append(stmt);
         try parser.nextToken();
     }
@@ -1249,6 +1280,28 @@ test "Index Expr" {
     try expect(left == .identifier);
 
     try expect(index == .infix_expression);
+
+}
+
+test "unexected prefix tkn" {
+
+    const allocator = std.testing.allocator;
+
+    const input = 
+        \\let x = 10;
+        \\if (x > 4) { x = x + 3 };
+    ;
+
+    var lexer = Lexer.init(allocator, input);
+
+    var parser = try Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    const programError = parser.ParseProgram(allocator);
+    //defer program.deinit();
+
+    try std.testing.expectError(error.NoPrefixFunction, programError);
+
 
 }
 //
