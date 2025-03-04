@@ -7,11 +7,18 @@ allocator: Allocator,
 kind: Kind,
 // TODO: allocate string on heap
 literal: []const u8, // literal can be at most 32 bytes
+loc: ?Location = null,
+
+// store where in src token starts and ends
+const Location = struct {
+    start: usize,
+    end: usize
+};
 
 pub fn init(allocator: Allocator, kind: Token.Kind, chars: []const u8) Allocator.Error!Token {
     const literal = try allocator.alloc(u8, chars.len);
 
-    std.mem.copyForwards(u8, literal, chars);
+    @memcpy(literal, chars);
 
     return .{
         .allocator = allocator,
