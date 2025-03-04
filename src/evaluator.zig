@@ -38,7 +38,7 @@ const ArrayList = std.ArrayList;
 const expect = std.testing.expect;
 const expectEqualStrings = std.testing.expectEqualStrings;
 
-const EvalError = error{
+pub const EvalError = error{
     // TODO: fill this out
     FailedEvalLet,
     FailedEvalString,
@@ -237,15 +237,10 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
     if (BuiltIn.getBuiltInFn(ident_name)) |built_in| {
         return Object{ .built_in = built_in };
     } else {
-        // print("didnt find: {s}\n", .{ident_name});
+
         // TODO: create a eval error
 
-        log.err("couldnt find {s} in {*}\n", .{ ident_name, env });
-        log.debug("env cointains:\n", .{});
-        env.printEnv();
-
-        @panic("Failed EvalIDentExpr");
-        // return EvalError.EvalIdentNonExistent;
+        return EvalError.EvalIdentNonExistent;
     }
 }
 

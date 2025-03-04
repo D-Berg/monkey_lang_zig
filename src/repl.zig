@@ -44,7 +44,13 @@ pub fn start(allocator: Allocator) !void {
         //
         // std.debug.print("Program: {s}\n", .{prog_str});
         //
-        const maybe_evaluated = try evaluator.Eval(&program, &env);
+        const maybe_evaluated = evaluator.Eval(&program, &env) catch |err| switch (err) {
+            evaluator.EvalError.EvalIdentNonExistent => {
+                try stdout.print("Error: Couldnt find variable or function\n", .{});
+                continue;
+            },
+            else => return err,
+        };
 
         if (maybe_evaluated) |evaluated| {
             defer evaluated.deinit();
