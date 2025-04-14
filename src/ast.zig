@@ -170,22 +170,19 @@ pub const BlockStatement = struct {
     }
 
     pub fn String(bs: *const BlockStatement) Allocator.Error![]const u8 {
-        var str_len: usize = 0;
         const allocator = bs.token.allocator;
-        var bs_str = try allocator.alloc(u8, 0);
+
+        var bs_str: ArrayList(u8) = .init(allocator);
+        errdefer bs_str.deinit();
 
         for (bs.statements.items) |stmt| {
             const stmt_str = try stmt.String();
             defer allocator.free(stmt_str);
 
-            bs_str = try allocator.realloc(bs_str, str_len + stmt_str.len);
-
-            @memcpy(bs_str[str_len..(str_len + stmt_str.len)], stmt_str);
-
-            str_len += stmt_str.len;
+            try bs_str.appendSlice(stmt_str);
         }
 
-        return bs_str;
+        return try bs_str.toOwnedSlice();
     }
 };
 
@@ -559,42 +556,28 @@ pub const CallExpression = struct {
         const fn_str = try ce.function.String();
         defer ce.allocator.free(fn_str);
 
-        var str_len: usize = 0;
-        var args_str = try ce.allocator.alloc(u8, 0);
-        defer ce.allocator.free(args_str);
 
+        var result_str: ArrayList(u8) = .init(ce.allocator);
+        errdefer result_str.deinit();
+
+        try result_str.appendSlice(fn_str);
+        try result_str.append('(');
         const n_args = ce.args.items.len;
-        
 
         for (ce.args.items, 0..) |arg_expr, i| {
 
             const arg_str = try arg_expr.String();
             defer ce.allocator.free(arg_str);
-            
-            
-            if (i == n_args - 1) {
-                args_str = try ce.allocator.realloc(args_str, str_len + arg_str.len);
-                @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
-                str_len += arg_str.len;
 
-            } else {
-                
-                args_str = try ce.allocator.realloc(args_str, str_len + arg_str.len + 2);
-                args_str[str_len + arg_str.len] = ',';
-                args_str[str_len + arg_str.len + 1] = ' ';
+            try result_str.appendSlice(arg_str);
 
-                @memcpy(args_str[(str_len)..(str_len + arg_str.len)], arg_str);
-                str_len += arg_str.len + 2;
-
-        
-            }
+            if (i != n_args - 1) try result_str.appendSlice(", ");
 
         }
 
-        return try std.fmt.allocPrint(ce.allocator, "{s}({s})", .{
-            fn_str, args_str
-        });
+        try result_str.append(')');
 
+        return result_str.toOwnedSlice();
     }
 
 };
@@ -659,37 +642,27 @@ pub const ArrayLiteralExpression = struct {
     pub fn String(array_lit: *const ArrayLiteralExpression) Allocator.Error![]const u8 {
         const allocator = array_lit.token.allocator;
 
-        var str_len: usize = 0;
-        var elem_str = try allocator.alloc(u8, 0);
-        defer allocator.free(elem_str);
+        var elem_str: ArrayList(u8) = .init(allocator);
+        errdefer elem_str.deinit();
+    
+        try elem_str.append('[');
 
         const n_elem = array_lit.elements.items.len;
 
-        // Beutiful string handling <3
         for (array_lit.elements.items, 0..) |elem_expr, i| {
 
             const e_str = try elem_expr.String();
             defer allocator.free(e_str);
             
-            if (i == n_elem - 1) {
-                elem_str = try allocator.realloc(elem_str, str_len + e_str.len);
-                @memcpy(elem_str[(str_len)..(str_len + e_str.len)], e_str);
-                str_len += e_str.len;
-
-            } else {
-                
-                elem_str = try allocator.realloc(elem_str, str_len + e_str.len + 2);
-                elem_str[str_len + e_str.len] = ',';
-                elem_str[str_len + e_str.len + 1] = ' ';
-
-                @memcpy(elem_str[(str_len)..(str_len + e_str.len)], e_str);
-                str_len += e_str.len + 2;
-
-            }
+            try elem_str.appendSlice(e_str);
+            
+            if (i != n_elem - 1) try elem_str.appendSlice(", ");
 
         }
 
-        return try std.fmt.allocPrint(allocator, "[{s}]", .{ elem_str });
+        try elem_str.append(']');
+
+        return try elem_str.toOwnedSlice();
     }
 };
 
@@ -779,22 +752,20 @@ pub const Program = struct {
     }
 
     /// String need to be deallocated by caller
-    pub fn String(program: *Program) Allocator.Error![]const u8 {
-        var str_len: usize = 0;
-        var prog_str = try program.allocator.alloc(u8, 0);
+    pub fn String(program: *Program) Allocator.Error![]const u8 { // TODO: take allocator as arg
+
+        var prog_str: ArrayList(u8) = .init(program.allocator);
+        errdefer prog_str.deinit();
+        
 
         for (program.statements.items) |stmt| {
             const stmt_str = try stmt.String();
             defer program.allocator.free(stmt_str);
 
-            prog_str = try program.allocator.realloc(prog_str, str_len + stmt_str.len);
-
-            @memcpy(prog_str[str_len..(str_len + stmt_str.len)], stmt_str);
-
-            str_len += stmt_str.len;
+            try prog_str.appendSlice(stmt_str);
         }
 
-        return prog_str;
+        return try prog_str.toOwnedSlice();
     }
 
     // TODO: check if needeed
