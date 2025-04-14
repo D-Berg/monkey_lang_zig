@@ -1,13 +1,20 @@
 const std = @import("std");
+const build_options = @import("build_options");
 const repl = @import("repl.zig");
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
 const object = @import("object.zig");
 const evaluator = @import("evaluator.zig");
-
 const Environment = @import("Environment.zig");
+
+
 const print = std.debug.print;
 const log = std.log;
+
+pub const std_options: std.Options = .{
+    .log_level = @enumFromInt(@intFromEnum(build_options.log_level)),
+};
+
 const expect = std.testing.expect;
 
 const stdin = std.io.getStdIn().reader();

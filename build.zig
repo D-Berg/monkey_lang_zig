@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -8,6 +10,12 @@ pub fn build(b: *std.Build) void {
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
     // for restricting supported target set are available.
+    //
+    const log_level = b.option(std.log.Level, "log", "Set log level") orelse std.log.Level.info;
+
+    var options = b.addOptions();
+    options.addOption(@TypeOf(log_level), "log_level", log_level);
+
     const target = b.standardTargetOptions(.{});
 
     // Standard optimization options allow the person running `zig build` to select
@@ -19,12 +27,19 @@ pub fn build(b: *std.Build) void {
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
 
-    const exe = b.addExecutable(.{
-        .name = "monkey_lang",
-        .root_source_file = b.path("src/main.zig"),
+    const monkey_mod = b.addModule("monkey", .{
         .target = target,
         .optimize = optimize,
+        .root_source_file = b.path("src/main.zig")
     });
+
+    monkey_mod.addOptions("build_options", options);
+
+    const exe = b.addExecutable(.{
+        .name = "monkey",
+        .root_module = monkey_mod
+    });
+
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -57,13 +72,11 @@ pub fn build(b: *std.Build) void {
 
 
     const exe_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
+        .root_module = monkey_mod,
         .test_runner = .{
             .path = b.path("test_runner.zig"),
             .mode = .simple
         },
-        .target = target,
-        .optimize = optimize,
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
