@@ -107,7 +107,17 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 return try Token.init(a, .Bang, &chars);
             }
         },
-        '/' => return try Token.init(a, .Slash, &chars),
+        '/' => {
+            if (l.peekChar() == '/') { // skip over comments
+
+                while (l.ch != '\n') : (l.readChar()) {}
+
+                return try l.NextToken();
+
+            } else {
+                return try Token.init(a, .Slash, &chars);
+            }
+        },
         '*' => return try Token.init(a, .Asterisk, &chars),
         '<' => return try Token.init(a, .Lt, &chars),
         '>' => return try Token.init(a, .Gt, &chars),
