@@ -35,15 +35,15 @@ pub fn start(allocator: Allocator) !void {
         var program = try parser.ParseProgram(allocator);
         defer program.deinit();
 
-        // const prog_str = try program.String();
-        // defer allocator.free(prog_str);
+        const prog_str = try program.String();
+        defer allocator.free(prog_str);
 
         // for (parser.errors.items) |err| {
         //     std.debug.print("monkey_parse_err: {s}\n", .{err});
         // }
-        //
-        // std.debug.print("Program: {s}\n", .{prog_str});
-        //
+
+        std.debug.print("Program: {s}\n", .{prog_str});
+
         const maybe_evaluated = evaluator.Eval(&program, &env) catch |err| switch (err) {
             evaluator.EvalError.EvalIdentNonExistent => {
                 try stdout.print("Error: Couldnt find variable or function\n", .{});

@@ -86,10 +86,10 @@ pub const Object = union(enum) {
             },
             .array => |array| {
                 
-                var array_str = try allocator.alloc(u8, 0);
-                defer allocator.free(array_str);
+                var array_str: ArrayList(u8) = .init(allocator);
+                errdefer array_str.deinit();
             
-                var str_len: usize = 0;
+                try array_str.append('[');
 
                 const n_elems = array.elements.items.len;
 
@@ -98,24 +98,16 @@ pub const Object = union(enum) {
                     const elem_str = try elem.inspect(allocator);
                     defer allocator.free(elem_str);
 
-                    if (i != n_elems - 1) {
-                        array_str = try allocator.realloc(array_str, str_len + elem_str.len + 2);
+                    try array_str.appendSlice(elem_str);
+                    
 
-                        @memcpy(array_str[str_len..(str_len + elem_str.len)], elem_str);
-                        
-                        array_str[str_len + elem_str.len] = ',';
-                        array_str[str_len + elem_str.len + 1] = ' ';
-
-                        str_len += elem_str.len + 2;
-                    } else {
-                        array_str = try allocator.realloc(array_str, str_len + elem_str.len);
-                        @memcpy(array_str[str_len..(str_len + elem_str.len)], elem_str);
-                    }
+                    if (i != n_elems - 1) try array_str.appendSlice(", ");
 
                 }
                 
-                const str = try std.fmt.allocPrint(allocator, "[{s}]", .{ array_str });
-                return str;
+                try array_str.append(']');
+
+                return array_str.toOwnedSlice();
 
             },
             inline else => |case| {
