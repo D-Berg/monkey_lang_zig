@@ -122,6 +122,7 @@ pub fn NextToken(l: *Lexer) LexError!Token {
         '<' => return try Token.init(a, .Lt, &chars),
         '>' => return try Token.init(a, .Gt, &chars),
         ';' => return try Token.init(a, .Semicolon, &chars),
+        ':' => return try Token.init(a, .Colon, &chars),
         ',' => return try Token.init(a, .Comma, &chars),
         '(' => return try Token.init(a, .Lparen, &chars),
         ')' => return try Token.init(a, .Rparen, &chars),
@@ -226,6 +227,7 @@ test "Create Tokens" {
         \\"foobar"
         \\"foo bar"
         \\[1, 2];
+        \\{"name": "Anna", "age": 24}
     ;
 
     var l = Lexer.init(allocator, input);
@@ -314,7 +316,15 @@ test "Create Tokens" {
         try Token.init(allocator, .Int, "2"),
         try Token.init(allocator, .Rbracket, "]"),
         try Token.init(allocator, .Semicolon, ";"),
-
+        try Token.init(allocator, .Lbrace, "{"),
+        try Token.init(allocator, .String, "name"),
+        try Token.init(allocator, .Colon, ":"),
+        try Token.init(allocator, .String, "Anna"),
+        try Token.init(allocator, .Comma, ","),
+        try Token.init(allocator, .String, "age"),
+        try Token.init(allocator, .Colon, ":"),
+        try Token.init(allocator, .Int, "24"),
+        try Token.init(allocator, .Rbrace, "}"),
 
         try Token.init(allocator, .Eof, ""),
     };
