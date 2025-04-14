@@ -76,10 +76,10 @@ pub fn main() !void {
                 defer evaluated.deinit();
                 const eval_str = try evaluated.inspect(allocator);
                 defer allocator.free(eval_str);
-                try stdout.print("evaluated: {s}\n", .{eval_str});
+                try stdout.print("{s}\n", .{eval_str});
             }
         } else {
-            @panic("unsupported number of args");
+            return error.UnsupportedNumberOfArgs;
         }
     }
 }
