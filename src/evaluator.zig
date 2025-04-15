@@ -211,6 +211,13 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
             return try EvalIndexExpr(ie, env);
 
             
+        },
+
+        .dictionary => |*dic| {
+            _ = dic;
+
+            @panic("Unimplemented");
+
         }
 
 

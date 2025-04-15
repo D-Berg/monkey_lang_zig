@@ -69,7 +69,8 @@ pub const Kind = enum {
 
     // Delimiters
     Comma,
-    Semicolon,
+    Semicolon, // ;
+    Colon, // :
 
     Lparen, // (
     Rparen, // )

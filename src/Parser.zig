@@ -34,6 +34,8 @@ const ParseError = error {
     ExpectedNextTokenRparen,
     ExpectedNextTokenLparen,
     ExpectedNextTokenRbraket, 
+    ExpectedNextTokenString,
+    ExpectedNextTokenColon,
     FailedToConvertStringToInt,
     NoPrefixFunction,
     NoInfixFunction
@@ -235,9 +237,10 @@ fn parseExpression(parser: *Parser, precedence: Precedence) ParseError!Expressio
         .Function => try parser.parseFunctionLiteral(),
         .String => parser.parseStringLiteral(),
         .Lbracket => parser.parseArrayLiteral(),
+        .Lbrace => parser.parseDictionaryLiteral(), // {
         inline else => |kind| {
-            _ = kind;
             // TODO: add parsing Error
+            log.err("no prefix for {}", .{kind});
             return ParseError.NoPrefixFunction;
         }
     };
@@ -609,6 +612,72 @@ fn parseArrayLiteral(parser: *Parser) ParseError!Expression {
     };
 }
 
+fn parseDictionaryLiteral(parser: *Parser) ParseError!Expression {
+
+    const allocator = parser.allocator;
+
+    const curr_tok = try parser.current_token.clone();
+    errdefer curr_tok.deinit();
+
+    var keys = ArrayList(Expression).init(allocator);
+    var values = ArrayList(Expression).init(allocator);
+
+    // errdefer {
+    //     for (keys.items) |key| key.deinit();
+    //
+    //     for (values.items) |value| value.deinit();
+    //
+    //     keys.deinit(); values.deinit();
+    // }
+
+    if (parser.peekTokenIs(.Rbrace)) { // empty dictionary
+        return Expression {
+            .dictionary = .{
+                .allocator = allocator,
+                .token = curr_tok,
+                .keys = keys,
+                .values = values
+            }
+        };
+    }
+
+    var i: usize = 0;
+    const max_iterations = 1000;
+
+    while (!parser.peekTokenIs(.Rbrace) and i < max_iterations) : (i += 1) {
+
+        try parser.nextToken();
+
+        const key = try parser.parseExpression(.Lowest);
+        try keys.append(key);
+
+        if (!try parser.expectPeek(.Colon)) return ParseError.ExpectedNextTokenColon;
+
+        try parser.nextToken(); // skip colon
+
+        const value = try parser.parseExpression(.Lowest);
+        try values.append(value);
+
+        if (!parser.peekTokenIs(.Rbrace) and !try parser.expectPeek(.Comma)) {
+            return ParseError.ExpectedNextTokenRbrace;
+        }
+
+    }
+
+    if (!try parser.expectPeek(.Rbrace)) return ParseError.ExpectedNextTokenRbrace;
+    
+    return Expression {
+        .dictionary = .{
+            .allocator = allocator,
+            .token = curr_tok,
+            .keys = keys,
+            .values = values
+        }
+    };
+
+
+}
+
 fn parseIndexExpression(parser: *Parser, left: Expression) ParseError!Expression {
 
     const curr_tok = try parser.current_token.clone();
@@ -620,7 +689,7 @@ fn parseIndexExpression(parser: *Parser, left: Expression) ParseError!Expression
     errdefer parser.allocator.destroy(index_ptr);
     index_ptr.* = try parser.parseExpression(.Lowest);
 
-    if (!try parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
+    if (!try parser.expectPeek(.Rbracket)) return ParseError.ExpectedNextTokenRbraket;
 
     const left_ptr = try parser.allocator.create(Expression);
     left_ptr.* = left;
@@ -1248,6 +1317,41 @@ test "Array Literal" {
 
 }
 
+test "Dictionary Literal" {
+
+    std.testing.log_level = .debug;
+
+    const allocator = std.testing.allocator;
+    const input = 
+        \\{ "key1": 21, "key2": "string_val" }
+    ;
+
+    var lexer = Lexer.init(allocator, input);
+
+    var parser = try Parser.init(&lexer, allocator);
+    defer parser.deinit();
+
+    var program = try parser.ParseProgram(allocator);
+    defer program.deinit();
+
+    const n_stmts = program.statements.items.len;
+
+    try expect(n_stmts == 1);
+
+    const stmt = program.statements.items[0];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr = stmt.expr_stmt.expression.*;
+
+    try expect(expr == .dictionary);
+
+    const prog_str = try program.String();
+    defer allocator.free(prog_str);
+    //
+    try expectEqualStrings(prog_str, "{ key1: 21, key2: string_val }");
+
+}
 test "Index Expr" {
         
     const allocator = std.testing.allocator;
@@ -1330,3 +1434,4 @@ test "unexected prefix tkn" {
 //
 //
 // }
+

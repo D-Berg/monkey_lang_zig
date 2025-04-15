@@ -3,6 +3,7 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const print = std.debug.print;
+const log = std.log.scoped(.@"ast");
 
 const ExprIdx = usize;
 const StateIdx = usize;
@@ -199,6 +200,7 @@ pub const Expression = union(enum) {
     string_expression: StringExpression,
     array_literal_expr: ArrayLiteralExpression,
     index_expr: IndexExpression,
+    dictionary: DictionaryExpression,
 
     pub fn deinit(expr: *const Expression) void {
         switch (expr.*) {
@@ -466,6 +468,7 @@ pub const FnLiteralExpression = struct {
         } };
     }
 
+    // TODO: use ArrayList(u8)
     pub fn String(fle: *const FnLiteralExpression) Allocator.Error![]const u8 {
         const allocator = fle.token.allocator;
 
@@ -664,6 +667,69 @@ pub const ArrayLiteralExpression = struct {
 
         return try elem_str.toOwnedSlice();
     }
+};
+
+pub const DictionaryExpression = struct {
+    allocator: Allocator,
+    token: Token,
+    keys: ArrayList(Expression),
+    values: ArrayList(Expression),
+
+    fn deinit(dictionary: *const DictionaryExpression) void {
+
+        dictionary.token.deinit();
+    
+        for (dictionary.keys.items, dictionary.values.items) |key, value| {
+            key.deinit();
+            value.deinit();
+        }
+
+        dictionary.keys.deinit();
+        dictionary.values.deinit();
+
+    }
+    
+    fn String(dictionary: *const DictionaryExpression) Allocator.Error![]const u8 {
+
+        const allocator = dictionary.allocator;
+
+        var str: ArrayList(u8) = .init(dictionary.allocator);
+
+        const n_items = dictionary.keys.items.len;
+
+        const writer = str.writer();
+
+        try str.appendSlice("{ ");
+
+        for (dictionary.keys.items, dictionary.values.items, 0..) |key, val, i| {
+            const key_str = try key.String();
+            defer allocator.free(key_str);
+
+            const val_str = try val.String();
+            defer allocator.free(val_str);
+            
+            try writer.print("{s}: {s}", .{key_str, val_str});
+
+            if ((i + 1) != n_items) {
+                try writer.print(", ", .{});
+            }
+
+        }
+
+        try str.appendSlice(" }");
+        
+        return try str.toOwnedSlice();
+
+    }
+
+    fn clone(dictionary: *const DictionaryExpression) Allocator.Error!Expression {
+
+        _ = dictionary;
+
+        @panic("unimplemented clone for DictionaryExpression");
+
+    }
+
 };
 
 pub const IndexExpression = struct {

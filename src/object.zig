@@ -240,6 +240,11 @@ pub const FunctionObject = struct {
     }
 };
 
+pub const HashMapObject = struct {
+    inner: std.StringHashMap(Object),
+    rc: usize = 0,
+};
+
 pub const StringObject = struct {
     allocator: Allocator,
     value: []const u8,
