@@ -8,29 +8,23 @@ const log = std.log;
 const expect = std.testing.expect;
 const expectEqualSlices = std.testing.expectEqualSlices;
 
-// const TokenError = error {
-//     unsupported_char,
-//     no_next_token
-// };
-//
-const LexError = error{} || Allocator.Error;
-
 const Lexer = @This();
 
-allocator: Allocator,
-input: []const u8,
+source: []const u8,
+/// the current character being analyzed
 position: usize = 0,
-readPosition: usize = 0,
+/// the next position to be read
+read_position: usize = 0,
+line: usize = 1,
 ch: u8 = 0,
 
 const KeyWordsStr = [7][]const u8{ "let", "fn", "true", "false", "if", "else", "return" };
 
 const KeyWordsKinds = [7]Token.Kind{ .Let, .Function, .True, .False, .If, .Else, .Return };
 
-pub fn init(allocator: Allocator, input: []const u8) Lexer {
+pub fn init(input: []const u8) Lexer {
     var l = Lexer{
-        .allocator = allocator,
-        .input = input,
+        .source = input,
     };
 
     l.readChar();
@@ -43,21 +37,21 @@ pub fn init(allocator: Allocator, input: []const u8) Lexer {
 // }
 
 fn readChar(l: *Lexer) void {
-    if (l.readPosition >= l.input.len) {
+    if (l.read_position >= l.source.len) {
         l.ch = 0;
     } else {
-        l.ch = l.input[l.readPosition];
+        l.ch = l.source[l.read_position];
     }
 
-    l.position = l.readPosition;
-    l.readPosition += 1;
+    l.position = l.read_position;
+    l.read_position += 1;
 }
 
 fn peekChar(l: *Lexer) u8 {
-    if (l.readPosition >= l.input.len) {
+    if (l.read_position >= l.source.len) {
         return 0;
     } else {
-        return l.input[l.readPosition];
+        return l.source[l.read_position];
     }
 }
 
@@ -72,8 +66,7 @@ fn GetKindFromKeyWord(word: []const u8) Token.Kind {
 }
 
 /// Creates a new token
-pub fn NextToken(l: *Lexer) LexError!Token {
-    const a = l.allocator;
+pub fn nextToken(l: *Lexer) Token {
 
     var read_next_char = true;
 
@@ -83,28 +76,39 @@ pub fn NextToken(l: *Lexer) LexError!Token {
 
     l.skipWhiteSpace();
 
-    const chars = [1]u8{l.ch};
+    
+    if (l.read_position > l.source.len ) {
+        return Token { .kind =.Eof, .literal = "" };
+    }
+
+    std.debug.assert(l.position < l.source.len);
+
+    const chars = l.source[l.position..l.read_position];
+
+    std.debug.assert(chars.len == 1);
+    std.debug.assert(chars[0] == l.ch);
+
     switch (l.ch) {
         '=' => {
             if (l.peekChar() == '=') {
-                const ch = l.ch;
+                const start = l.position;
                 l.readChar();
-                const eq_str = [2]u8{ ch, l.ch };
-                return try Token.init(a, .Eq, &eq_str);
+                const end = l.position + 1;
+                return Token { .kind = .Eq, .literal = l.source[start..end] };
             } else {
-                return try Token.init(a, .Assign, &chars);
+                return Token{ .kind = .Assign, .literal = chars };
             }
         },
-        '+' => return try Token.init(a, .Plus, &chars),
-        '-' => return try Token.init(a, .Minus, &chars),
+        '+' => return Token{ .kind = .Plus, .literal = chars },
+        '-' => return Token{ .kind = .Minus, .literal = chars },
         '!' => {
             if (l.peekChar() == '=') {
-                const ch = l.ch;
+                const start = l.position;
                 l.readChar();
-                const neq_str = [2]u8{ ch, l.ch };
-                return try Token.init(a, .Neq, &neq_str);
+                const end = l.position + 1;
+                return Token { .kind = .Neq, .literal = l.source[start..end] };
             } else {
-                return try Token.init(a, .Bang, &chars);
+                return Token { .kind = .Bang, .literal = chars };
             }
         },
         '/' => {
@@ -112,24 +116,27 @@ pub fn NextToken(l: *Lexer) LexError!Token {
 
                 while (l.ch != '\n') : (l.readChar()) {}
 
-                return try l.NextToken();
+                return l.nextToken();
 
             } else {
-                return try Token.init(a, .Slash, &chars);
+                return Token{ .kind = .Slash, .literal = chars };
             }
         },
-        '*' => return try Token.init(a, .Asterisk, &chars),
-        '<' => return try Token.init(a, .Lt, &chars),
-        '>' => return try Token.init(a, .Gt, &chars),
-        ';' => return try Token.init(a, .Semicolon, &chars),
-        ':' => return try Token.init(a, .Colon, &chars),
-        ',' => return try Token.init(a, .Comma, &chars),
-        '(' => return try Token.init(a, .Lparen, &chars),
-        ')' => return try Token.init(a, .Rparen, &chars),
-        '{' => return try Token.init(a, .Lbrace, &chars),
-        '}' => return try Token.init(a, .Rbrace, &chars),
-        '[' => return try Token.init(a, .Lbracket, &chars),
-        ']' => return try Token.init(a, .Rbracket, &chars),
+        '*' => return Token { .kind = .Asterisk, .literal = chars },
+        '<' => return Token { .kind = .Lt, .literal = chars },
+        '>' => return Token { .kind = .Gt, .literal = chars },
+        ';' => return Token { .kind = .Semicolon, .literal = chars },
+        ':' => return Token { .kind = .Colon, .literal = chars },
+        ',' => return Token { .kind = .Comma, .literal = chars },
+        '(' => return Token { .kind = .Lparen, .literal = chars },
+        ')' => return Token { .kind = .Rparen, .literal = chars },
+        '{' => return Token { .kind = .Lbrace, .literal = chars },
+        '}' => return Token { .kind = .Rbrace, .literal = chars },
+        '[' => return Token { .kind = .Lbracket, .literal = chars },
+        ']' => return Token { .kind = .Rbracket, .literal = chars },
+        // 0 => {
+        //     return Token { .kind =.Eof, .literal = "" };
+        // },
         '"' => {
             const position = l.position + 1;
 
@@ -141,12 +148,9 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 }
             }
 
-            const string = l.input[position..l.position];
+            const string = l.source[position..l.position];
 
-            return try Token.init(a, .String, string);
-        },
-        0 => {
-            return try Token.init(a, .Eof, "");
+            return Token { .kind = .String, .literal = string };
         },
         else => {
             if (isLetter(l.ch)) {
@@ -155,10 +159,10 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 l.readIdentifier();
                 const end = l.position;
 
-                const identifer_str = l.input[start..end];
+                const identifer_str = l.source[start..end];
                 const token_kind = GetKindFromKeyWord(identifer_str);
 
-                return try Token.init(a, token_kind, identifer_str);
+                return Token { .kind = token_kind, .literal = identifer_str };
             }
             if (isDigit(l.ch)) {
                 read_next_char = false;
@@ -167,10 +171,10 @@ pub fn NextToken(l: *Lexer) LexError!Token {
                 l.readNumber();
                 const end = l.position;
 
-                const number_str = l.input[start..end];
-                return try Token.init(a, .Int, number_str);
+                const number_str = l.source[start..end];
+                return Token { .kind = .Int, .literal = number_str };
             } else {
-                return try Token.init(a, .Illegal, &chars);
+                return Token { .kind = .Illegal, .literal =  chars };
             }
         },
     }
@@ -185,8 +189,18 @@ fn readNumber(l: *Lexer) void {
 }
 
 fn skipWhiteSpace(l: *Lexer) void {
-    while (l.ch == ' ' or l.ch == '\t' or l.ch == '\n' or l.ch == '\r') {
-        l.readChar();
+    sw: switch (l.ch) {
+        ' ', '\t', '\r' => {
+            l.readChar();
+            continue :sw l.ch;
+        },
+        '\n' => {
+            l.readChar();
+            l.line += 1;
+
+            continue :sw l.ch;
+        },
+        else => break :sw,
     }
 }
 
@@ -202,7 +216,6 @@ fn isDigit(ch: u8) bool {
 }
 
 test "Create Tokens" {
-    const allocator = std.testing.allocator;
 
     const input =
         \\let five = 5;
@@ -230,117 +243,111 @@ test "Create Tokens" {
         \\{"name": "Anna", "age": 24}
     ;
 
-    var l = Lexer.init(allocator, input);
+    var l = Lexer.init(input);
 
     var passed_tests: u32 = 0;
 
     const token_tests = [_]Token{
-        try Token.init(allocator, .Let, "let"),
-        try Token.init(allocator, .Ident, "five"),
-        try Token.init(allocator, .Assign, "="),
-        try Token.init(allocator, .Int, "5"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Let, "let"),
-        try Token.init(allocator, .Ident, "ten"),
-        try Token.init(allocator, .Assign, "="),
-        try Token.init(allocator, .Int, "10"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Let, "let"),
-        try Token.init(allocator, .Ident, "add"),
-        try Token.init(allocator, .Assign, "="),
-        try Token.init(allocator, .Function, "fn"),
-        try Token.init(allocator, .Lparen, "("),
-        try Token.init(allocator, .Ident, "x"),
-        try Token.init(allocator, .Comma, ","),
-        try Token.init(allocator, .Ident, "y"),
-        try Token.init(allocator, .Rparen, ")"),
-        try Token.init(allocator, .Lbrace, "{"),
-        try Token.init(allocator, .Ident, "x"),
-        try Token.init(allocator, .Plus, "+"),
-        try Token.init(allocator, .Ident, "y"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Rbrace, "}"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Let, "let"),
-        try Token.init(allocator, .Ident, "result"),
-        try Token.init(allocator, .Assign, "="),
-        try Token.init(allocator, .Ident, "add"),
-        try Token.init(allocator, .Lparen, "("),
-        try Token.init(allocator, .Ident, "five"),
-        try Token.init(allocator, .Comma, ","),
-        try Token.init(allocator, .Ident, "ten"),
-        try Token.init(allocator, .Rparen, ")"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Bang, "!"),
-        try Token.init(allocator, .Minus, "-"),
-        try Token.init(allocator, .Slash, "/"),
-        try Token.init(allocator, .Asterisk, "*"),
-        try Token.init(allocator, .Int, "5"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Int, "5"),
-        try Token.init(allocator, .Lt, "<"),
-        try Token.init(allocator, .Int, "10"),
-        try Token.init(allocator, .Gt, ">"),
-        try Token.init(allocator, .Int, "5"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .If, "if"),
-        try Token.init(allocator, .Lparen, "("),
-        try Token.init(allocator, .Int, "5"),
-        try Token.init(allocator, .Lt, "<"),
-        try Token.init(allocator, .Int, "10"),
-        try Token.init(allocator, .Rparen, ")"),
-        try Token.init(allocator, .Lbrace, "{"),
-        try Token.init(allocator, .Return, "return"),
-        try Token.init(allocator, .True, "true"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Rbrace, "}"),
-        try Token.init(allocator, .Else, "else"),
-        try Token.init(allocator, .Lbrace, "{"),
-        try Token.init(allocator, .Return, "return"),
-        try Token.init(allocator, .False, "false"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Rbrace, "}"),
-        try Token.init(allocator, .Int, "10"),
-        try Token.init(allocator, .Eq, "=="),
-        try Token.init(allocator, .Int, "10"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Int, "10"),
-        try Token.init(allocator, .Neq, "!="),
-        try Token.init(allocator, .Int, "9"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .String, "foobar"),
-        try Token.init(allocator, .String, "foo bar"),
-        try Token.init(allocator, .Lbracket, "["),
-        try Token.init(allocator, .Int, "1"),
-        try Token.init(allocator, .Comma, ","),
-        try Token.init(allocator, .Int, "2"),
-        try Token.init(allocator, .Rbracket, "]"),
-        try Token.init(allocator, .Semicolon, ";"),
-        try Token.init(allocator, .Lbrace, "{"),
-        try Token.init(allocator, .String, "name"),
-        try Token.init(allocator, .Colon, ":"),
-        try Token.init(allocator, .String, "Anna"),
-        try Token.init(allocator, .Comma, ","),
-        try Token.init(allocator, .String, "age"),
-        try Token.init(allocator, .Colon, ":"),
-        try Token.init(allocator, .Int, "24"),
-        try Token.init(allocator, .Rbrace, "}"),
+        Token { .kind = .Let, .literal = "let" },
+        Token { .kind = .Ident, .literal = "five" },
+        Token { .kind = .Assign, .literal = "=" },
+        Token { .kind = .Int, .literal = "5" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Let, .literal = "let" },
+        Token { .kind = .Ident, .literal = "ten" },
+        Token { .kind = .Assign, .literal = "=" },
+        Token { .kind = .Int, .literal = "10" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Let, .literal = "let" },
+        Token { .kind = .Ident, .literal = "add" },
+        Token { .kind = .Assign, .literal = "=" },
+        Token { .kind = .Function, .literal = "fn" },
+        Token { .kind = .Lparen, .literal = "(" },
+        Token { .kind = .Ident, .literal = "x" },
+        Token { .kind = .Comma, .literal = "," },
+        Token { .kind = .Ident, .literal = "y" },
+        Token { .kind = .Rparen, .literal = ")" },
+        Token { .kind = .Lbrace, .literal = "{" },
+        Token { .kind = .Ident, .literal = "x" },
+        Token { .kind = .Plus, .literal = "+" },
+        Token { .kind = .Ident, .literal = "y" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Rbrace, .literal = "}" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Let, .literal = "let" },
+        Token { .kind = .Ident, .literal = "result" },
+        Token { .kind = .Assign, .literal = "=" },
+        Token { .kind = .Ident, .literal = "add" },
+        Token { .kind = .Lparen, .literal = "(" },
+        Token { .kind = .Ident, .literal = "five" },
+        Token { .kind = .Comma, .literal = "," },
+        Token { .kind = .Ident, .literal = "ten" },
+        Token { .kind = .Rparen, .literal = ")" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Bang, .literal = "!" },
+        Token { .kind = .Minus, .literal = "-" },
+        Token { .kind = .Slash, .literal = "/" },
+        Token { .kind = .Asterisk, .literal = "*" },
+        Token { .kind = .Int, .literal = "5" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Int, .literal = "5" },
+        Token { .kind = .Lt, .literal = "<" },
+        Token { .kind = .Int, .literal = "10" },
+        Token { .kind = .Gt, .literal = ">" },
+        Token { .kind = .Int, .literal = "5" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .If, .literal = "if" },
+        Token { .kind = .Lparen, .literal = "(" },
+        Token { .kind = .Int, .literal = "5" },
+        Token { .kind = .Lt, .literal = "<" },
+        Token { .kind = .Int, .literal = "10" },
+        Token { .kind = .Rparen, .literal = ")" },
+        Token { .kind = .Lbrace, .literal = "{" },
+        Token { .kind = .Return, .literal = "return" },
+        Token { .kind = .True, .literal = "true" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Rbrace, .literal = "}" },
+        Token { .kind = .Else, .literal = "else" },
+        Token { .kind = .Lbrace, .literal = "{" },
+        Token { .kind = .Return, .literal = "return" },
+        Token { .kind = .False, .literal = "false" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Rbrace, .literal = "}" },
+        Token { .kind = .Int, .literal = "10" },
+        Token { .kind = .Eq, .literal = "==" },
+        Token { .kind = .Int, .literal = "10" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Int, .literal = "10" },
+        Token { .kind = .Neq, .literal = "!=" },
+        Token { .kind = .Int, .literal = "9" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .String, .literal = "foobar" },
+        Token { .kind = .String, .literal = "foo bar" },
+        Token { .kind = .Lbracket, .literal = "[" },
+        Token { .kind = .Int, .literal = "1" },
+        Token { .kind = .Comma, .literal = "," },
+        Token { .kind = .Int, .literal = "2" },
+        Token { .kind = .Rbracket, .literal = "]" },
+        Token { .kind = .Semicolon, .literal = ";" },
+        Token { .kind = .Lbrace, .literal = "{" },
+        Token { .kind = .String, .literal = "name" },
+        Token { .kind = .Colon, .literal = ":" },
+        Token { .kind = .String, .literal = "Anna" },
+        Token { .kind = .Comma, .literal = "," },
+        Token { .kind = .String, .literal = "age" },
+        Token { .kind = .Colon, .literal = ":" },
+        Token { .kind = .Int, .literal = "24" },
+        Token { .kind = .Rbrace, .literal = "}" },
 
-        try Token.init(allocator, .Eof, ""),
+        Token { .kind = .Eof, .literal = "" },
     };
-
-    defer {
-        for (token_tests) |tok| {
-            tok.deinit();
-        }
-    }
 
     const n_tests = token_tests.len;
 
     for (token_tests, 0..) |expected_token, i| {
 
-        const tok = try l.NextToken();
-        defer tok.deinit();
+        const tok = l.nextToken();
+        // defer tok.deinit();
         // print("{s}\n", .{&tok.literal});
 
         expect(tok.kind == expected_token.kind) catch |err| {
@@ -370,6 +377,8 @@ test "Create Tokens" {
         passed_tests += 1;
 
     }
+
+    try std.testing.expectEqual(23, l.line);
 
     // print("\u{001b}[32mtoken test {}/{}: succeded\u{001b}[0m\n", .{
     //     passed_tests, n_tests
