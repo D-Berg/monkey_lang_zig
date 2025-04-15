@@ -1,8 +1,6 @@
 const std = @import("std");
 const Token = @import("Token.zig");
 
-const Allocator = std.mem.Allocator;
-
 const print = std.debug.print;
 const log = std.log;
 const expect = std.testing.expect;
@@ -31,10 +29,6 @@ pub fn init(input: []const u8) Lexer {
 
     return l;
 }
-
-// pub fn deinit(l: *Lexer) void {
-//     l.key_words.deinit();
-// }
 
 fn readChar(l: *Lexer) void {
     if (l.read_position >= l.source.len) {
