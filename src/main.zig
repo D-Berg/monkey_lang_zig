@@ -68,19 +68,16 @@ pub fn main() !void {
             var env = try Environment.init(allocator);
             defer env.deinit();
 
-            var lex = Lexer.init(allocator, input);
-            // defer lex.deinit();
+            var parser = Parser.init(allocator, input);
+            defer parser.deinit(allocator);
 
-            var parser = try Parser.init(&lex, allocator);
-            defer parser.deinit();
+            var program = try parser.Program(allocator);
+            defer program.deinit(allocator);
 
-            var program = try parser.ParseProgram(allocator);
-            defer program.deinit();
-
-            const maybe_evaluated = try evaluator.Eval(&program, &env);
+            const maybe_evaluated = try evaluator.eval(allocator, &program, &env);
 
             if (maybe_evaluated) |evaluated| {
-                defer evaluated.deinit();
+                defer evaluated.deinit(allocator);
                 const eval_str = try evaluated.inspect(allocator);
                 defer allocator.free(eval_str);
                 try stdout.print("{s}\n", .{eval_str});

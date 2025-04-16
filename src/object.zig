@@ -43,7 +43,7 @@ pub const Object = union(enum) {
 
             .string => |so| {
                 if (so.rc == 0) {
-                    so.deintit(allocator);
+                    so.deinit(allocator);
                     allocator.destroy(so);
                 }
             },
@@ -59,7 +59,7 @@ pub const Object = union(enum) {
         }
     }
 
-    pub fn clone(obj: *const Object) !Object {
+    pub fn clone(obj: *const Object, allocator: Allocator) !Object {
         switch (obj.*) {
             .integer, .boolean, .nullable, .built_in => {
                 return obj.*;
@@ -68,7 +68,7 @@ pub const Object = union(enum) {
                 @panic("clone for FunctionObject not yet implemented");
             },
             inline else => |case| {
-                return case.clone();
+                return case.clone(allocator);
             },
         }
     }
@@ -91,15 +91,14 @@ pub const Object = union(enum) {
             
                 try array_str.append('[');
 
-                const n_elems = array.elements.items.len;
+                const n_elems = array.elements.len;
 
-                for (array.elements.items, 0..) |elem, i| {
+                for (array.elements, 0..) |elem, i| {
 
                     const elem_str = try elem.inspect(allocator);
                     defer allocator.free(elem_str);
 
                     try array_str.appendSlice(elem_str);
-                    
 
                     if (i != n_elems - 1) try array_str.appendSlice(", ");
 
@@ -128,12 +127,13 @@ const ReturnObject = struct {
         allocator.destroy(ret_obj.value);
     }
 
-    pub fn clone(ro: *const ReturnObject) Allocator.Error!Object {
-        const value_ptr = try ro.allocator.create(Object);
-        value_ptr.* = try ro.value.clone();
+    pub fn clone(ro: *const ReturnObject, allocator: Allocator) Allocator.Error!Object {
+        const value_ptr = try allocator.create(Object);
+        errdefer allocator.destroy(value_ptr);
+
+        value_ptr.* = try ro.value.clone(allocator);
 
         return Object{ .return_val_obj = .{
-            .allocator = ro.allocator,
             .value = value_ptr,
             .owner = ro.owner,
         } };
@@ -141,36 +141,33 @@ const ReturnObject = struct {
 };
 
 pub const FunctionObject = struct {
-    params: ArrayList(Identifier),
+    params: []const Identifier,
     body: BlockStatement,
     env: *Environment,
     rc: usize = 0, // the env that owns the object have the responsebility to destroy it, if null it should deallocate
 
-    pub fn deinit(fnc_obj: *const FunctionObject, _: Allocator) void {
+    pub fn deinit(func_obj: *const FunctionObject, allocator: Allocator) void {
 
         // TODO: only deinit if obj dont have a owner
 
-        log.debug("trying to deinit fn obj, addr: {*}\n", .{fnc_obj});
+        log.debug("trying to deinit fn obj, addr: {*}\n", .{func_obj});
 
-        if (fnc_obj.rc != 0) {
-            log.debug("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{ fnc_obj, fnc_obj.rc });
+        if (func_obj.rc != 0) {
+            log.debug("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{ func_obj, func_obj.rc });
         } else {
 
             // Only deinit if fnc_obj dont have a owner
 
-            log.debug("func_obj ref count is {} , deinits\n", .{fnc_obj.rc});
+            log.debug("func_obj ref count is {} , deinits\n", .{func_obj.rc});
 
-            fnc_obj.body.deinit();
+            func_obj.body.deinit(allocator);
 
-            for (fnc_obj.params.items) |p| {
-                p.deinit();
-            }
-            fnc_obj.params.deinit();
+            allocator.free(func_obj.params);
 
-            if (fnc_obj.env.outer) |_| {
-                log.debug("deinits func objects enclosed env: {*}\n", .{fnc_obj.env});
-                fnc_obj.env.rc -= 1;
-                fnc_obj.env.deinit();
+            if (func_obj.env.outer) |_| {
+                log.debug("deinits func objects enclosed env: {*}\n", .{func_obj.env});
+                func_obj.env.rc -= 1;
+                func_obj.env.deinit();
                 // fnc_obj.allocator.destroy(fnc_obj.env);
 
             } else {
@@ -244,23 +241,23 @@ pub const HashMapObject = struct {
 };
 
 pub const StringObject = struct {
-    allocator: Allocator,
     value: []const u8,
     rc: usize = 0,
 
-    pub fn deintit(so: *const StringObject) void {
-        if (so.rc == 0) so.allocator.free(so.value);
+    pub fn deinit(so: *const StringObject, allocator: Allocator) void {
+        if (so.rc == 0) allocator.free(so.value);
     }
 
-    pub fn clone(so: *const StringObject) Allocator.Error!Object {
+    pub fn clone(so: *const StringObject, allocator: Allocator) Allocator.Error!Object {
 
-        const new_val = try so.allocator.alloc(u8, so.value.len);
+        const new_val = try allocator.alloc(u8, so.value.len);
+        errdefer allocator.free(new_val);
+
         @memcpy(new_val, so.value);
 
-        const so_ptr = try so.allocator.create(StringObject);
+        const so_ptr = try allocator.create(StringObject);
 
         so_ptr.* = StringObject{
-            .allocator = so.allocator,
             .value = new_val,
         };
 
@@ -273,21 +270,21 @@ pub const StringObject = struct {
 };
 
 pub const ArrayObject = struct {
-    allocator: Allocator,
-    elements: ArrayList(Object),
+    elements: []const Object,
     rc: usize = 0,
 
-    pub fn deinit(ao: *const ArrayObject) void {
-        if (ao.rc == 0) {
-            for (ao.elements.items) |elem| {
-                elem.deinit();
+    pub fn deinit(array_object: *const ArrayObject, allocator: Allocator) void {
+        if (array_object.rc == 0) {
+            for (array_object.elements) |elem| {
+                elem.deinit(allocator);
             }
-            ao.elements.deinit();
+            allocator.free(array_object.elements);
         }
 
     }
 
-    pub fn clone(ao: *const ArrayObject) Allocator.Error!Object {
+    pub fn clone(ao: *const ArrayObject, allocator: Allocator) Allocator.Error!Object {
+        _ = allocator;
         _ = ao;
         @panic("clone for ArrayObject not implemented");
 

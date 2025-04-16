@@ -25,32 +25,34 @@ pub fn HashMap() type { // TODO: Remove generic
             val: Object,
 
             fn deinit(entry: *const Entry) void {
-                entry.allocator.free(entry.key);
+                const allocator = entry.allocator;
+
+                allocator.free(entry.key);
 
                 log.debug("deinits entry:\n", .{});
 
                 switch (entry.val) {
                     .function => |fnc_obj| {
                         fnc_obj.rc -= 1;
-                        fnc_obj.deinit();
+                        fnc_obj.deinit(allocator);
 
-                        fnc_obj.allocator.destroy(fnc_obj);
+                        allocator.destroy(fnc_obj);
                     },
 
                     .string => |str_obj| {
                         str_obj.rc -= 1;
-                        str_obj.deintit();
-                        str_obj.allocator.destroy(str_obj);
+                        str_obj.deinit(allocator);
+                        allocator.destroy(str_obj);
                     },
 
                     .array => |array| {
                         array.rc -= 1;
-                        array.deinit();
-                        array.allocator.destroy(array);
+                        array.deinit(allocator);
+                        allocator.destroy(array);
                     },
 
                     else => {
-                        entry.val.deinit();
+                        entry.val.deinit(allocator);
                     },
                 }
             }

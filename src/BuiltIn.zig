@@ -18,12 +18,12 @@ pub fn getBuiltInFn(str: []const u8) ?Kind {
     return null;
 }
 
-pub fn Execute(kind: Kind, args: *const ArrayList(Object)) BuiltInError!Object {
+pub fn Execute(allocator: Allocator, kind: Kind, args: *const ArrayList(Object)) BuiltInError!Object {
     switch (kind) {
         .len => return try len(args),
         .first => return try first(args),
         .last => return try last(args),
-        .push => return try push(args),
+        .push => return try push(allocator, args),
     }
 }
 
@@ -44,7 +44,7 @@ fn len(args: *const ArrayList(Object)) BuiltInError!Object {
 
         .array => |array| {
             return Object{
-                .integer = @intCast(array.elements.items.len),
+                .integer = @intCast(array.elements.len),
             };
         },
 
@@ -61,7 +61,7 @@ fn first(args: *const ArrayList(Object)) BuiltInError!Object {
     switch (arg) {
         .array => |array| {
 
-            if (array.elements.items.len > 0) return array.elements.items[0];
+            if (array.elements.len > 0) return array.elements[0];
             
             return Object {.nullable = {}};
 
@@ -80,9 +80,9 @@ fn last(args: *const ArrayList(Object)) BuiltInError!Object {
     switch (arg) {
             
         .array => |array| {
-            const last_idx = array.elements.items.len;
+            const last_idx = array.elements.len;
 
-            if (array.elements.items.len > 0) return array.elements.items[last_idx - 1];
+            if (last_idx > 0) return array.elements[last_idx - 1];
             
             return Object {.nullable = {}};
         },
@@ -93,7 +93,7 @@ fn last(args: *const ArrayList(Object)) BuiltInError!Object {
     }
 }
 
-fn push(args: *const ArrayList(Object)) BuiltInError!Object {
+fn push(allocator: Allocator, args: *const ArrayList(Object)) BuiltInError!Object {
 
     if (args.items.len != 2) return error.WrongNumberOfArgs;
 
@@ -102,28 +102,27 @@ fn push(args: *const ArrayList(Object)) BuiltInError!Object {
 
     if (arg1 != .array) return error.WrongArgType;
 
-    const allocator = args.allocator;
     var new_elements = ArrayList(Object).init(allocator);
-
-    for (arg1.array.elements.items) |elem| {
-        try new_elements.append(try elem.clone());
+    errdefer {
+        for (new_elements.items) |obj| obj.deinit(allocator);
+        new_elements.deinit();
     }
 
-    try new_elements.append(try arg2.clone());
+    for (arg1.array.elements) |elem| {
+        try new_elements.append(try elem.clone(allocator));
+    }
 
-    const new_array = object.ArrayObject{
-        .allocator = allocator,
-        .elements = new_elements,
-    };
-
+    try new_elements.append(try arg2.clone(allocator));
+ 
     const new_array_ptr = try allocator.create(object.ArrayObject);
-    new_array_ptr.* = new_array;
+    errdefer allocator.destroy(new_array_ptr);
+
+    new_array_ptr.* = object.ArrayObject {
+        .elements = try new_elements.toOwnedSlice(),
+    };
 
     return Object{
         .array = new_array_ptr
     };
-
-
-    
 
 }

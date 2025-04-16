@@ -26,14 +26,12 @@ pub fn start(allocator: Allocator) !void {
 
         if (isExit(line)) break;
 
-        var lex = Lexer.init(line);
-        // defer lex.deinit();
 
-        var parser = try Parser.init(&lex, allocator);
-        defer parser.deinit();
+        var parser = Parser.init(allocator, line);
+        defer parser.deinit(allocator);
 
-        var program = try parser.ParseProgram(allocator);
-        defer program.deinit();
+        var program = try parser.Program(allocator);
+        defer program.deinit(allocator);
 
         const prog_str = try program.String(allocator);
         defer allocator.free(prog_str);
@@ -44,7 +42,7 @@ pub fn start(allocator: Allocator) !void {
 
         std.debug.print("Program: {s}\n", .{prog_str});
 
-        const maybe_evaluated = evaluator.Eval(&program, &env) catch |err| switch (err) {
+        const maybe_evaluated = evaluator.eval(allocator, &program, &env) catch |err| switch (err) {
             evaluator.EvalError.EvalIdentNonExistent => {
                 try stdout.print("Error: Couldnt find variable or function\n", .{});
                 continue;
@@ -53,7 +51,7 @@ pub fn start(allocator: Allocator) !void {
         };
 
         if (maybe_evaluated) |evaluated| {
-            defer evaluated.deinit();
+            defer evaluated.deinit(allocator);
             const eval_str = try evaluated.inspect(allocator);
             defer allocator.free(eval_str);
             try stdout.print("evaluated: {s}\n", .{eval_str});
@@ -71,3 +69,5 @@ fn isExit(line: []const u8) bool {
     // std.debug.print("{s}", .{line});
     return std.mem.eql(u8, line, exit);
 }
+
+// TODO: test repl by passing a writer and reader

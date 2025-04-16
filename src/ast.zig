@@ -26,13 +26,13 @@ pub const Statement = union(enum) {
         }
     }
 
-    pub fn clone(stmt: *const Statement) Allocator.Error!Statement {
+    pub fn clone(stmt: *const Statement, allocator: Allocator) Allocator.Error!Statement {
         switch (stmt.*) {
             .blck_stmt => {
                 @panic("blck_stmt.clone() should maybe not be called");
             },
             inline else => |sub_stmt| {
-                return try sub_stmt.clone();
+                return try sub_stmt.clone(allocator);
             },
         }
     }
@@ -63,14 +63,15 @@ pub const LetStatement = struct {
         allocator.destroy(ls.value);
     }
 
-    pub fn clone(ls: *const LetStatement) Allocator.Error!Statement {
-        const value_ptr = try ls.allocator.create(Expression);
-        value_ptr.* = try ls.value.clone();
+    pub fn clone(ls: *const LetStatement, allocator: Allocator) Allocator.Error!Statement {
+        const value_ptr = try allocator.create(Expression);
+        errdefer allocator.destroy(value_ptr);
+
+        value_ptr.* = try ls.value.clone(allocator);
 
         return Statement{ .let_stmt = .{
-            .allocator = ls.allocator,
             .token = ls.token,
-            .name = try ls.name.clone(),
+            .name = ls.name,
             .value = value_ptr,
         } };
     }
@@ -95,15 +96,18 @@ pub const ReturnStatement = struct {
         allocator.destroy(rs.value);
     }
     // TODO: deinit
-    pub fn clone(rs: *const ReturnStatement) Allocator.Error!Statement {
-        const value_ptr = try rs.allocator.create(Expression);
-        value_ptr.* = try rs.value.clone();
+    pub fn clone(rs: *const ReturnStatement, allocator: Allocator) Allocator.Error!Statement {
+        const value_ptr = try allocator.create(Expression);
+        errdefer allocator.destroy(value_ptr);
 
-        return Statement{ .ret_stmt = .{
-            .allocator = rs.allocator,
-            .token = rs.token,
-            .value = value_ptr,
-        } };
+        value_ptr.* = try rs.value.clone(allocator);
+
+        return Statement{ 
+            .ret_stmt = .{
+                .token = rs.token,
+                .value = value_ptr,
+            } 
+        };
     }
 
     pub fn String(rs: *const ReturnStatement, allocator: Allocator) Allocator.Error![]const u8 {
@@ -124,11 +128,16 @@ pub const ExpressionStatement = struct {
         allocator.destroy(es.expression);
     }
 
-    pub fn clone(es: *const ExpressionStatement) Allocator.Error!Statement {
-        const expr_ptr = try es.allocator.create(Expression);
-        expr_ptr.* = try es.expression.clone();
+    pub fn clone(expression_statement: *const ExpressionStatement, allocator: Allocator) Allocator.Error!Statement {
+        const expr_ptr = try allocator.create(Expression);
+        expr_ptr.* = try expression_statement.expression.clone(allocator);
 
-        return Statement{ .expr_stmt = .{ .allocator = es.allocator, .token = try es.token, .expression = expr_ptr } };
+        return Statement{ 
+            .expr_stmt = .{ 
+                .token = expression_statement.token, 
+                .expression = expr_ptr 
+            } 
+        };
     }
 
     pub fn String(es: *const ExpressionStatement, allocator: Allocator) Allocator.Error![]const u8 {
@@ -149,16 +158,20 @@ pub const BlockStatement = struct {
 
     }
 
-    pub fn clone(self: *const BlockStatement) !BlockStatement {
-        var statements = ArrayList(Statement).init(self.statements.allocator);
+    pub fn clone(self: *const BlockStatement, allocator: Allocator) Allocator.Error!BlockStatement {
+        var statements = ArrayList(Statement).init(allocator);
+        errdefer {
+            for (statements.items) |s| s.deinit(allocator);
+            statements.deinit();
+        }
 
-        for (self.statements.items) |stmt| {
-            try statements.append(try stmt.clone());
+        for (self.statements) |stmt| {
+            try statements.append(try stmt.clone(allocator));
         }
 
         return BlockStatement{
             .token = self.token,
-            .statements = statements,
+            .statements = try statements.toOwnedSlice(),
         };
     }
 
@@ -203,12 +216,18 @@ pub const Expression = union(enum) {
         }
     }
 
-    pub fn clone(expr: *const Expression) Allocator.Error!Expression {
+    pub fn clone(expr: *const Expression, allocator: Allocator) Allocator.Error!Expression {
         switch (expr.*) {
             .identifier => |ident| {
-                return Expression{ .identifier = try ident.clone() };
+                return Expression { .identifier = ident };
             },
-            inline else => |case| return try case.clone(),
+            .integer_literal => |int| {
+                return Expression { .integer_literal = int };
+            },
+            .boolean_literal => |b| {
+                return Expression { .boolean_literal = b };
+            },
+            inline else => |case| return try case.clone(allocator),
         }
     }
 
@@ -228,10 +247,6 @@ pub const IntegerLiteralExpression = struct {
     token: Token,
     value: u32,
 
-    pub fn clone(int_lit_expr: *const IntegerLiteralExpression) !Expression {
-        return Expression{ .integer_literal = .{ .token = try int_lit_expr.token, .value = int_lit_expr.value } };
-    }
-
     pub fn String(ile: *const IntegerLiteralExpression, allocator: Allocator) Allocator.Error![]const u8 {
         const str = try std.fmt.allocPrint(allocator, "{}", .{ile.value});
         return str;
@@ -241,15 +256,6 @@ pub const IntegerLiteralExpression = struct {
 pub const BooleanLiteralExpression = struct {
     token: Token,
     value: bool,
-
-    pub fn clone(bool_lit_expr: *const BooleanLiteralExpression) !Expression {
-        return Expression {
-            .boolean_literal = .{
-                .token = bool_lit_expr.token,
-                .value = bool_lit_expr.value
-            }
-        };
-    }
 
     pub fn String(ble: *const BooleanLiteralExpression, allocator: Allocator) Allocator.Error![]const u8 {
         const str = try std.fmt.allocPrint(allocator, "{}", .{ble.value});
@@ -266,13 +272,14 @@ pub const PrefixExpression = struct {
         allocator.destroy(pe.right);
     }
 
-    pub fn clone(pe: *const PrefixExpression) Allocator.Error!Expression {
-        const right_ptr = try pe.allocator.create(Expression);
-        right_ptr.* = try pe.right.clone();
+    pub fn clone(pe: *const PrefixExpression, allocator: Allocator) Allocator.Error!Expression {
+        const right_ptr = try allocator.create(Expression);
+        errdefer allocator.destroy(right_ptr);
+
+        right_ptr.* = try pe.right.clone(allocator);
 
         return Expression {
             .prefix_expression = .{
-                .allocator = pe.allocator,
                 .token = pe.token,
                 .right = right_ptr
             }
@@ -307,16 +314,20 @@ pub const InfixExpression = struct {
         allocator.destroy(ie.right);
     }
 
-    pub fn clone(ie: *const InfixExpression) Allocator.Error!Expression {
-        const left_ptr = try ie.allocator.create(Expression);
-        left_ptr.* = try ie.left.clone();
-        const right_ptr = try ie.allocator.create(Expression);
-        right_ptr.* = try ie.right.clone();
-        //TODO add err defer when allocating
+    pub fn clone(ie: *const InfixExpression, allocator: Allocator) Allocator.Error!Expression {
+
+        const left_ptr = try allocator.create(Expression);
+        errdefer allocator.destroy(left_ptr);
+
+        left_ptr.* = try ie.left.clone(allocator);
+
+        const right_ptr = try allocator.create(Expression);
+        errdefer allocator.destroy(right_ptr);
+    
+        right_ptr.* = try ie.right.clone(allocator);
 
         return Expression {
             .infix_expression = .{
-                .allocator = ie.allocator,
                 .token = ie.token,
                 .left = left_ptr,
                 .right = right_ptr
@@ -361,22 +372,24 @@ pub const IfExpression = struct {
         if (ie.alternative) |alt| alt.deinit(allocator);
     }
 
-    pub fn clone(ie: *const IfExpression) Allocator.Error!Expression {
-        const condition_ptr = try ie.allocator.create(Expression);
-        condition_ptr.* = try ie.condition.clone();
+    pub fn clone(ie: *const IfExpression, allocator: Allocator) Allocator.Error!Expression {
+        const condition_ptr = try allocator.create(Expression);
+        errdefer allocator.destroy(condition_ptr);
+
+        condition_ptr.* = try ie.condition.clone(allocator);
+        errdefer condition_ptr.deinit(allocator);
         
         var new_alt: ?BlockStatement = null;
         
         if (ie.alternative) |alt| {
-            new_alt = try alt.clone();
+            new_alt = try alt.clone(allocator);
         } 
 
         return Expression {
             .if_expression = .{
-                .allocator = ie.allocator,
                 .token = ie.token,
                 .condition = condition_ptr,
-                .consequence = try ie.consequence.clone(),
+                .consequence = try ie.consequence.clone(allocator),
                 .alternative = new_alt,
             }
         };
@@ -430,17 +443,18 @@ pub const FnLiteralExpression = struct {
         fe.body.deinit(allocator);
     }
 
-    pub fn clone(fe: *const FnLiteralExpression) Allocator.Error!Expression {
-        var parameters = ArrayList(Identifier).init(fe.parameters.allocator);
+    pub fn clone(fe: *const FnLiteralExpression, allocator: Allocator) Allocator.Error!Expression {
+        var parameters = ArrayList(Identifier).init(allocator);
+        errdefer parameters.deinit();
 
-        for (fe.parameters.items) |p| {
-            try parameters.append(try p.clone());
+        for (fe.parameters) |p| {
+            try parameters.append(p);
         }
 
         return Expression{ .fn_literal = .{
             .token = fe.token,
-            .body = try fe.body.clone(),
-            .parameters = parameters,
+            .body = try fe.body.clone(allocator),
+            .parameters = try parameters.toOwnedSlice(),
         } };
     }
 
@@ -489,7 +503,7 @@ pub const FnLiteralExpression = struct {
 pub const CallExpression = struct {
     token: Token, // the '('
     function: *const Expression, // fnlit or ident expr
-    args: [] const Expression, // TODO: use slice
+    args: []const Expression, // TODO: use slice
 
     pub fn deinit(ce: *const CallExpression, allocator: Allocator) void {
         ce.function.deinit(allocator);
@@ -502,24 +516,28 @@ pub const CallExpression = struct {
         allocator.free(ce.args);
     }
 
-    pub fn clone(ce: *const CallExpression) Allocator.Error!Expression {
+    pub fn clone(ce: *const CallExpression, allocator: Allocator) Allocator.Error!Expression {
         
-        const func_ptr = try ce.allocator.create(Expression);
-        func_ptr.* = try ce.function.clone();
-        
-        var args = ArrayList(Expression).init(ce.allocator);
-        
-        for (ce.args.items) |arg| {
-            try args.append(try arg.clone());
+        const func_ptr = try allocator.create(Expression);
+        errdefer allocator.destroy(func_ptr);
 
+        func_ptr.* = try ce.function.clone(allocator);
+        
+        var args = ArrayList(Expression).init(allocator);
+        errdefer {
+            for (args.items) |expr| expr.deinit(allocator);
+            args.deinit();
+        }
+        
+        for (ce.args) |arg| {
+            try args.append(try arg.clone(allocator));
         }
 
         return Expression {
             .call_expression = .{
-                .allocator = ce.allocator,
                 .token = ce.token,
                 .function = func_ptr,
-                .args = args
+                .args = try args.toOwnedSlice()
 
             }
             
@@ -562,7 +580,8 @@ pub const StringExpression = struct {
     token: Token,
     value: []const u8,
 
-    pub fn clone(se: *const StringExpression) Allocator.Error!Expression {
+    pub fn clone(se: *const StringExpression, allocator: Allocator) Allocator.Error!Expression {
+        _ = allocator;
         const cloned_token = se.token;
         
         return Expression {
@@ -597,8 +616,9 @@ pub const ArrayLiteralExpression = struct {
 
     }
 
-    pub fn clone(array_lit: *const ArrayLiteralExpression) Allocator.Error!Expression {
+    pub fn clone(array_lit: *const ArrayLiteralExpression, allocator: Allocator) Allocator.Error!Expression {
         _ = array_lit;
+        _ = allocator;
         @panic("clone for array_literal_expr not implemented");
 
     }
@@ -677,7 +697,8 @@ pub const DictionaryExpression = struct {
 
     }
 
-    fn clone(dictionary: *const DictionaryExpression) Allocator.Error!Expression {
+    fn clone(dictionary: *const DictionaryExpression, allocator: Allocator) Allocator.Error!Expression {
+        _ = allocator;
 
         _ = dictionary;
 
@@ -701,7 +722,8 @@ pub const IndexExpression = struct {
         allocator.destroy(ie.index);
     }
 
-    pub fn clone(ie: *const IndexExpression) Allocator.Error!Expression {
+    pub fn clone(ie: *const IndexExpression, allocator: Allocator) Allocator.Error!Expression {
+        _ = allocator;
         _ = ie;
 
         @panic("clone for IndexExpression not implemented");
@@ -726,12 +748,6 @@ pub const IndexExpression = struct {
 // Identifier --------------------------------------------------------------
 pub const Identifier = struct {
     token: Token,
-
-    pub fn clone(ident: *const Identifier) Allocator.Error!Identifier {
-        return Identifier{
-            .token = ident.token,
-        };
-    }
 
     pub fn tokenLiteral(ident: *const Identifier) []const u8 {
         return ident.token.literal;
