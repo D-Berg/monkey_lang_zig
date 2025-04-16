@@ -2,7 +2,6 @@ const std = @import("std");
 const Lexer = @import("Lexer.zig");
 const Token = @import("Token.zig");
 const ast = @import("ast.zig");
-const Program = ast.Program;
 const Expression = ast.Expression;
 const Statement = ast.Statement;
 const LetStatement = ast.LetStatement;
@@ -21,11 +20,16 @@ const log = std.log;
 
 const Parser = @This();
 
-allocator: Allocator,
-lexer: *Lexer,
+const MonkeyError = struct {
+    msg_buffer: [200]u8 = undefined,
+    msg: []const u8 = &[_]u8{},
+    line: usize = 0
+};
+
+lexer: Lexer,
 current_token: Token,
 peek_token: Token,
-errors: ArrayList([]const u8),
+errors: ArrayList(MonkeyError),
 
 const ParseError = error {
     WrongExpressionType,
@@ -41,7 +45,7 @@ const ParseError = error {
     FailedToConvertStringToInt,
     NoPrefixFunction,
     NoInfixFunction
-} || Allocator.Error;
+} || Allocator.Error || std.fmt.BufPrintError;
 
 const Precedence = enum {
     Lowest,
@@ -73,21 +77,19 @@ const Precedence = enum {
     }
 };
 
-pub fn init(lexer: *Lexer, allocator: Allocator) !Parser {
+pub fn init(allocator: Allocator, input: []const u8) Parser {
+    var lexer = Lexer.init(input);
+    const current_token = lexer.nextToken();
+    const peek_token = lexer.nextToken();
     return .{
-        .allocator = allocator,
         .lexer = lexer,
-        .current_token = lexer.nextToken(),
-        .peek_token = lexer.nextToken(),
-        .errors = ArrayList([]const u8).init(allocator),
+        .current_token = current_token,
+        .peek_token = peek_token,
+        .errors = ArrayList(MonkeyError).init(allocator),
     };
 }
 
-pub fn deinit(parser: Parser) void {
-
-    for (parser.errors.items) |parse_err| {
-        parser.allocator.free(parse_err);
-    }
+pub fn deinit(parser: Parser, _: Allocator) void {
 
     parser.errors.deinit();
 
@@ -129,21 +131,21 @@ fn parseStatement(parser: *Parser, allocator: Allocator) ParseError!Statement {
 fn parseLetStatement(parser: *Parser, allocator: Allocator) ParseError!LetStatement {
     const token = parser.current_token;
 
-    if (!parser.expectPeek(Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
+    if (!try parser.expectPeek(Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
 
     const ident_token = parser.current_token;
 
     const identifier = Identifier{ .token = ident_token };
 
-    if (!parser.expectPeek(Token.Kind.Assign)) return ParseError.ExpectedNextTokenAssign;
+    if (!(try parser.expectPeek(Token.Kind.Assign))) return ParseError.ExpectedNextTokenAssign;
 
     parser.nextToken();
 
     const expr = try parser.parseExpression(allocator, .Lowest);
     errdefer expr.deinit(allocator);
 
-    const expr_ptr = try parser.allocator.create(Expression);
-    errdefer parser.allocator.destroy(expr_ptr);
+    const expr_ptr = try allocator.create(Expression);
+    errdefer allocator.destroy(expr_ptr);
 
     expr_ptr.* = expr;
 
@@ -165,8 +167,9 @@ fn parseReturnStatement(parser: *Parser, allocator: Allocator) ParseError!Statem
     parser.nextToken();
 
     const expr = try parser.parseExpression(allocator, .Lowest);
+    errdefer expr.deinit(allocator);
 
-    const expr_ptr = try parser.allocator.create(Expression);
+    const expr_ptr = try allocator.create(Expression);
     expr_ptr.* = expr;
 
     while (!parser.curTokenIs(Token.Kind.Semicolon)) {
@@ -368,7 +371,7 @@ fn parseGroupedExpression(parser: *Parser, allocator: Allocator) ParseError!Expr
 
     const expr = try parser.parseExpression(allocator, .Lowest);
 
-    if (!parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(.Rparen)) {
         return ParseError.ExpectedNextTokenRparen;
     }
 
@@ -380,16 +383,16 @@ fn parseIfExpression(parser: *Parser, allocator: Allocator) ParseError!Expressio
 
     // print("if curr_tot = {}\n", .{curr_tok.kind});
 
-    if (!parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
+    if (!try parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
 
     parser.nextToken();
     const condition = try parser.parseExpression(allocator, .Lowest);
     errdefer condition.deinit(allocator);
     // print("if condition = {}\n", .{condition});
 
-    if (!parser.expectPeek(.Rparen)) return ParseError.ExpectedNextTokenRparen;
+    if (!try parser.expectPeek(.Rparen)) return ParseError.ExpectedNextTokenRparen;
 
-    if (!parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
+    if (!try parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
     const consequence = try parser.parseBlockStatement(allocator);
     errdefer consequence.deinit(allocator);
@@ -406,7 +409,7 @@ fn parseIfExpression(parser: *Parser, allocator: Allocator) ParseError!Expressio
     if (parser.peekTokenIs(.Else)) {
         parser.nextToken();
 
-        if (!parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
+        if (!try parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
         alternative = try parser.parseBlockStatement(allocator);
     }
@@ -449,12 +452,12 @@ fn parseBlockStatement(parser: *Parser, allocator: Allocator) ParseError!BlockSt
 fn parseFunctionLiteral(parser: *Parser, allocator: Allocator) ParseError!Expression {
     const curr_tok = parser.current_token;
 
-    if (!parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
+    if (!try parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
 
-    const parameters = try parser.parseFunctionParameters();
+    const parameters = try parser.parseFunctionParameters(allocator);
     errdefer allocator.free(parameters);
 
-    if (!parser.expectPeek(.Lbrace)) {
+    if (!try parser.expectPeek(.Lbrace)) {
         return ParseError.ExpectedNextTokenLbrace;
     }
 
@@ -467,9 +470,9 @@ fn parseFunctionLiteral(parser: *Parser, allocator: Allocator) ParseError!Expres
     } };
 }
 
-fn parseFunctionParameters(parser: *Parser) ParseError![]const Identifier {
+fn parseFunctionParameters(parser: *Parser, allocator: Allocator) ParseError![]const Identifier {
 
-    var identifiers = ArrayList(Identifier).init(parser.allocator);
+    var identifiers = ArrayList(Identifier).init(allocator);
     errdefer identifiers.deinit();
 
     if (parser.peekTokenIs(.Rparen)) {
@@ -491,7 +494,7 @@ fn parseFunctionParameters(parser: *Parser) ParseError![]const Identifier {
         try identifiers.append(.{ .token = token });
     }
 
-    if (!parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(.Rparen)) {
         return error.ExpectedNextTokenRparen;
     }
 
@@ -549,7 +552,7 @@ fn parseCallArguments(parser: *Parser, allocator: Allocator) ParseError![]const 
     }
 
     // TODO: handle if !expectpeek(.Rparent) return null
-    if (!parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(.Rparen)) {
         return ParseError.ExpectedNextTokenRparen;
     }
 
@@ -594,7 +597,7 @@ fn parseArrayLiteral(parser: *Parser, allocator: Allocator) ParseError!Expressio
         try elements.append(try parser.parseExpression(allocator, .Lowest));
     }
 
-    if (!parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
+    if (!try parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
 
     return Expression {
         .array_literal_expr = .{
@@ -637,20 +640,20 @@ fn parseDictionaryLiteral(parser: *Parser, allocator: Allocator) ParseError!Expr
         const key = try parser.parseExpression(allocator, .Lowest);
         try keys.append(key);
 
-        if (!parser.expectPeek(.Colon)) return ParseError.ExpectedNextTokenColon;
+        if (!try parser.expectPeek(.Colon)) return ParseError.ExpectedNextTokenColon;
 
         parser.nextToken(); // skip colon
 
         const value = try parser.parseExpression(allocator, .Lowest);
         try values.append(value);
 
-        if (!parser.peekTokenIs(.Rbrace) and !parser.expectPeek(.Comma)) {
+        if (!parser.peekTokenIs(.Rbrace) and !try parser.expectPeek(.Comma)) {
             return ParseError.ExpectedNextTokenRbrace;
         }
 
     }
 
-    if (!parser.expectPeek(.Rbrace)) return ParseError.ExpectedNextTokenRbrace;
+    if (!try parser.expectPeek(.Rbrace)) return ParseError.ExpectedNextTokenRbrace;
     
     return Expression {
         .dictionary = .{
@@ -676,9 +679,9 @@ fn parseIndexExpression(parser: *Parser, allocator: Allocator, left: Expression)
     }
     index_ptr.* = try parser.parseExpression(allocator, .Lowest);
 
-    if (!parser.expectPeek(.Rbracket)) return ParseError.ExpectedNextTokenRbraket;
+    if (!try parser.expectPeek(.Rbracket)) return ParseError.ExpectedNextTokenRbraket;
 
-    const left_ptr = try parser.allocator.create(Expression);
+    const left_ptr = try allocator.create(Expression);
     left_ptr.* = left;
 
     return Expression {
@@ -700,12 +703,12 @@ fn peekTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.peek_token.kind == kind;
 }
 
-fn expectPeek(parser: *Parser, kind: Token.Kind) bool {
+fn expectPeek(parser: *Parser, kind: Token.Kind) ParseError!bool {
     if (parser.peekTokenIs(kind)) {
         parser.nextToken();
         return true;
     } else {
-        parser.peekError(kind);
+        try parser.peekError(kind);
         return false;
     }
 }
@@ -720,7 +723,7 @@ fn peekPrecedence(parser: *Parser) Precedence {
     return prec;
 }
 
-pub fn ParseProgram(parser: *Parser, allocator: Allocator) ParseError!Program {
+pub fn Program(parser: *Parser, allocator: Allocator) ParseError!ast.Program {
 
     var statements: ArrayList(Statement) = .init(allocator);
     errdefer {
@@ -736,7 +739,7 @@ pub fn ParseProgram(parser: *Parser, allocator: Allocator) ParseError!Program {
     }
 
     // does not clone, parsers arraylists gets deinited by program
-    return Program {
+    return ast.Program {
         .statements = try statements.toOwnedSlice()
     };
 }
@@ -747,18 +750,17 @@ fn checkParseErrors(parser: *Parser) error{ParsingError}!void {
 
 }
 
-fn peekError(parser: *Parser, kind: Token.Kind) void {
+fn peekError(parser: *Parser, kind: Token.Kind) ParseError!void {
 
-    const err_str = std.fmt.allocPrint(parser.allocator, "expected next token to be {}, got {} instead", .{
+    var mnky_error: MonkeyError = .{};
+
+    const err_str = try std.fmt.bufPrint(&mnky_error.msg_buffer, "expected next token to be {}, got {} instead", .{
         kind, parser.peek_token.kind
-    }) catch |err| {
-        print("Error: {}\n", .{err});
-        @panic("Failed allocPrint");
-    };
+    });
 
-    parser.errors.append(err_str) catch {
-        @panic("failed to allocate error msg");
-    };
+    mnky_error.msg = err_str;
+
+    try parser.errors.append(mnky_error);
 }
 
 fn noPrefixParseFunction(parser: *Parser, kind: Token.Kind) !void {
@@ -778,12 +780,11 @@ test "Let Statements" {
         \\let foobar = 838383;
     ;
 
-    var lexer = Lexer.init(correct_input); // working
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
+    var parser = Parser.init(allocator, correct_input);
+    defer parser.deinit(allocator);
 
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     try parser.checkParseErrors();
@@ -791,17 +792,14 @@ test "Let Statements" {
     expect(parser.errors.items.len == 0) catch |err| {
         print("Encountered {} parsing errors\n", .{parser.errors.items.len});
 
-        for (parser.errors.items) |parse_err| {
-            print("parse error: {s}\n", .{parse_err});
+        for (parser.errors.items) |mnky_error| {
+            print("parse error: {s}\n", .{mnky_error.msg});
         }
 
         return err;
     };
 
-    expect(program.statements.len == 3) catch |err| {
-        print("Statements len is not 3: Failed with error", .{});
-        return err;
-    };
+    try expectEqual(3, program.statements.len);
 
     const expected_identiefers = [3][]const u8{ "x", "y", "foobar" };
 
@@ -825,12 +823,11 @@ test "Return Statements" {
         \\return 993322;
     ;
 
-    var lexer = Lexer.init(input);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     try parser.checkParseErrors();
@@ -848,12 +845,11 @@ test "Ident Expression" {
 
     const input = "foobar;";
 
-    var lexer = Lexer.init(input);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     // try parser.checkParseErrors();
@@ -887,12 +883,10 @@ test "Int Lit Expression" {
     const input = "5;";
     const input_int: u32 = 5;
 
-    var lexer = Lexer.init(input);
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     try parser.checkParseErrors();
@@ -934,12 +928,11 @@ test "Boolean lit expr" {
     };
 
     for (0..input.len) |i| {
-        var lexer = Lexer.init(input[i]);
 
-        var parser = try Parser.init(&lexer, allocator);
-        defer parser.deinit();
+        var parser = Parser.init(allocator, input[i]);
+        defer parser.deinit(allocator);
 
-        var program = try parser.ParseProgram(allocator);
+        var program = try parser.Program(allocator);
         defer program.deinit(allocator);
 
         try parser.checkParseErrors();
@@ -961,12 +954,11 @@ test "Prefix Expression" {
     const int_values = [_]u32{ 5, 15 };
 
     for (0..2) |i| {
-        var lexer = Lexer.init(input[i]);
 
-        var parser = try Parser.init(&lexer, allocator);
-        defer parser.deinit();
+        var parser = Parser.init(allocator, input[i]);
+        defer parser.deinit(allocator);
 
-        var program = try parser.ParseProgram(allocator);
+        var program = try parser.Program(allocator);
         defer program.deinit(allocator);
 
         try parser.checkParseErrors();
@@ -1002,12 +994,11 @@ test "Infix Expression" {
     const right_value = 10;
 
     for (0..input.len) |i| {
-        var lexer = Lexer.init(input[i]);
 
-        var parser = try Parser.init(&lexer, allocator);
-        defer parser.deinit();
+        var parser = Parser.init(allocator, input[i]);
+        defer parser.deinit(allocator);
 
-        var program = try parser.ParseProgram(allocator);
+        var program = try parser.Program(allocator);
         defer program.deinit(allocator);
 
         try parser.checkParseErrors();
@@ -1064,7 +1055,7 @@ test "Get Program String" {
         }
     );
 
-    var prog = Program {
+    var prog = ast.Program {
         .statements = try statements.toOwnedSlice(),
     };
     defer prog.deinit(allocator);
@@ -1132,12 +1123,11 @@ test "Operator Precedence" {
     };
 
     for (0..input.len) |i| {
-        var lexer = Lexer.init(input[i]);
 
-        var parser = try Parser.init(&lexer, allocator);
-        defer parser.deinit();
+        var parser = Parser.init(allocator, input[i]);
+        defer parser.deinit(allocator);
 
-        var program = try parser.ParseProgram(allocator);
+        var program = try parser.Program(allocator);
         defer program.deinit(allocator);
 
         try parser.checkParseErrors();
@@ -1154,12 +1144,10 @@ test "If Expression" {
 
     const input = "if (x < y) { x }";
 
-    var lexer = Lexer.init(input);
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     try parser.checkParseErrors();
@@ -1175,12 +1163,11 @@ test "Func Lit Expr" {
     const allocator = std.testing.allocator;
     const input = "fn(x, y) { x + y; }";
 
-    var lexer = Lexer.init(input);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     expect(program.statements.len == 1) catch |err| {
@@ -1222,12 +1209,10 @@ test "Call expression" {
     // const input = "add(1, 2 * 3, 4 + 5);";
     const input = "add(1, 2 * 3, add(5, 5));";
 
-    var lexer = Lexer.init(input);
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     const n_stmts = program.statements.len;
@@ -1256,12 +1241,10 @@ test "String Expr" {
 
     const answer = "hello world";
 
-    var lexer = Lexer.init(input);
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     const n_stmts = program.statements.len;
@@ -1284,13 +1267,10 @@ test "Array Literal" {
     const allocator = std.testing.allocator;
     const input = "[1, 2 * 2, 3 + 4]";
 
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var lexer = Lexer.init(input);
-
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     const n_stmts = program.statements.len;
@@ -1325,12 +1305,10 @@ test "Dictionary Literal" {
         \\{ "key1": 21, "key2": "string_val" }
     ;
 
-    var lexer = Lexer.init(input);
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     const n_stmts = program.statements.len;
@@ -1357,12 +1335,10 @@ test "Index Expr" {
 
     const input = "myArray[1 + 1]";
 
-    var lexer = Lexer.init(input);
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    var program = try parser.ParseProgram(allocator);
+    var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
     const n_stmts = program.statements.len;
@@ -1395,12 +1371,10 @@ test "unexected prefix tkn" {
         \\if (x > 4) { x = x + 3 };
     ;
 
-    var lexer = Lexer.init(input);
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
 
-    var parser = try Parser.init(&lexer, allocator);
-    defer parser.deinit();
-
-    const programError = parser.ParseProgram(allocator);
+    const programError = parser.Program(allocator);
     // defer program.deinit(allocator);
 
     try std.testing.expectError(error.NoPrefixFunction, programError);
@@ -1423,7 +1397,7 @@ test "unexected prefix tkn" {
 //     var parser = try Parser.init(&lexer, allocator);
 //     defer parser.deinit();
 //
-//     var program = try parser.ParseProgram(allocator);
+//     var program = try parser.Program(allocator);
 //     defer program.deinit();
 //
 //     expect(parser.errors.items.len == 3) catch |err| {
