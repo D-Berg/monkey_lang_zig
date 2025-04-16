@@ -299,31 +299,29 @@ pub fn HashMap() type { // TODO: Remove generic
 test "init hashmap" {
     const allocator = std.testing.allocator;
 
-    var token1 = try Token.init(allocator, .Ident, "a");
-    defer token1.deinit();
+    const token1 = Token { .kind = .Ident, .literal = "a" };
+
     const obj1 = Object{ .integer = 3 };
 
-    var token2 = try Token.init(allocator, .Ident, "b");
-    defer token2.deinit();
+    const token2 =  Token { .kind = .Ident, .literal = "b" };
     const obj2 = Object{ .integer = 4 };
 
-    var token3 = try Token.init(allocator, .Ident, "c");
-    defer token3.deinit();
+    const token3 = Token { .kind = .Ident, .literal = "c" };
     const obj3 = Object{ .integer = 5 };
 
     var store = try HashMap().init(allocator);
     defer store.deinit();
 
-    try store.put(token1.tokenLiteral(), obj1);
-    try store.put(token2.tokenLiteral(), obj2);
-    try store.put(token3.tokenLiteral(), obj3);
+    try store.put(token1.literal, obj1);
+    try store.put(token2.literal, obj2);
+    try store.put(token3.literal, obj3);
 
-    try expect(store.get(token1.tokenLiteral()).?.integer == obj1.integer);
+    try expect(store.get(token1.literal).?.integer == obj1.integer);
     try expect(store.n_entries == 3);
 
     store.printHM();
 
-    try store.put(token1.tokenLiteral(), Object{ .integer = 100 });
+    try store.put(token1.literal, Object{ .integer = 100 });
     store.printHM();
 
     // try store.put(obj);

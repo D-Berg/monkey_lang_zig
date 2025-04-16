@@ -26,7 +26,7 @@ pub fn start(allocator: Allocator) !void {
 
         if (isExit(line)) break;
 
-        var lex = Lexer.init(allocator, line);
+        var lex = Lexer.init(line);
         // defer lex.deinit();
 
         var parser = try Parser.init(&lex, allocator);
@@ -35,7 +35,7 @@ pub fn start(allocator: Allocator) !void {
         var program = try parser.ParseProgram(allocator);
         defer program.deinit();
 
-        const prog_str = try program.String();
+        const prog_str = try program.String(allocator);
         defer allocator.free(prog_str);
 
         // for (parser.errors.items) |err| {

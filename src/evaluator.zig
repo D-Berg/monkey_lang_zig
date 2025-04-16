@@ -51,7 +51,9 @@ pub const EvalError = error{
 pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
     var maybe_result: ?object.Object = null;
 
-    const prg_str = try program.String();
+    const allocator = program.allocator;
+
+    const prg_str = try program.String(allocator);
     defer program.allocator.free(prg_str);
     // print("\nprog str: {s}\n", .{prg_str});
 
@@ -78,7 +80,7 @@ pub fn Eval(program: *Program, env: *Environment) EvalError!?Object {
     return maybe_result;
 }
 
-fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object {
+fn EvalStmt(allocator: Allocator, stmt: *const Statement, env: *Environment) EvalError!?object.Object {
     switch (stmt.*) {
         .let_stmt => |*ls| {
             try EvalLetStmt(ls, env);
@@ -90,7 +92,7 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
 
         .expr_stmt => |es| {
             // print("evaluating expression stmt\n", .{});
-            return try EvalExpr(es.expression, env);
+            return try evalExpression(allocator, es.expression, env);
         },
 
         .blck_stmt => |bs| {
@@ -99,13 +101,13 @@ fn EvalStmt(stmt: *const Statement, env: *Environment) EvalError!?object.Object 
     }
 }
 
-fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
+fn EvalLetStmt(allocator: Allocator, ls: *const LetStatement, env: *Environment) EvalError!void {
     var ident = ls.name;
     const name = ident.tokenLiteral();
 
     log.debug("Evaluating let stmt: {s}\n", .{name});
 
-    const maybe_val = try EvalExpr(ls.value, env);
+    const maybe_val = try evalExpression(allocator, ls.value, env);
     // defer val.?.deinit(); // deinit because store.put clones val
 
     // print("putting ident: {s} with val: {}\n", .{name, val.?});
@@ -123,10 +125,10 @@ fn EvalLetStmt(ls: *const LetStatement, env: *Environment) EvalError!void {
 
 }
 
-fn EvalRetStmt(rs: *const ReturnStatement, env: *Environment) EvalError!Object {
+fn EvalRetStmt(allocator: Allocator, rs: *const ReturnStatement, env: *Environment) EvalError!Object {
 
     // print("evaluating  return stmt\n", .{});
-    const val = try EvalExpr(rs.value, env);
+    const val = try evalExpression(allocator, rs.value, env);
     const res = try rs.allocator.create(Object);
     res.* = val.?;
 
@@ -135,7 +137,7 @@ fn EvalRetStmt(rs: *const ReturnStatement, env: *Environment) EvalError!Object {
     };
 }
 
-fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object {
+fn evalExpression(allocator: Allocator, expr: *const Expression, env: *Environment) EvalError!?object.Object {
     switch (expr.*) {
         .identifier => |*ident| {
             return try EvalIdentExpr(ident, env);
@@ -171,7 +173,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
         .fn_literal => |*fl| {
             const fn_obj_ptr = try env.store.allocator.create(FuncionObject);
             errdefer env.store.allocator.destroy(fn_obj_ptr);
-            fn_obj_ptr.* = try EvalFnExpr(fl, env);
+            fn_obj_ptr.* = try EvalFnExpr(allocator, fl, env);
 
             log.debug("created fn obj {*}\n", .{fn_obj_ptr});
 
@@ -228,9 +230,7 @@ fn EvalExpr(expr: *const Expression, env: *Environment) EvalError!?object.Object
 /// Retrieves a cloned obj from env
 fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
 
-    // print("\nEvaluating ident expr\n", .{});
-    var tok = ident.token;
-    const ident_name = tok.tokenLiteral();
+    const ident_name = ident.token.literal;
 
     const maybe_val = env.get(ident_name);
 
@@ -251,13 +251,14 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) EvalError!Object {
     }
 }
 
-fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!FuncionObject {
+fn EvalFnExpr(allocator: Allocator, fl: *const FnLiteralExpression, env: *Environment) EvalError!FuncionObject {
 
     // print("outer env = {?}\n", .{env.outer});
 
     // Clone func expr param identifiers to func obj
 
-    var params = ArrayList(Identifier).init(fl.token.allocator);
+    var params = ArrayList(Identifier).init(allocator);
+    // TODO: errdefer deinit
 
     for (fl.parameters.items) |p| {
         try params.append(try p.clone());
@@ -282,8 +283,8 @@ fn EvalFnExpr(fl: *const FnLiteralExpression, env: *Environment) EvalError!Funci
     };
 }
 
-fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object {
-    const maybe_func = try EvalExpr(ce.function, env);
+fn EvalCallExpr(allocator: Allocator, ce: *const CallExpression, env: *Environment) EvalError!?Object {
+    const maybe_func = try evalExpression(allocator, ce.function, env);
 
     const func = maybe_func.?;
     defer func.deinit(); // only deinit if fnc dont have a owner
@@ -303,7 +304,7 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
 
     // evalExpressions p.144
     for (ce.args.items) |*arg| {
-        try args.append((try EvalExpr(arg, env)).?);
+        try args.append((try evalExpression(allocator, arg, env)).?);
     }
 
     switch (func) {
@@ -318,6 +319,9 @@ fn EvalCallExpr(ce: *const CallExpression, env: *Environment) EvalError!?Object 
 }
 
 fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
+
+    const allocator = func.allocator;
+
     log.debug("\napplying func {*}\n", .{func});
     defer log.debug("funished applying func {*}\n", .{func});
 
@@ -351,7 +355,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     std.debug.assert(args.items.len == func.params.items.len);
 
     for (func.params.items, args.items) |*p, arg| {
-        const name = p.token.tokenLiteral();
+        const name = p.token.literal;
 
         log.debug("putting param: {s} = {} in env {*}\n", .{ name, arg, func.env });
 
@@ -363,7 +367,7 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
 
     // print("printing functions block statements\n", .{});
     for (func.body.statements.items) |stmt| {
-        const stmt_str = try stmt.String();
+        const stmt_str = try stmt.String(allocator);
         defer func.params.allocator.free(stmt_str);
         // print("body smt: {s}\n", .{stmt_str});
 
@@ -385,10 +389,10 @@ fn applyFunction(func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Obje
     return maybe_evaluated;
 }
 
-fn EvalPrefixExpr(pe: *const PrefixExpression, env: *Environment) EvalError!Object {
+fn EvalPrefixExpr(allocator: Allocator, pe: *const PrefixExpression, env: *Environment) EvalError!Object {
     const operator = pe.token.kind;
 
-    const right = (try EvalExpr(pe.right, env)).?; // TODO: handle null case
+    const right = (try evalExpression(allocator, pe.right, env)).?; // TODO: handle null case
     defer right.deinit();
 
     switch (operator) {
@@ -428,20 +432,22 @@ fn EvalPrefixExpr(pe: *const PrefixExpression, env: *Environment) EvalError!Obje
     }
 }
 
-fn EvalInfixExpr(ie: *const InfixExpression, env: *Environment) EvalError!object.Object {
+fn EvalInfixExpr(allocator: Allocator, ie: *const InfixExpression, env: *Environment) EvalError!object.Object {
+
+
     const operator = ie.token.kind;
 
-    const ie_str = try ie.String();
+    const ie_str = try ie.String(allocator);
     defer ie.allocator.free(ie_str);
     // print("infix_expression = {s}\n", .{ie_str});
 
     // TODO: handle null cases
-    const maybe_left = try EvalExpr(ie.left, env);
+    const maybe_left = try evalExpression(allocator, ie.left, env);
     const left = maybe_left.?;
-    defer left.deinit();
+    defer left.deinit(allocator);
 
-    const right = (try EvalExpr(ie.right, env)).?;
-    defer right.deinit();
+    const right = (try evalExpression(allocator, ie.right, env)).?;
+    defer right.deinit(allocator);
 
     if (left == .integer and right == .integer) {
         const left_val = left.integer;
@@ -506,8 +512,6 @@ fn EvalInfixExpr(ie: *const InfixExpression, env: *Environment) EvalError!object
                 const right_len = right_str.len;
                 const new_len = left_len + right_len;
                 log.debug("{} + {} = {}", .{ left_len, right_len, new_len });
-
-                const allocator = left.string.allocator;
 
                 const str = try allocator.alloc(u8, new_len);
                 errdefer allocator.free(str);
@@ -673,7 +677,7 @@ fn EvalStringExpr(se: *const StringExpression) EvalError!StringObject {
 fn testEval(env: *Environment, input: []const u8) !?object.Object {
     const allocator = env.store.allocator;
 
-    var lexer = Lexer.init(allocator, input);
+    var lexer = Lexer.init(input);
 
     var parser = try Parser.init(&lexer, allocator);
     defer parser.deinit();
@@ -1000,7 +1004,7 @@ test "multi input fn appl" {
     defer env.deinit();
 
     for (inputs, 0..) |inp, idx| {
-        var lexer = Lexer.init(allocator, inp);
+        var lexer = Lexer.init(inp);
 
         var parser = try Parser.init(&lexer, allocator);
         defer parser.deinit();

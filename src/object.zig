@@ -22,20 +22,20 @@ pub const Object = union(enum) {
     built_in: BuiltIn.Kind,
     array: *ArrayObject,
 
-    pub fn deinit(obj: *const Object) void {
+    pub fn deinit(obj: *const Object, allocator: Allocator) void {
 
         // print("Deinitalizing object\n", .{});
         switch (obj.*) {
             .return_val_obj => |rvj| {
                 log.debug("Deinitalizing return object\n", .{});
-                rvj.deinit();
+                rvj.deinit(allocator);
             },
             .function => |func| {
                 log.debug("trying to deinitalizing func object\n", .{});
                 // is only deinited if func_obj dont have a owner
                 if (func.rc == 0) {
-                    func.deinit();
-                    func.allocator.destroy(func);
+                    func.deinit(allocator);
+                    allocator.destroy(func);
                 } else {
                     log.debug("did not deinit func {*}, cause its referenced by {} other\n", .{ func, func.rc });
                 }
@@ -43,15 +43,15 @@ pub const Object = union(enum) {
 
             .string => |so| {
                 if (so.rc == 0) {
-                    so.deintit();
-                    so.allocator.destroy(so);
+                    so.deintit(allocator);
+                    allocator.destroy(so);
                 }
             },
 
             .array => |array| {
                 if (array.rc == 0) {
-                    array.deinit();
-                    array.allocator.destroy(array);
+                    array.deinit(allocator);
+                    allocator.destroy(array);
                 }
             },
 
@@ -119,14 +119,13 @@ pub const Object = union(enum) {
 };
 
 const ReturnObject = struct {
-    allocator: Allocator,
     value: *const Object,
     owner: ?*Environment,
 
-    pub fn deinit(ret_obj: *const ReturnObject) void {
+    pub fn deinit(ret_obj: *const ReturnObject, allocator: Allocator) void {
         // print("deinits ret obj\n", .{});
-        ret_obj.value.deinit();
-        ret_obj.allocator.destroy(ret_obj.value);
+        ret_obj.value.deinit(allocator);
+        allocator.destroy(ret_obj.value);
     }
 
     pub fn clone(ro: *const ReturnObject) Allocator.Error!Object {
@@ -142,13 +141,12 @@ const ReturnObject = struct {
 };
 
 pub const FunctionObject = struct {
-    allocator: Allocator,
     params: ArrayList(Identifier),
     body: BlockStatement,
     env: *Environment,
     rc: usize = 0, // the env that owns the object have the responsebility to destroy it, if null it should deallocate
 
-    pub fn deinit(fnc_obj: *const FunctionObject) void {
+    pub fn deinit(fnc_obj: *const FunctionObject, _: Allocator) void {
 
         // TODO: only deinit if obj dont have a owner
 
