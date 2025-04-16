@@ -34,6 +34,7 @@ const monkey =
 ;
 
 pub fn main() !void {
+
     const allocator, const is_debug = gpa: {
         break :gpa switch (builtin.mode) {
             .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
@@ -43,8 +44,6 @@ pub fn main() !void {
     defer if (is_debug) {
         _ = debug_allocator.deinit();
     };
-
-
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
