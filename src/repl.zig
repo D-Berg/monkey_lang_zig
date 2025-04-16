@@ -6,23 +6,24 @@ const evaluator = @import("evaluator.zig");
 const Environment = @import("Environment.zig");
 
 const Allocator = std.mem.Allocator;
-const stdin = std.io.getStdIn().reader();
-const stdout = std.io.getStdOut().writer();
 const print = std.debug.print;
+
+const AnyReader = std.io.AnyReader;
+const AnyWriter = std.io.AnyWriter;
 
 const prompt = ">> ";
 const buffer_size = 256;
 
-pub fn start(allocator: Allocator) !void {
+pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter) !void {
     var buffer: [buffer_size]u8 = undefined;
 
     var env = try Environment.init(allocator);
     defer env.deinit();
 
     while (true) {
-        try stdout.print("{s}", .{prompt});
+        try writer.print("{s}", .{prompt});
 
-        const line = try stdin.readUntilDelimiter(&buffer, '\n'); // TODO: handle error better
+        const line = try reader.readUntilDelimiter(&buffer, '\n'); // TODO: handle error better
 
         if (isExit(line)) break;
 
@@ -44,7 +45,7 @@ pub fn start(allocator: Allocator) !void {
 
         const maybe_evaluated = evaluator.eval(allocator, &program, &env) catch |err| switch (err) {
             evaluator.EvalError.EvalIdentNonExistent => {
-                try stdout.print("Error: Couldnt find variable or function\n", .{});
+                try writer.print("Error: Couldnt find variable or function\n", .{});
                 continue;
             },
             else => return err,
@@ -54,7 +55,7 @@ pub fn start(allocator: Allocator) !void {
             defer evaluated.deinit(allocator);
             const eval_str = try evaluated.inspect(allocator);
             defer allocator.free(eval_str);
-            try stdout.print("evaluated: {s}\n", .{eval_str});
+            try writer.print("evaluated: {s}\n", .{eval_str});
         }
         //
         // var tok = lex.NextToken();

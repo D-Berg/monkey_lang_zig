@@ -148,7 +148,7 @@ pub const FunctionObject = struct {
 
     pub fn deinit(func_obj: *const FunctionObject, allocator: Allocator) void {
 
-        // TODO: only deinit if obj dont have a owner
+        // only deinit if obj dont have a owner
 
         log.debug("trying to deinit fn obj, addr: {*}\n", .{func_obj});
 

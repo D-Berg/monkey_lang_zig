@@ -7,7 +7,7 @@ const object = @import("object.zig");
 const evaluator = @import("evaluator.zig");
 const Environment = @import("Environment.zig");
 
-
+const builtin = @import("builtin");
 const print = std.debug.print;
 const log = std.log;
 
@@ -17,8 +17,8 @@ pub const std_options: std.Options = .{
 
 const expect = std.testing.expect;
 
-const stdin = std.io.getStdIn().reader();
-const stdout = std.io.getStdOut().writer();
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+
 
 const monkey =
     \\ .--.  .-"   "-.  .--.
@@ -34,10 +34,17 @@ const monkey =
 ;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    const allocator, const is_debug = gpa: {
+        break :gpa switch (builtin.mode) {
+            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false }
+        };
+    };
+    defer if (is_debug) {
+        _ = debug_allocator.deinit();
+    };
 
-    const allocator = gpa.allocator();
+
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -45,6 +52,8 @@ pub fn main() !void {
     for (args, 0..) |arg, i| {
         log.debug("arg {} = {s}\n", .{ i, arg });
     }
+    
+    const stdout = std.io.getStdOut().writer();
 
     if (args.len == 1) {
         try stdout.print("Hello! This is the monkey programming language!\n", .{});
@@ -52,7 +61,9 @@ pub fn main() !void {
         try stdout.print("Feel free to type in commands\n", .{});
         try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
-        try repl.start(allocator);
+        const stdin = std.io.getStdIn().reader();
+
+        try repl.start(allocator, stdin.any(), stdout.any());
     } else {
         if (args.len == 2) {
             const path = args[1];
