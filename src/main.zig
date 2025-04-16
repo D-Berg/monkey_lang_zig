@@ -42,7 +42,12 @@ pub fn main() !void {
         };
     };
     defer if (is_debug) {
-        _ = debug_allocator.deinit();
+        const check = debug_allocator.deinit();
+
+        switch (check) {
+            .ok => log.debug("no leaks", .{}),
+            .leak => log.err("leaked", .{})
+        }
     };
 
     const args = try std.process.argsAlloc(allocator);
