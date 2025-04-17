@@ -45,7 +45,8 @@ pub const EvalError = error{
     FailedEvalLet,
     FailedEvalString,
     EvalIdentNonExistent,
-    EvalUnsupportedIndexType
+    EvalUnsupportedIndexType,
+    Unimplemented
 } || Allocator.Error || std.fmt.BufPrintError || BuiltIn.BuiltInError;
 
 
@@ -223,7 +224,7 @@ fn evalExpression(allocator: Allocator, expr: *const Expression, env: *Environme
         .dictionary => |*dict| {
             _ = dict;
 
-            @panic("Unimplemented");
+            return EvalError.Unimplemented;
 
         }
 

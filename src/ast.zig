@@ -55,7 +55,7 @@ pub const Statement = union(enum) {
 pub const LetStatement = struct {
     token: Token, // the Let TokenLiteral
     name: Identifier,
-    value: *const Expression, //TODO: remove null
+    value: *const Expression,
 
     pub fn deinit(ls: *const LetStatement, allocator: Allocator) void {
         // print("deinits let stmt\n", .{});

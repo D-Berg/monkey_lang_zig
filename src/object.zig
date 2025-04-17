@@ -21,6 +21,7 @@ pub const Object = union(enum) {
     string: *StringObject,
     built_in: BuiltIn.Kind,
     array: *ArrayObject,
+    // dictionary: *DictionayObject,
 
     pub fn deinit(obj: *const Object, allocator: Allocator) void {
 
@@ -54,7 +55,15 @@ pub const Object = union(enum) {
                     allocator.destroy(array);
                 }
             },
-
+            
+            // .dictionary => |dict| {
+            //     if (dict.rc == 0) {
+            //         dict.deinit(allocator);
+            //         allocator.destroy(dict);
+            //     }
+            //
+            // },
+            //
             else => {},
         }
     }
@@ -235,9 +244,23 @@ pub const FunctionObject = struct {
     }
 };
 
-pub const HashMapObject = struct {
+pub const DictionayObject = struct {
     inner: std.StringHashMap(Object),
     rc: usize = 0,
+
+    fn deinit(dictionary_obj: *const DictionayObject, allocator: Allocator) void {
+        var iterator = dictionary_obj.inner.iterator();
+
+        while (iterator.next()) |entry| {
+            // allocator.free(entry.key_ptr)
+            entry.value_ptr.deinit(allocator);
+        }
+
+        dictionary_obj.inner.deinit();
+
+    }
+
+
 };
 
 pub const StringObject = struct {

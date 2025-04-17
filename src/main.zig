@@ -66,8 +66,9 @@ pub fn main() !void {
         try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
         const stdin = std.io.getStdIn().reader();
+        const stderr = std.io.getStdErr().writer();
 
-        try repl.start(allocator, stdin.any(), stdout.any());
+        try repl.start(allocator, stdin.any(), stdout.any(), stderr.any());
     } else {
         if (args.len == 2) {
             const path = args[1];

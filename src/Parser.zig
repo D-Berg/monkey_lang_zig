@@ -21,8 +21,7 @@ const log = std.log;
 const Parser = @This();
 
 const MonkeyError = struct {
-    msg_buffer: [200]u8 = undefined,
-    msg: []const u8 = &[_]u8{},
+    msg: []const u8,
     line: usize = 0
 };
 
@@ -31,7 +30,7 @@ current_token: Token,
 peek_token: Token,
 errors: ArrayList(MonkeyError),
 
-const ParseError = error {
+pub const ParseError = error {
     WrongExpressionType,
     ExpectedNextTokenIdentifier,
     ExpectedNextTokenAssign,
@@ -89,7 +88,9 @@ pub fn init(allocator: Allocator, input: []const u8) Parser {
     };
 }
 
-pub fn deinit(parser: Parser, _: Allocator) void {
+pub fn deinit(parser: Parser, allocator: Allocator) void {
+
+    for (parser.errors.items) |item| allocator.free(item.msg);
 
     parser.errors.deinit();
 
@@ -752,17 +753,20 @@ fn checkParseErrors(parser: *Parser) error{ParsingError}!void {
 
 fn peekError(parser: *Parser, kind: Token.Kind) ParseError!void {
 
-    var mnky_error: MonkeyError = .{};
+    const allocator = parser.errors.allocator;
 
-    const err_str = try std.fmt.bufPrint(&mnky_error.msg_buffer, "expected next token to be {}, got {} instead", .{
+    const err_str = try std.fmt.allocPrint(allocator, "expected next token to be {}, got {} instead", .{
         kind, parser.peek_token.kind
     });
 
-    mnky_error.msg = err_str;
+    const mnky_error: MonkeyError = .{
+        .msg = err_str
+    };
 
     try parser.errors.append(mnky_error);
 }
 
+// BUG: should append a mnky error
 fn noPrefixParseFunction(parser: *Parser, kind: Token.Kind) !void {
     // TODO: fix error handling for monkey
     const err_str = try std.fmt.allocPrint(parser.allocator, "no defined prefix parse function for {}", .{kind});
