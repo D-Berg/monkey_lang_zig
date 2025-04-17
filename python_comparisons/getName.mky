@@ -1,0 +1,10 @@
+// User-defined functions...
+let people = [{"name": "Anna", "age": 24}, {"name": "Bob", "age": 99}];
+
+let getName = fn(person) { person["name"]; };
+
+getName(people[0]); // => "Anna"
+getName(people[1]); // => "Bob"
+
+// and built-in functions
+puts(len(people)) // prints: 2

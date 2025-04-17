@@ -1,17 +1,24 @@
 const std = @import("std");
+const build_options = @import("build_options");
 const repl = @import("repl.zig");
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
 const object = @import("object.zig");
 const evaluator = @import("evaluator.zig");
-
 const Environment = @import("Environment.zig");
+
+const builtin = @import("builtin");
 const print = std.debug.print;
 const log = std.log;
+
+pub const std_options: std.Options = .{
+    .log_level = @enumFromInt(@intFromEnum(build_options.log_level)),
+};
+
 const expect = std.testing.expect;
 
-const stdin = std.io.getStdIn().reader();
-const stdout = std.io.getStdOut().writer();
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+
 
 const monkey =
     \\ .--.  .-"   "-.  .--.
@@ -27,10 +34,21 @@ const monkey =
 ;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
 
-    const allocator = gpa.allocator();
+    const allocator, const is_debug = gpa: {
+        break :gpa switch (builtin.mode) {
+            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false }
+        };
+    };
+    defer if (is_debug) {
+        const check = debug_allocator.deinit();
+
+        switch (check) {
+            .ok => log.debug("no leaks", .{}),
+            .leak => log.err("leaked", .{})
+        }
+    };
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -38,6 +56,8 @@ pub fn main() !void {
     for (args, 0..) |arg, i| {
         log.debug("arg {} = {s}\n", .{ i, arg });
     }
+    
+    const stdout = std.io.getStdOut().writer();
 
     if (args.len == 1) {
         try stdout.print("Hello! This is the monkey programming language!\n", .{});
@@ -45,7 +65,10 @@ pub fn main() !void {
         try stdout.print("Feel free to type in commands\n", .{});
         try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
-        try repl.start(allocator);
+        const stdin = std.io.getStdIn().reader();
+        const stderr = std.io.getStdErr().writer();
+
+        try repl.start(allocator, stdin.any(), stdout.any(), stderr.any());
     } else {
         if (args.len == 2) {
             const path = args[1];
@@ -61,25 +84,22 @@ pub fn main() !void {
             var env = try Environment.init(allocator);
             defer env.deinit();
 
-            var lex = Lexer.init(allocator, input);
-            // defer lex.deinit();
+            var parser = Parser.init(allocator, input);
+            defer parser.deinit(allocator);
 
-            var parser = try Parser.init(&lex, allocator);
-            defer parser.deinit();
+            var program = try parser.Program(allocator);
+            defer program.deinit(allocator);
 
-            var program = try parser.ParseProgram(allocator);
-            defer program.deinit();
-
-            const maybe_evaluated = try evaluator.Eval(&program, &env);
+            const maybe_evaluated = try evaluator.eval(allocator, &program, &env);
 
             if (maybe_evaluated) |evaluated| {
-                defer evaluated.deinit();
+                defer evaluated.deinit(allocator);
                 const eval_str = try evaluated.inspect(allocator);
                 defer allocator.free(eval_str);
-                try stdout.print("evaluated: {s}\n", .{eval_str});
+                try stdout.print("{s}\n", .{eval_str});
             }
         } else {
-            @panic("unsupported number of args");
+            return error.UnsupportedNumberOfArgs;
         }
     }
 }
