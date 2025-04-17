@@ -1,3 +1,13 @@
+# Edit
+
+Contains the code from 04 in https://interpreterbook.com/waiig_code_1.3.zip 
+with the small modification in `main.go` to be able to read input from a file,
+by providing filename arg.
+
+Original `README.md` is below.
+
+---
+
 # Writing An Interpreter In Go
 
 Thank you for purchasing "Writing An Interpreter In Go"!
