@@ -772,7 +772,7 @@ pub const Program = struct {
     }
 
     /// String need to be deallocated by caller
-    pub fn String(program: *Program, allocator: Allocator) Allocator.Error![]const u8 { // TODO: take allocator as arg
+    pub fn String(program: *Program, allocator: Allocator) Allocator.Error![]const u8 { 
 
         var prog_str: ArrayList(u8) = .init(allocator);
         errdefer prog_str.deinit();

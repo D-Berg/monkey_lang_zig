@@ -42,6 +42,13 @@ const expectEqualStrings = std.testing.expectEqualStrings;
 
 pub const EvalError = error{
     // TODO: fill this out
+    NullPrefix,
+    NullLeftInfix,
+    NullRightInfix,
+    NullIfCondition,
+    NullLeftObject,
+    NullObject,
+
     FailedEvalLet,
     FailedEvalString,
     EvalIdentNonExistent,
@@ -110,7 +117,7 @@ fn evalLetStatement(allocator: Allocator, ls: *const LetStatement, env: *Environ
     log.debug("Evaluating let stmt: {s}\n", .{name});
 
     const maybe_val = try evalExpression(allocator, ls.value, env);
-    // defer val.?.deinit(); // deinit because store.put clones val
+    errdefer if (maybe_val) |val| val.deinit(allocator); // deinit because store.put clones val
 
     // print("putting ident: {s} with val: {}\n", .{name, val.?});
     //
@@ -120,8 +127,6 @@ fn evalLetStatement(allocator: Allocator, ls: *const LetStatement, env: *Environ
     } else {
         return EvalError.FailedEvalLet;
     }
-
-    // TODO print env, think key disapear because env lives longer than tokens.
 
     // TODO: errors p.137
 
@@ -292,16 +297,9 @@ fn EvalFnExpr(allocator: Allocator, fl: *const FnLiteralExpression, env: *Enviro
 fn evalCallExpression(allocator: Allocator, ce: *const CallExpression, env: *Environment) EvalError!?Object {
     const maybe_func = try evalExpression(allocator, ce.function, env);
 
-    // TODO: handle null
-    const func = maybe_func.?;
+    const func = maybe_func orelse return EvalError.NullObject;
     defer func.deinit(allocator); // only deinit if fnc dont have a owner
 
-    // const fn_obj_str = try func.function.String();
-    // defer func.function.allocator.free(fn_obj_str);
-
-    // print("\ncalling func {s}\n", .{fn_obj_str});
-
-    // var args = ArrayList(Object).init(allocator);
     const args = try allocator.alloc(Object, ce.args.len);
     defer {
         for (args) |arg| {
@@ -312,7 +310,8 @@ fn evalCallExpression(allocator: Allocator, ce: *const CallExpression, env: *Env
 
     // evalExpressions p.144
     for (ce.args, 0..) |*arg, i| {
-        args[i] = (try evalExpression(allocator, arg, env)).?;
+        args[i] = try evalExpression(allocator, arg, env) orelse
+            return EvalError.NullObject;
     }
 
     switch (func) {
@@ -346,7 +345,6 @@ fn applyFunction(allocator: Allocator, func: *FuncionObject, args: []const Objec
     log.debug("Creating Extended env, has address {*}\n", .{extendedEnv});
 
     func.env = extendedEnv;
-    // defer func.env = extendedEnv.outer.?;
     
     func.env.rc += 1;
 
@@ -409,7 +407,7 @@ fn applyFunction(allocator: Allocator, func: *FuncionObject, args: []const Objec
 fn evalPrefixExpr(allocator: Allocator, pe: *const PrefixExpression, env: *Environment) EvalError!Object {
     const operator = pe.token.kind;
 
-    const right = (try evalExpression(allocator, pe.right, env)).?; // TODO: handle null case
+    const right = try evalExpression(allocator, pe.right, env) orelse return EvalError.NullPrefix;
     defer right.deinit(allocator);
 
     switch (operator) {
@@ -454,16 +452,11 @@ fn evalInfixExpr(allocator: Allocator, ie: *const InfixExpression, env: *Environ
 
     const operator = ie.token.kind;
 
-    const ie_str = try ie.String(allocator);
-    defer allocator.free(ie_str);
-    // print("infix_expression = {s}\n", .{ie_str});
-
-    // TODO: handle null cases
     const maybe_left = try evalExpression(allocator, ie.left, env);
-    const left = maybe_left.?;
+    const left = maybe_left orelse return EvalError.NullLeftInfix;
     defer left.deinit(allocator);
 
-    const right = (try evalExpression(allocator, ie.right, env)).?;
+    const right = try evalExpression(allocator, ie.right, env) orelse return EvalError.NullRightInfix;
     defer right.deinit(allocator);
 
     if (left == .integer and right == .integer) {
@@ -608,8 +601,8 @@ fn evalBlockStatement(allocator: Allocator, blck_stmt: *const ast.BlockStatement
 
 fn evalIfExpression(allocator: Allocator, if_epxr: *const ast.IfExpression, env: *Environment) EvalError!?object.Object {
 
-    // TODO: handle null 
-    const condition = (try evalExpression(allocator, if_epxr.condition, env)).?;
+    const condition = try evalExpression(allocator, if_epxr.condition, env) orelse
+        return EvalError.NullIfCondition;
 
     if (isTruthy(&condition)) {
         return try evalBlockStatement(allocator, &if_epxr.consequence, env);
@@ -632,9 +625,11 @@ fn evalArrayExpression(allocator: Allocator, array_expr: *const ArrayLiteralExpr
 
     for (array_expr.elements) |*elem| {
 
-        const expr = try evalExpression(allocator, elem, env);
-        errdefer if (expr) |e| e.deinit(allocator);
-        try elements.append(expr.?); // cant be null because why put let inside an array, right?!?!
+        const maybe_expr = try evalExpression(allocator, elem, env);
+        if (maybe_expr) |expr| {
+            errdefer expr.deinit(allocator);
+            try elements.append(expr); // cant be null because why put let inside an array, right?!?!
+        }
 
     }
 
@@ -647,10 +642,12 @@ fn evalArrayExpression(allocator: Allocator, array_expr: *const ArrayLiteralExpr
 
 fn evalIndexExpression(allocator: Allocator, ie: *const IndexExpression, env: *Environment) EvalError!Object {
 
-    const left_obj = (try evalExpression(allocator, ie.left, env)).?;
+    const left_obj = try evalExpression(allocator, ie.left, env) orelse
+        return EvalError.NullObject;
     defer left_obj.deinit(allocator);
 
-    const index_obj = (try evalExpression(allocator, ie.index, env)).?;
+    const index_obj = try evalExpression(allocator, ie.index, env) orelse
+        return EvalError.NullObject;
     defer index_obj.deinit(allocator);
 
     if (index_obj == .integer and left_obj == .array) {
@@ -740,7 +737,8 @@ test "Eval Int expr" {
         var env = try Environment.init(allocator);
         defer env.deinit(allocator);
 
-        const evaluated = (try testEval(allocator, &env, inp)).?;
+        const evaluated = try testEval(allocator, &env, inp) orelse
+            return error.NullObject;
         defer evaluated.deinit(allocator);
 
         expect(evaluated.integer == ans) catch |err| {
@@ -804,7 +802,8 @@ test "Eval bool expr" {
         var env = try Environment.init(allocator);
         defer env.deinit(allocator);
 
-        const evaluated = (try testEval(allocator, &env, inp)).?;
+        const evaluated = try testEval(allocator, &env, inp) orelse
+            return EvalError.NullObject;
         defer evaluated.deinit(allocator);
 
         expect(evaluated.boolean == ans) catch |err| {
@@ -828,7 +827,8 @@ test "Bang(!) operator" {
         var env = try Environment.init(allocator);
         defer env.deinit(allocator);
 
-        const evaluated = (try testEval(allocator, &env, inp)).?;
+        const evaluated = try testEval(allocator, &env, inp) orelse
+            return EvalError.NullObject;
         defer evaluated.deinit(allocator);
 
         try expect(evaluated.boolean == ans);
@@ -866,7 +866,8 @@ test "eval if expr" {
         defer env.deinit(allocator);
 
 
-        const evaluated = (try testEval(allocator, &env, inp)).?;
+        const evaluated = try testEval(allocator, &env, inp) orelse 
+            return EvalError.NullObject;
         defer evaluated.deinit(allocator);
 
 
@@ -910,7 +911,8 @@ test "Eval return stmt" {
         var env = try Environment.init(allocator);
         defer env.deinit(allocator);
 
-        const evaluated = (try testEval(allocator, &env, inp)).?;
+        const evaluated = try testEval(allocator, &env, inp) orelse 
+            return EvalError.NullObject;
         defer evaluated.deinit(allocator);
 
         expect(ans == evaluated.integer) catch |err| {
@@ -942,7 +944,8 @@ test "Eval Let stmt" {
         var env = try Environment.init(allocator);
         defer env.deinit(allocator);
 
-        const evaluated = (try testEval(allocator, &env, inp)).?;
+        const evaluated = try testEval(allocator, &env, inp) orelse
+            return EvalError.NullObject;
         defer evaluated.deinit(allocator);
 
         expect(ans == evaluated.integer) catch |err| {
@@ -960,7 +963,8 @@ test "func object" {
     var env = try Environment.init(allocator);
     defer env.deinit(allocator);
 
-    const evaluated = (try testEval(allocator, &env, input)).?;
+    const evaluated = try testEval(allocator, &env, input) orelse
+        return EvalError.NullObject;
     defer evaluated.deinit(allocator);
 
     try expect(evaluated == .function);
@@ -996,8 +1000,8 @@ test "func application" {
         var env = try Environment.init(allocator);
         defer env.deinit(allocator);
 
-        // TODO:, handle nulll
-        const evaluated = (try testEval(allocator, &env, inp)).?;
+        const evaluated = try testEval(allocator, &env, inp) orelse
+            return EvalError.NullObject;
         defer evaluated.deinit(allocator);
 
         expect(ans == evaluated.integer) catch |err| {
