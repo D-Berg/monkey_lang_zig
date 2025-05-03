@@ -53,7 +53,7 @@ pub const EvalError = error{
 /// Returns an Object that needs to be deinitiated or null
 pub fn eval(allocator: Allocator, program: *Program, env: *Environment) EvalError!?Object {
 
-    var maybe_result: ?object.Object = null;
+    var maybe_result: ?Object = null;
 
     const prg_str = try program.String(allocator);
     defer allocator.free(prg_str);
