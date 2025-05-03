@@ -1,6 +1,6 @@
 const Token = @import("Token.zig");
 const std = @import("std");
-const ArrayList = std.ArrayList;
+const ArrayList = std.ArrayListUnmanaged;
 const Allocator = std.mem.Allocator;
 const print = std.debug.print;
 const log = std.log.scoped(.@"ast");
@@ -159,35 +159,35 @@ pub const BlockStatement = struct {
     }
 
     pub fn clone(self: *const BlockStatement, allocator: Allocator) Allocator.Error!BlockStatement {
-        var statements = ArrayList(Statement).init(allocator);
+        var statements: ArrayList(Statement) = .empty;
         errdefer {
             for (statements.items) |s| s.deinit(allocator);
-            statements.deinit();
+            statements.deinit(allocator);
         }
 
         for (self.statements) |stmt| {
-            try statements.append(try stmt.clone(allocator));
+            try statements.append(allocator, try stmt.clone(allocator));
         }
 
         return BlockStatement{
             .token = self.token,
-            .statements = try statements.toOwnedSlice(),
+            .statements = try statements.toOwnedSlice(allocator),
         };
     }
 
     pub fn String(bs: *const BlockStatement, allocator: Allocator) Allocator.Error![]const u8 {
 
-        var bs_str: ArrayList(u8) = .init(allocator);
-        errdefer bs_str.deinit();
+        var bs_str: ArrayList(u8) = .empty;
+        errdefer bs_str.deinit(allocator);
 
         for (bs.statements) |stmt| {
             const stmt_str = try stmt.String(allocator);
             defer allocator.free(stmt_str);
 
-            try bs_str.appendSlice(stmt_str);
+            try bs_str.appendSlice(allocator, stmt_str);
         }
 
-        return try bs_str.toOwnedSlice();
+        return try bs_str.toOwnedSlice(allocator);
     }
 };
 
@@ -444,17 +444,19 @@ pub const FnLiteralExpression = struct {
     }
 
     pub fn clone(fe: *const FnLiteralExpression, allocator: Allocator) Allocator.Error!Expression {
-        var parameters = ArrayList(Identifier).init(allocator);
-        errdefer parameters.deinit();
+        var parameters: ArrayList(Identifier) = .empty;
+        errdefer parameters.deinit(allocator);
 
         for (fe.parameters) |p| {
-            try parameters.append(p);
+            try parameters.append(allocator, p);
         }
+        const cloned_body = try fe.body.clone(allocator);
+        errdefer cloned_body.deinit(allocator);
 
         return Expression{ .fn_literal = .{
             .token = fe.token,
-            .body = try fe.body.clone(allocator),
-            .parameters = try parameters.toOwnedSlice(),
+            .body = cloned_body,
+            .parameters = try parameters.toOwnedSlice(allocator),
         } };
     }
 
@@ -523,21 +525,21 @@ pub const CallExpression = struct {
 
         func_ptr.* = try ce.function.clone(allocator);
         
-        var args = ArrayList(Expression).init(allocator);
+        var args: ArrayList(Expression) = .empty;
         errdefer {
             for (args.items) |expr| expr.deinit(allocator);
-            args.deinit();
+            args.deinit(allocator);
         }
         
-        for (ce.args) |arg| {
-            try args.append(try arg.clone(allocator));
+        for (ce.args) |arg| { // TODO: errdefer
+            try args.append(allocator, try arg.clone(allocator));
         }
 
         return Expression {
             .call_expression = .{
                 .token = ce.token,
                 .function = func_ptr,
-                .args = try args.toOwnedSlice()
+                .args = try args.toOwnedSlice(allocator)
 
             }
             
@@ -550,11 +552,11 @@ pub const CallExpression = struct {
         const fn_str = try ce.function.String(allocator);
         defer allocator.free(fn_str);
 
-        var result_str: ArrayList(u8) = .init(allocator);
-        errdefer result_str.deinit();
+        var result_str: ArrayList(u8) = .empty;
+        errdefer result_str.deinit(allocator);
 
-        try result_str.appendSlice(fn_str);
-        try result_str.append('(');
+        try result_str.appendSlice(allocator,  fn_str);
+        try result_str.append(allocator, '(');
 
         const n_args = ce.args.len;
 
@@ -563,15 +565,15 @@ pub const CallExpression = struct {
             const arg_str = try arg_expr.String(allocator);
             defer allocator.free(arg_str);
 
-            try result_str.appendSlice(arg_str);
+            try result_str.appendSlice(allocator, arg_str);
 
-            if (i != n_args - 1) try result_str.appendSlice(", ");
+            if (i != n_args - 1) try result_str.appendSlice(allocator, ", ");
 
         }
 
-        try result_str.append(')');
+        try result_str.append(allocator, ')');
 
-        return result_str.toOwnedSlice();
+        return result_str.toOwnedSlice(allocator);
     }
 
 };
@@ -625,10 +627,10 @@ pub const ArrayLiteralExpression = struct {
 
     pub fn String(array_lit: *const ArrayLiteralExpression, allocator: Allocator) Allocator.Error![]const u8 {
 
-        var elem_str: ArrayList(u8) = .init(allocator);
-        errdefer elem_str.deinit();
+        var elem_str: ArrayList(u8) = .empty;
+        errdefer elem_str.deinit(allocator);
     
-        try elem_str.append('[');
+        try elem_str.append(allocator, '[');
 
         const n_elem = array_lit.elements.len;
 
@@ -637,15 +639,15 @@ pub const ArrayLiteralExpression = struct {
             const e_str = try elem_expr.String(allocator);
             defer allocator.free(e_str);
             
-            try elem_str.appendSlice(e_str);
+            try elem_str.appendSlice(allocator, e_str);
             
-            if (i != n_elem - 1) try elem_str.appendSlice(", ");
+            if (i != n_elem - 1) try elem_str.appendSlice(allocator, ", ");
 
         }
 
-        try elem_str.append(']');
+        try elem_str.append(allocator, ']');
 
-        return try elem_str.toOwnedSlice();
+        return try elem_str.toOwnedSlice(allocator);
     }
 };
 
@@ -668,13 +670,14 @@ pub const DictionaryExpression = struct {
     
     fn String(dictionary: *const DictionaryExpression, allocator: Allocator) Allocator.Error![]const u8 {
 
-        var str: ArrayList(u8) = .init(allocator);
+        var str: ArrayList(u8) = .empty;
+        errdefer str.deinit(allocator);
 
         const n_items = dictionary.keys.len;
 
-        const writer = str.writer();
+        const writer = str.writer(allocator);
 
-        try str.appendSlice("{ ");
+        try str.appendSlice(allocator, "{ ");
 
         for (dictionary.keys, dictionary.values, 0..) |key, val, i| {
             const key_str = try key.String(allocator);
@@ -691,9 +694,9 @@ pub const DictionaryExpression = struct {
 
         }
 
-        try str.appendSlice(" }");
+        try str.appendSlice(allocator, " }");
         
-        return try str.toOwnedSlice();
+        return try str.toOwnedSlice(allocator);
 
     }
 
@@ -774,17 +777,17 @@ pub const Program = struct {
     /// String need to be deallocated by caller
     pub fn String(program: *Program, allocator: Allocator) Allocator.Error![]const u8 { 
 
-        var prog_str: ArrayList(u8) = .init(allocator);
-        errdefer prog_str.deinit();
+        var prog_str: ArrayList(u8) = .empty;
+        errdefer prog_str.deinit(allocator);
 
         for (program.statements) |stmt| {
             const stmt_str = try stmt.String(allocator);
             defer allocator.free(stmt_str);
 
-            try prog_str.appendSlice(stmt_str);
+            try prog_str.appendSlice(allocator, stmt_str);
         }
 
-        return try prog_str.toOwnedSlice();
+        return try prog_str.toOwnedSlice(allocator);
     }
 
     // TODO: check if needeed
