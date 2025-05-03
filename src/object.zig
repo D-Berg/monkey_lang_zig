@@ -176,7 +176,7 @@ pub const FunctionObject = struct {
             if (func_obj.env.outer) |_| {
                 log.debug("deinits func objects enclosed env: {*}\n", .{func_obj.env});
                 func_obj.env.rc -= 1;
-                func_obj.env.deinit();
+                func_obj.env.deinit(allocator);
                 // fnc_obj.allocator.destroy(fnc_obj.env);
 
             } else {

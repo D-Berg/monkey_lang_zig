@@ -20,7 +20,7 @@ const buffer_size = 256;
 pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_writer: AnyWriter) !void {
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
 
     var buffer: [2048]u8 = undefined;
     var fixed_buf_allocator: std.heap.FixedBufferAllocator = .init(buffer[0..]);

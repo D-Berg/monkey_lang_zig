@@ -82,7 +82,7 @@ pub fn main() !void {
             // print("file = {s}\n", .{input});
 
             var env = try Environment.init(allocator);
-            defer env.deinit();
+            defer env.deinit(allocator);
 
             var parser = Parser.init(allocator, input);
             defer parser.deinit(allocator);

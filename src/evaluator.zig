@@ -116,7 +116,7 @@ fn evalLetStatement(allocator: Allocator, ls: *const LetStatement, env: *Environ
     //
     if (maybe_val) |val| {
         var val_var = val;
-        try env.put(name, &val_var);
+        try env.put(allocator, name, &val_var);
     } else {
         return EvalError.FailedEvalLet;
     }
@@ -179,8 +179,8 @@ fn evalExpression(allocator: Allocator, expr: *const Expression, env: *Environme
         },
 
         .fn_literal => |*fl| {
-            const fn_obj_ptr = try env.store.allocator.create(FuncionObject);
-            errdefer env.store.allocator.destroy(fn_obj_ptr);
+            const fn_obj_ptr = try allocator.create(FuncionObject);
+            errdefer allocator.destroy(fn_obj_ptr);
             fn_obj_ptr.* = try EvalFnExpr(allocator, fl, env);
 
             log.debug("created fn obj {*}\n", .{fn_obj_ptr});
@@ -328,19 +328,25 @@ fn evalCallExpression(allocator: Allocator, ce: *const CallExpression, env: *Env
 
 fn applyFunction(allocator: Allocator, func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
 
+    // TODO: maybe use an arena
+    // var arena_allocator: std.heap.ArenaAllocator = .init(allocator);
+    // defer arena_allocator.deinit();
+    //
+    // const arena = arena_allocator.allocator();
 
     log.debug("\napplying func {*}\n", .{func});
     defer log.debug("funished applying func {*}\n", .{func});
 
     // print("function = {}\n", .{func});
 
-    const extendedEnv = try allocator.create(Environment);
-    errdefer allocator.destroy(extendedEnv);
-    extendedEnv.* = try func.env.initClosedEnv();
-    errdefer extendedEnv.deinit();
+    // errdefer allocator.destroy(extendedEnv);
+    const extendedEnv = try func.env.initClosedEnv(allocator);
+    errdefer extendedEnv.deinit(allocator);
     log.debug("Creating Extended env, has address {*}\n", .{extendedEnv});
 
     func.env = extendedEnv;
+    // defer func.env = extendedEnv.outer.?;
+    
     func.env.rc += 1;
 
     if (func.env.outer) |outer| {
@@ -371,16 +377,16 @@ fn applyFunction(allocator: Allocator, func: *FuncionObject, args: *ArrayList(Ob
         // TODO: Clone arg since its deinited
 
         var cloned_arg = try arg.clone(allocator);
-        try func.env.put(name, &cloned_arg);
+        try func.env.put(allocator, name, &cloned_arg);
     }
 
     // print("printing functions block statements\n", .{});
     if (OPTIMIZE_MODE == .Debug ) {
-        for (func.body.statements) |stmt| {
-            const stmt_str = try stmt.String(allocator);
-            defer allocator.free(stmt_str);
+        // for (func.body.statements) |stmt| {
+            // const stmt_str = try stmt.String(arena);
+            // defer allocator.free(arena);
             // print("body smt: {s}\n", .{stmt_str});
-        }
+        // }
     }
 
     // Failes on new line because BlockStatement has indices to old program
@@ -731,7 +737,7 @@ test "Eval Int expr" {
 
     for (inputs, answers) |inp, ans| {
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
         const evaluated = (try testEval(allocator, &env, inp)).?;
         defer evaluated.deinit(allocator);
@@ -795,7 +801,7 @@ test "Eval bool expr" {
     for (inputs, answers) |inp, ans| {
 
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
         const evaluated = (try testEval(allocator, &env, inp)).?;
         defer evaluated.deinit(allocator);
@@ -819,7 +825,7 @@ test "Bang(!) operator" {
 
     for (inputs, answers) |inp, ans| {
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
         const evaluated = (try testEval(allocator, &env, inp)).?;
         defer evaluated.deinit(allocator);
@@ -856,7 +862,7 @@ test "eval if expr" {
 
     for (inputs, answers) |inp, ans| {
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
 
         const evaluated = (try testEval(allocator, &env, inp)).?;
@@ -901,7 +907,7 @@ test "Eval return stmt" {
     for (inputs, answers) |inp, ans| {
 
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
         const evaluated = (try testEval(allocator, &env, inp)).?;
         defer evaluated.deinit(allocator);
@@ -933,7 +939,7 @@ test "Eval Let stmt" {
     for (inputs, answers) |inp, ans| {
 
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
         const evaluated = (try testEval(allocator, &env, inp)).?;
         defer evaluated.deinit(allocator);
@@ -951,7 +957,7 @@ test "func object" {
     const input = "fn(x) { x + 2; };";
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
 
     const evaluated = (try testEval(allocator, &env, input)).?;
     defer evaluated.deinit(allocator);
@@ -987,7 +993,7 @@ test "func application" {
     for (inputs, answers) |inp, ans| {
 
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
         // TODO:, handle nulll
         const evaluated = (try testEval(allocator, &env, inp)).?;
@@ -1010,7 +1016,7 @@ test "multi input fn appl" {
     };
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
 
     for (inputs, 0..) |inp, idx| {
 
@@ -1054,7 +1060,7 @@ test "Closures" {
     ;
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
 
     const maybe_eval = try testEval(allocator, &env, input);
 
@@ -1088,7 +1094,7 @@ test "eval counter p.150" {
     // let counter = fn(x) { if (x > 997) { return x; } else { let foobar = 9999; counter(x + 1); } };
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
     const maybe_eval = try testEval(allocator, &env, input);
 
     if (maybe_eval) |evaluated| {
@@ -1108,7 +1114,7 @@ test "String" {
     ;
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
 
     const maybe_eval = try testEval(allocator, &env, input);
 
@@ -1133,7 +1139,7 @@ test "String concat" {
     ;
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
 
     const maybe_eval = try testEval(allocator, &env, input);
 
@@ -1157,7 +1163,7 @@ test "Array Lit" {
     const input = "[1, 2 * 2, 3 + 3]";
 
     var env = try Environment.init(allocator);
-    defer env.deinit();
+    defer env.deinit(allocator);
 
     const maybe_eval = try testEval(allocator, &env, input);
 
@@ -1195,7 +1201,7 @@ test "Array Index" {
     for (inputs, answers) |inp, ans| {
 
         var env = try Environment.init(allocator);
-        defer env.deinit();
+        defer env.deinit(allocator);
 
         const maybe_eval = try testEval(allocator, &env, inp);
 

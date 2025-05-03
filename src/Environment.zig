@@ -16,17 +16,16 @@ pub fn init(allocator: Allocator) Allocator.Error!Environment {
     return Environment{ .store = try HashMap().init(allocator) };
 }
 
-pub fn deinit(env: *Environment) void {
+pub fn deinit(env: *Environment, allocator: Allocator) void {
     log.debug("trying to deinit env {*}\n", .{env});
 
     if (env.rc == 0 or env.isMainEnv()) {
         defer log.debug("deinited env {*}\n", .{env});
-        const allocator = env.store.allocator;
-        env.store.deinit();
+        env.store.deinit(allocator);
 
         if (env.outer) |outer| {
             outer.rc -= 1;
-            if (!outer.isMainEnv()) outer.deinit(); // try to deinit outer
+            if (!outer.isMainEnv()) outer.deinit(allocator); // try to deinit outer
             allocator.destroy(env);
         }
     } else {
@@ -68,16 +67,20 @@ pub fn printEnv(env: *Environment) void {
 //
 // }
 
-pub fn initClosedEnv(outer: *Environment) Allocator.Error!Environment {
+pub fn initClosedEnv(outer: *Environment, allocator: Allocator) Allocator.Error!*Environment {
     log.debug("initializing enclosed env, setting outer to {*}\n", .{outer});
-    const store = try HashMap().init(outer.store.allocator);
+    var store = try HashMap().init(allocator);
+    errdefer store.deinit(allocator);
 
+    const extendedEnv = try allocator.create(Environment);
+    extendedEnv.* = Environment{ .store = store, .outer = outer };
+    
     outer.rc += 1;
-    return Environment{ .store = store, .outer = outer };
+    return extendedEnv;
 }
 
 /// Increases some objects ref count and store them in env (hash_map)
-pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!void {
+pub fn put(env: *Environment, allocator: Allocator, key: []const u8, val: *Object) Allocator.Error!void {
     switch (val.*) {
         // TODO: use captures
         .function => {
@@ -95,7 +98,7 @@ pub fn put(env: *Environment, key: []const u8, val: *Object) Allocator.Error!voi
         else => {},
     }
 
-    try env.store.put(key, val.*);
+    try env.store.put(allocator, key, val.*);
     // TODO: set ownership of obj to env
 
 }

@@ -20,12 +20,10 @@ pub fn HashMap() type { // TODO: Remove generic
     return struct {
         const Self = @This();
         const Entry = struct {
-            allocator: Allocator,
             key: []const u8,
             val: Object,
 
-            fn deinit(entry: *const Entry) void {
-                const allocator = entry.allocator;
+            fn deinit(entry: *const Entry, allocator: Allocator) void {
 
                 allocator.free(entry.key);
 
@@ -72,7 +70,6 @@ pub fn HashMap() type { // TODO: Remove generic
             // }
         };
 
-        allocator: Allocator,
         n_entries: usize = 0,
         buckets: []?ArrayList(Entry),
         capacity: usize,
@@ -85,24 +82,23 @@ pub fn HashMap() type { // TODO: Remove generic
             }
 
             return Self{
-                .allocator = allocator,
                 .buckets = buckets, // TODO change default size
                 .capacity = buckets.len,
             };
         }
 
-        pub fn deinit(self: *Self) void {
+        pub fn deinit(self: *Self, allocator: Allocator) void {
             for (self.buckets) |maybe_bucket| {
                 if (maybe_bucket) |bucket| {
                     for (bucket.items) |entry| {
-                        entry.deinit();
+                        entry.deinit(allocator);
                     }
 
                     bucket.deinit();
                 }
             }
 
-            self.allocator.free(self.buckets);
+            allocator.free(self.buckets);
         }
 
         // pub fn clone(self: *Self) Allocator.Error!Self {
@@ -134,17 +130,17 @@ pub fn HashMap() type { // TODO: Remove generic
         // }
 
         /// takes ownership of the objects
-        pub fn put(self: *Self, key: []const u8, value: Object) Allocator.Error!void {
+        pub fn put(self: *Self, allocator: Allocator, key: []const u8, value: Object) Allocator.Error!void {
 
             // print("got key: {s}, value: {}\n", .{key, value});
 
             // TODO if collisions increase buckets until no collision
             // TODO:
-            const new_key_str = try self.allocator.alloc(u8, key.len);
+            const new_key_str = try allocator.alloc(u8, key.len);
             std.mem.copyForwards(u8, new_key_str, key);
 
-            const new_entry = Entry{ .allocator = self.allocator, .key = new_key_str, .val = value };
-            errdefer new_entry.deinit();
+            const new_entry = Entry{ .key = new_key_str, .val = value };
+            errdefer new_entry.deinit(allocator);
 
             const h = hash(key);
             const b_idx = h % self.buckets.len;
@@ -157,7 +153,7 @@ pub fn HashMap() type { // TODO: Remove generic
                 for (bucket.items, 0..) |entry, i| {
                     if (std.mem.eql(u8, new_entry.key, entry.key)) {
                         // print("key already exists, updading entry\n", .{});
-                        entry.deinit();
+                        entry.deinit(allocator);
                         bucket.items[i] = new_entry;
                         return;
                     }
@@ -171,7 +167,7 @@ pub fn HashMap() type { // TODO: Remove generic
             } else {
 
                 // print("bucket is empty, filling bucket\n", .{});
-                var bucket = ArrayList(Entry).init(self.allocator);
+                var bucket = ArrayList(Entry).init(allocator);
                 try bucket.append(new_entry);
                 self.capacity += bucket.capacity;
                 self.buckets[b_idx] = bucket;
@@ -312,18 +308,18 @@ test "init hashmap" {
     const obj3 = Object{ .integer = 5 };
 
     var store = try HashMap().init(allocator);
-    defer store.deinit();
+    defer store.deinit(allocator);
 
-    try store.put(token1.literal, obj1);
-    try store.put(token2.literal, obj2);
-    try store.put(token3.literal, obj3);
+    try store.put(allocator, token1.literal, obj1);
+    try store.put(allocator, token2.literal, obj2);
+    try store.put(allocator, token3.literal, obj3);
 
     try expect(store.get(token1.literal).?.integer == obj1.integer);
     try expect(store.n_entries == 3);
 
     store.printHM();
 
-    try store.put(token1.literal, Object{ .integer = 100 });
+    try store.put(allocator, token1.literal, Object{ .integer = 100 });
     store.printHM();
 
     // try store.put(obj);
