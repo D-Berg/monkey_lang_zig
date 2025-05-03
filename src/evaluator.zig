@@ -301,24 +301,25 @@ fn evalCallExpression(allocator: Allocator, ce: *const CallExpression, env: *Env
 
     // print("\ncalling func {s}\n", .{fn_obj_str});
 
-    var args = ArrayList(Object).init(allocator);
+    // var args = ArrayList(Object).init(allocator);
+    const args = try allocator.alloc(Object, ce.args.len);
     defer {
-        for (args.items) |arg| {
+        for (args) |arg| {
             arg.deinit(allocator);
         }
-        args.deinit();
+        allocator.free(args);
     }
 
     // evalExpressions p.144
-    for (ce.args) |*arg| {
-        try args.append((try evalExpression(allocator, arg, env)).?);
+    for (ce.args, 0..) |*arg, i| {
+        args[i] = (try evalExpression(allocator, arg, env)).?;
     }
 
     switch (func) {
         .built_in => |kind| {
-            return try BuiltIn.Execute(allocator, kind, &args);
+            return try BuiltIn.Execute(allocator, kind, args);
         },
-        .function => |func_obj| return try applyFunction(allocator, func_obj, &args),
+        .function => |func_obj| return try applyFunction(allocator, func_obj, args),
         else => {
             // TODO: return error 
             @panic("call failed because func is not a function");
@@ -326,12 +327,12 @@ fn evalCallExpression(allocator: Allocator, ce: *const CallExpression, env: *Env
     }
 }
 
-fn applyFunction(allocator: Allocator, func: *FuncionObject, args: *ArrayList(Object)) EvalError!?Object {
+fn applyFunction(allocator: Allocator, func: *FuncionObject, args: []const Object) EvalError!?Object {
 
     // TODO: maybe use an arena
     // var arena_allocator: std.heap.ArenaAllocator = .init(allocator);
     // defer arena_allocator.deinit();
-    //
+
     // const arena = arena_allocator.allocator();
 
     log.debug("\napplying func {*}\n", .{func});
@@ -366,10 +367,10 @@ fn applyFunction(allocator: Allocator, func: *FuncionObject, args: *ArrayList(Ob
 
     // print("outer env has adress {*}\n", .{func.env.outer.?});
 
-    log.debug("n_params = {}, n_args = {}\n", .{ func.params.len, args.items.len });
-    std.debug.assert(args.items.len == func.params.len);
+    log.debug("n_params = {}, n_args = {}\n", .{ func.params.len, args.len });
+    std.debug.assert(args.len == func.params.len);
 
-    for (func.params, args.items) |*p, arg| {
+    for (func.params, args) |*p, arg| {
         const name = p.token.literal;
 
         log.debug("putting param: {s} = {} in env {*}\n", .{ name, arg, func.env });
@@ -383,7 +384,7 @@ fn applyFunction(allocator: Allocator, func: *FuncionObject, args: *ArrayList(Ob
     // print("printing functions block statements\n", .{});
     if (OPTIMIZE_MODE == .Debug ) {
         // for (func.body.statements) |stmt| {
-            // const stmt_str = try stmt.String(arena);
+            // const stmt_str = try stmt.String(allocator);
             // defer allocator.free(arena);
             // print("body smt: {s}\n", .{stmt_str});
         // }

@@ -18,7 +18,7 @@ pub fn getBuiltInFn(str: []const u8) ?Kind {
     return null;
 }
 
-pub fn Execute(allocator: Allocator, kind: Kind, args: *const ArrayList(Object)) BuiltInError!Object {
+pub fn Execute(allocator: Allocator, kind: Kind, args: []const Object) BuiltInError!Object {
     switch (kind) {
         .len => return try len(args),
         .first => return try first(args),
@@ -29,11 +29,11 @@ pub fn Execute(allocator: Allocator, kind: Kind, args: *const ArrayList(Object))
 
 
 
-fn len(args: *const ArrayList(Object)) BuiltInError!Object {
+fn len(args: []const Object) BuiltInError!Object {
 
-    if (args.items.len != 1) return error.WrongNumberOfArgs;
+    if (args.len != 1) return error.WrongNumberOfArgs;
 
-    const arg = args.items[0];
+    const arg = args[0];
 
     switch (arg) {
         .string => |str| {
@@ -52,11 +52,11 @@ fn len(args: *const ArrayList(Object)) BuiltInError!Object {
     }
 }
 
-fn first(args: *const ArrayList(Object)) BuiltInError!Object {
+fn first(args: []const Object) BuiltInError!Object {
 
-    if (args.items.len != 1) return error.WrongNumberOfArgs;
+    if (args.len != 1) return error.WrongNumberOfArgs;
 
-    const arg = args.items[0];
+    const arg = args[0];
 
     switch (arg) {
         .array => |array| {
@@ -71,11 +71,11 @@ fn first(args: *const ArrayList(Object)) BuiltInError!Object {
     }
 }
 
-fn last(args: *const ArrayList(Object)) BuiltInError!Object {
+fn last(args: []const Object) BuiltInError!Object {
 
-    if (args.items.len != 1) return error.WrongNumberOfArgs;
+    if (args.len != 1) return error.WrongNumberOfArgs;
 
-    const arg = args.items[0];
+    const arg = args[0];
 
     switch (arg) {
             
@@ -93,14 +93,12 @@ fn last(args: *const ArrayList(Object)) BuiltInError!Object {
     }
 }
 
-fn push(allocator: Allocator, args: *const ArrayList(Object)) BuiltInError!Object {
+fn push(allocator: Allocator, args: []const Object) BuiltInError!Object {
 
-    if (args.items.len != 2) return error.WrongNumberOfArgs;
+    if (args.len != 2) return error.WrongNumberOfArgs;
 
-    const arg1 = args.items[0];
-    const arg2 = args.items[1];
 
-    if (arg1 != .array) return error.WrongArgType;
+    if (args[0] != .array) return error.WrongArgType;
 
     var new_elements = ArrayList(Object).init(allocator);
     errdefer {
@@ -108,11 +106,11 @@ fn push(allocator: Allocator, args: *const ArrayList(Object)) BuiltInError!Objec
         new_elements.deinit();
     }
 
-    for (arg1.array.elements) |elem| {
+    for (args[0].array.elements) |elem| {
         try new_elements.append(try elem.clone(allocator));
     }
 
-    try new_elements.append(try arg2.clone(allocator));
+    try new_elements.append(try args[1].clone(allocator));
  
     const new_array_ptr = try allocator.create(object.ArrayObject);
     errdefer allocator.destroy(new_array_ptr);
