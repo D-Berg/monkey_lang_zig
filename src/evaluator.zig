@@ -1,7 +1,7 @@
 // TODO make evaluator file upercase
 const std = @import("std");
 const print = std.debug.print;
-const log = std.log;
+const log = std.log.scoped(.@"evaluator");
 
 const Allocator = std.mem.Allocator;
 const Token = @import("Token.zig");
@@ -293,6 +293,14 @@ fn EvalFnExpr(allocator: Allocator, env: *Environment, fl: *const FnLiteralExpre
 }
 
 fn evalCallExpression(allocator: Allocator, ce: *const CallExpression, env: *Environment) EvalError!?Object {
+    
+    if (std.options.log_level == .debug) {
+        const call_str = try ce.String(allocator);
+        defer allocator.free(call_str);
+        log.debug("calling {s}", .{call_str});
+    }
+
+
     const maybe_func = try evalExpression(allocator, ce.function, env);
 
     var func = maybe_func orelse return EvalError.NullObject;
@@ -326,8 +334,8 @@ fn evalCallExpression(allocator: Allocator, ce: *const CallExpression, env: *Env
 
 fn applyFunction(allocator: Allocator, func: *FuncionObject, args: []const Object) EvalError!?Object {
 
-    log.debug("\napplying func {*}\n", .{func});
-    defer log.debug("funished applying func {*}\n", .{func});
+    log.debug("executing func {*}\n", .{func});
+    defer log.debug("finnished executing func {*}\n", .{func});
 
     const enclosed_env_ptr = try allocator.create(Environment);
     errdefer {
@@ -336,8 +344,6 @@ fn applyFunction(allocator: Allocator, func: *FuncionObject, args: []const Objec
     }
     enclosed_env_ptr.* = func.env.enclosed();
     func.env = enclosed_env_ptr;
-
-    if (func.env.outer) |outer| outer.rc -= 1; // fn no longer reference outer
 
     log.debug("n_params = {}, n_args = {}\n", .{ func.params.len, args.len });
     std.debug.assert(args.len == func.params.len);

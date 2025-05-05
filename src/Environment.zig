@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const debug_print = std.debug.print;
-const log = std.log;
+const log = std.log.scoped(.@"Environment");
 
 const Object = @import("object.zig").Object;
 const HashMap = @import("hash_map.zig").HashMap;
@@ -27,7 +27,8 @@ pub const empty = Environment {
 
 
 /// Creates a new Environment wich references the outer and 
-/// increases the rc of outer
+/// increases the rc of outer.
+/// Starts with rc of 1 since its going to be used by a function.
 pub fn enclosed(outer: *Environment) Environment {
     log.debug("initializing enclosed env, setting outer to {*}\n", .{outer});
     return Environment {
@@ -41,32 +42,39 @@ pub fn enclosed(outer: *Environment) Environment {
 
 /// Decreases rc of outer and frees store
 pub fn deinit(self: *Environment, allocator: Allocator) void {
+
     log.debug("trying to deinit env {*} of kind {s}\n", .{self, @tagName(self.kind)});
 
     if (self.rc == 0 or self.isMainEnv()) {
         defer log.debug("deinited env {*} of kind {s}\n", .{self, @tagName(self.kind)});
 
+        // log.debug(, args: anytype)
         var hm_it = self.store.iterator();
         while (hm_it.next()) |e|  {
 
+            log.debug("allocator: freeing key({*}){s}", .{e.key_ptr, e.key_ptr.*});
             allocator.free(e.key_ptr.*);
+
             const val = e.value_ptr;
+            log.debug("deiniting value({s})", .{@tagName(val.*)});
             switch (val.*) {
                 .function => |f| f.rc -= 1,
                 .string => |s| s.rc -= 1,
                 .array => |a| a.rc -= 1,
                 else => {}
             }
-            val.destroy(allocator);
+            val.deinit(allocator);
         }
 
         self.store.deinit(allocator);
 
-        if (self.outer) |outer| {
-            if (outer.rc > 0)outer.rc -= 1;
-            self.outer = null;
-            if (!outer.isMainEnv()) outer.deinit(allocator); // try to deinit outer
-        }
+        // if (self.outer) |outer| {
+        //     if (outer.rc > 0)outer.rc -= 1;
+        //     log.debug("destryoing env ptr {*} of kind {}", .{self, self.kind});
+        //     allocator.destroy(self);
+        //     // self.outer = null;
+        //     if (!outer.isMainEnv()) outer.deinit(allocator); // try to deinit outer
+        // }
     } else {
         log.debug("didnt deinit env {*} since its referenced by {} others\n", .{ self, self.rc });
     }
@@ -116,7 +124,7 @@ pub fn print(env: *Environment) void {
 pub fn put(env: *Environment, allocator: Allocator, key: []const u8, val: Object) Allocator.Error!void {
 
 
-    log.debug("putting obj({s}) {s}  in env: {*}", .{@tagName(val), key, env});
+    log.debug("putting obj({s}) {s}  in env: {*}({s})", .{@tagName(val), key, env, @tagName(env.kind)});
 
 
     if (env.store.getPtr(key)) |current_val| {
@@ -144,6 +152,7 @@ pub fn get(env: *Environment, key: []const u8) ?Object {
     // p.146
     log.debug("Retreiving {s} from env: {*}\n", .{key, env});
     if (env.store.get(key)) |val| {
+        log.debug("found {s}({s}) in env {*}", .{key, @tagName(val), env});
         return val;
     }
 

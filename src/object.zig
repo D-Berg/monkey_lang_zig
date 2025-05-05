@@ -2,13 +2,19 @@ const std = @import("std");
 const HashMap = @import("hash_map.zig").HashMap;
 const ast = @import("ast.zig");
 const Environment = @import("Environment.zig");
+
+pub const FunctionObject = @import("objects/FunctionObject.zig");
+pub const ReturnObject = @import("objects/ReturnObject.zig");
+pub const StringObject = @import("objects/StringObject.zig");
+
+
 const BuiltIn = @import("BuiltIn.zig");
 
 const ArrayList = std.ArrayList;
 const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
 const print = std.debug.print;
-const log = std.log;
+const log = std.log.scoped(.@"Object");
 
 const Allocator = std.mem.Allocator;
 
@@ -38,6 +44,7 @@ pub const Object = union(enum) {
                 // is only deinited if func_obj dont have a owner
                 if (func.rc == 0) {
                     func.deinit(allocator);
+                    log.debug("allocator: destroying {*}", .{func});
                     allocator.destroy(func);
                 } else {
                     log.debug("did not deinit func {*}, cause its referenced by {} other\n", .{ func, func.rc });
@@ -47,6 +54,7 @@ pub const Object = union(enum) {
             .string => |string| {
                 if (string.rc == 0) {
                     string.deinit(allocator);
+                    log.debug("allocator: destroying {*}", .{string});
                     allocator.destroy(string);
                 }
             },
@@ -140,124 +148,6 @@ pub const Object = union(enum) {
     }
 };
 
-const ReturnObject = struct {
-    value: *const Object,
-    owner: ?*Environment,
-
-    pub fn deinit(ret_obj: *const ReturnObject, allocator: Allocator) void {
-        // print("deinits ret obj\n", .{});
-        ret_obj.value.deinit(allocator);
-        allocator.destroy(ret_obj.value);
-    }
-
-    pub fn clone(ro: *const ReturnObject, allocator: Allocator) Allocator.Error!Object {
-        const value_ptr = try allocator.create(Object);
-        errdefer allocator.destroy(value_ptr);
-
-        value_ptr.* = try ro.value.clone(allocator);
-
-        return Object{ .return_val_obj = .{
-            .value = value_ptr,
-            .owner = ro.owner,
-        } };
-    }
-};
-
-pub const FunctionObject = struct {
-    params: []const Identifier,
-    body: BlockStatement,
-    env: *Environment,
-    rc: usize = 0, 
-
-    pub fn deinit(func_obj: *const FunctionObject, allocator: Allocator) void {
-
-        // only deinit if obj dont have a owner
-        log.debug("trying to deinit fn object {*}", .{func_obj});
-        if (func_obj.rc == 0) {
-            log.debug("deinited fn object {*}", .{func_obj});
-
-            // Only deinit if fnc_obj dont have a owner
-
-            log.debug("func_obj ref count is {} , deinits\n", .{func_obj.rc});
-
-            func_obj.body.deinit(allocator);
-
-            allocator.free(func_obj.params);
-            log.debug("deinited fn obj, addr: {*}\n", .{func_obj});
-
-            if (func_obj.env.outer) |_| {
-                log.debug("deinits func objects enclosed env: {*}\n", .{func_obj.env});
-                func_obj.env.rc -= 1;
-                func_obj.env.deinit(allocator);
-                allocator.destroy(func_obj.env);
-
-            } else {
-                log.debug("func env.outer = null. dont deinits its env\n", .{});
-                // since its the main env
-
-            }
-        } else {
-            log.debug("didnt deinits fnc_obj {*} since its referenced by {} other objects\n", .{ func_obj, func_obj.rc });
-        }
-
-        //
-    }
-
-    // pub fn clone(fo: *const FunctionObject) Allocator.Error!Object {
-    //
-    //     print("cloning func {*}\n", .{fo});
-    //
-    //     var params = ArrayList(Identifier).init(fo.params.allocator);
-    //
-    //     for (fo.params.items) |p| {
-    //
-    //         try params.append(try p.clone());
-    //
-    //     }
-    //
-    //     const body = try fo.body.clone();
-    //
-    //     // var new_env: *Environment = undefined;
-    //     //
-    //     // // expensive way of doing, but as of
-    //     // // right now fn objects gets cloned and deinited
-    //     // // at each fn call and if it has an enclosed env,
-    //     // // the enclosed env get deinited asweell
-    //     // // TODO: come up with a better wwayy future me
-    //     // if (fo.env.outer != null) {
-    //     //     // enclosed env
-    //     //     new_env = try fo.env.clone();
-    //     //     new_env.outer = fo.env.outer;
-    //     //
-    //     // } else {
-    //     //     // fo.env is the main env
-    //     //     new_env = fo.env;
-    //     // }
-    //     //
-    //     return Object {
-    //         .function = .{
-    //             .allocator = fo.allocator,
-    //             .params = params,
-    //             .body = body,
-    //             .env = fo.env,
-    //             .owner = fo.owner,
-    //         }
-    //     };
-    //
-    // }
-
-    /// For debuging
-    /// Caller need to deinit returned str
-    pub fn String(fo: *const FunctionObject) Allocator.Error![]const u8 {
-        const n_params = fo.params.items.len;
-
-        if (fo.env.outer) |outer| {
-            return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {*}", .{ n_params, fo.env, outer });
-        }
-        return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {?}", .{ n_params, fo.env, fo.env.outer });
-    }
-};
-
 pub const DictionayObject = struct {
     inner: std.StringHashMap(Object),
     rc: usize = 0,
@@ -275,35 +165,6 @@ pub const DictionayObject = struct {
     }
 
 
-};
-
-pub const StringObject = struct {
-    value: []const u8,
-    rc: usize = 0,
-
-    pub fn deinit(so: *const StringObject, allocator: Allocator) void {
-        if (so.rc == 0) allocator.free(so.value);
-    }
-
-    pub fn clone(so: *const StringObject, allocator: Allocator) Allocator.Error!Object {
-
-        const new_val = try allocator.alloc(u8, so.value.len);
-        errdefer allocator.free(new_val);
-
-        @memcpy(new_val, so.value);
-
-        const str_ptr = try allocator.create(StringObject);
-        errdefer allocator.destroy(str_ptr);
-
-        str_ptr.* = StringObject{
-            .value = new_val,
-        };
-
-        return Object{
-            .string = str_ptr
-        };
-
-    }
 };
 
 pub const ArrayObject = struct {
