@@ -1,35 +1,74 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const print = std.debug.print;
+const debug_print = std.debug.print;
 const log = std.log;
 
 const Object = @import("object.zig").Object;
 const HashMap = @import("hash_map.zig").HashMap;
+const StringHashMap = std.StringHashMapUnmanaged;
 
 const Environment = @This();
 
-store: HashMap(),
-outer: ?*Environment = null,
-rc: usize = 0,
+store: StringHashMap(Object),
+outer: ?*Environment,
+rc: usize,
+kind: Kind,
 
-pub fn init(allocator: Allocator) Allocator.Error!Environment {
-    return Environment{ .store = try HashMap().init(allocator) };
+const Kind = enum {
+    main,
+    enclosed
+};
+pub const empty = Environment {
+    .store = .empty,
+    .outer = null,
+    .rc = 0,
+    .kind = .main,
+};
+
+
+/// Creates a new Environment wich references the outer and 
+/// increases the rc of outer
+pub fn enclosed(outer: *Environment) Environment {
+    log.debug("initializing enclosed env, setting outer to {*}\n", .{outer});
+    return Environment {
+        .store = .empty,
+        .outer = outer,
+        .rc = 1, // refereced by a function
+        .kind = .enclosed
+    };
 }
 
-pub fn deinit(env: *Environment, allocator: Allocator) void {
-    log.debug("trying to deinit env {*}\n", .{env});
 
-    if (env.rc == 0 or env.isMainEnv()) {
-        defer log.debug("deinited env {*}\n", .{env});
-        env.store.deinit(allocator);
+/// Decreases rc of outer and frees store
+pub fn deinit(self: *Environment, allocator: Allocator) void {
+    log.debug("trying to deinit env {*} of kind {s}\n", .{self, @tagName(self.kind)});
 
-        if (env.outer) |outer| {
-            outer.rc -= 1;
+    if (self.rc == 0 or self.isMainEnv()) {
+        defer log.debug("deinited env {*} of kind {s}\n", .{self, @tagName(self.kind)});
+
+        var hm_it = self.store.iterator();
+        while (hm_it.next()) |e|  {
+
+            allocator.free(e.key_ptr.*);
+            const val = e.value_ptr;
+            switch (val.*) {
+                .function => |f| f.rc -= 1,
+                .string => |s| s.rc -= 1,
+                .array => |a| a.rc -= 1,
+                else => {}
+            }
+            val.destroy(allocator);
+        }
+
+        self.store.deinit(allocator);
+
+        if (self.outer) |outer| {
+            if (outer.rc > 0)outer.rc -= 1;
+            self.outer = null;
             if (!outer.isMainEnv()) outer.deinit(allocator); // try to deinit outer
-            allocator.destroy(env);
         }
     } else {
-        log.debug("didnt deinit env {*} since its referenced by {} others\n", .{ env, env.rc });
+        log.debug("didnt deinit env {*} since its referenced by {} others\n", .{ self, self.rc });
     }
 }
 
@@ -41,13 +80,18 @@ fn isMainEnv(env: *Environment) bool {
     }
 }
 
-pub fn printEnv(env: *Environment) void {
-    print("printing env {*}\n", .{env});
-    env.store.printHM();
+/// debuging
+pub fn print(env: *Environment) void {
+    debug_print("env contians:\n", .{});
+    var it = env.store.iterator();
+
+    while  (it.next()) |entry| {
+        debug_print("key: {s}, val: {}\n", .{entry.key_ptr.*, entry.value_ptr.*});
+    }
 
     if (env.outer) |outer| {
-        print("printing outer\n\n", .{});
-        outer.printEnv();
+        debug_print("printing outer\n\n", .{});
+        outer.print();
     }
 }
 
@@ -67,68 +111,46 @@ pub fn printEnv(env: *Environment) void {
 //
 // }
 
-pub fn initClosedEnv(outer: *Environment, allocator: Allocator) Allocator.Error!*Environment {
-    log.debug("initializing enclosed env, setting outer to {*}\n", .{outer});
-    var store = try HashMap().init(allocator);
-    errdefer store.deinit(allocator);
-
-    const extendedEnv = try allocator.create(Environment);
-    extendedEnv.* = Environment{ .store = store, .outer = outer };
-    
-    outer.rc += 1;
-    return extendedEnv;
-}
-
 /// Increases some objects ref count and store them in env (hash_map)
-pub fn put(env: *Environment, allocator: Allocator, key: []const u8, val: *Object) Allocator.Error!void {
-    switch (val.*) {
-        // TODO: use captures
-        .function => {
-            log.debug("putting fnc obj {*} in env {*}\n", .{ val.function, env });
-            val.function.rc += 1;
-        },
-        .string => {
-            val.string.rc += 1;
-        },
-        .array => {
-            val.array.rc += 1;
-        },
+// TODO: fix deallocation for collisions
+pub fn put(env: *Environment, allocator: Allocator, key: []const u8, val: Object) Allocator.Error!void {
 
-        // TODO fill out more
-        else => {},
+
+    log.debug("putting obj({s}) {s}  in env: {*}", .{@tagName(val), key, env});
+
+
+    if (env.store.getPtr(key)) |current_val| {
+        current_val.destroy(allocator); //replace current_val
+        current_val.* = val;
+    } else {
+        const key_copy = try allocator.dupe(u8, key);
+        errdefer allocator.free(key_copy);
+        // increase rc of refcounted objects
+        switch (val) {
+            .function => |f| f.rc += 1,
+            .string => |s| s.rc += 1,
+            .array => |a| a.rc += 1,
+            else => {}
+        }
+
+        try env.store.put(allocator, key_copy, val);
     }
-
-    try env.store.put(allocator, key, val.*);
-    // TODO: set ownership of obj to env
-
 }
 
 /// First checks its own store, if that returns null,
 /// it checks outer.
-/// TODO: remove clone docs
 pub fn get(env: *Environment, key: []const u8) ?Object {
 
     // p.146
-    // print("Retreiving {s} from env: {*}\n", .{key, env});
-    var maybe_obj_ptr = env.store.get(key);
-
-    if (maybe_obj_ptr) |obj_ptr| {
-
-        // print("return clone of env obj\n", .{});
-        // print("found {s} in env {*}\n", .{key, env});
-        return obj_ptr;
-    } else { // if maybe_obj == null
-        if (env.outer) |outer| { // if env.out != null
-
-            // print("didnt find {s} in enclosed, checking outer env\n", .{key});
-            maybe_obj_ptr = outer.get(key);
-
-            if (maybe_obj_ptr) |obj_ptr| {
-                // print("return clone of outer env obj\n", .{});
-                return obj_ptr;
-            }
-        }
-
-        return null;
+    log.debug("Retreiving {s} from env: {*}\n", .{key, env});
+    if (env.store.get(key)) |val| {
+        return val;
     }
+
+    if (env.outer) |outer| {
+        return outer.get(key);
+    }
+
+    return null;
+
 }

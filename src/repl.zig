@@ -19,7 +19,7 @@ const buffer_size = 256;
 
 pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_writer: AnyWriter) !void {
 
-    var env = try Environment.init(allocator);
+    var env: Environment = .empty;
     defer env.deinit(allocator);
 
     var buffer: [2048]u8 = undefined;
@@ -62,13 +62,7 @@ pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_wri
 
         // std.debug.print("Program: {s}\n", .{prog_str});
 
-        const maybe_evaluated = evaluator.eval(allocator, &program, &env) catch |err| switch (err) {
-            evaluator.EvalError.EvalIdentNonExistent => {
-                try writer.print("Error: Couldnt find variable or function\n", .{});
-                continue;
-            },
-            else => return err,
-        };
+        const maybe_evaluated = try evaluator.eval(allocator, &program, &env);
 
         if (maybe_evaluated) |evaluated| {
             defer evaluated.deinit(allocator);
@@ -76,6 +70,8 @@ pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_wri
             defer allocator.free(eval_str);
             try writer.print("{s}\n", .{eval_str});
         }
+
+        env.print();
         //
         // var tok = lex.NextToken();
         // while (tok.kind != Token.Kind.Eof) : (tok = lex.NextToken()) {

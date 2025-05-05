@@ -23,6 +23,7 @@ pub const Object = union(enum) {
     array: *ArrayObject,
     // dictionary: *DictionayObject,
 
+    // maybe frees memory depending on rc
     pub fn deinit(obj: *const Object, allocator: Allocator) void {
 
         // print("Deinitalizing object\n", .{});
@@ -32,6 +33,7 @@ pub const Object = union(enum) {
                 rvj.deinit(allocator);
             },
             .function => |func| {
+                // log.debug("func.rc = {}", .{func.rc});
                 log.debug("trying to deinitalizing func object\n", .{});
                 // is only deinited if func_obj dont have a owner
                 if (func.rc == 0) {
@@ -42,10 +44,10 @@ pub const Object = union(enum) {
                 }
             },
 
-            .string => |so| {
-                if (so.rc == 0) {
-                    so.deinit(allocator);
-                    allocator.destroy(so);
+            .string => |string| {
+                if (string.rc == 0) {
+                    string.deinit(allocator);
+                    allocator.destroy(string);
                 }
             },
 
@@ -66,6 +68,18 @@ pub const Object = union(enum) {
             //
             else => {},
         }
+    }
+
+    pub fn destroy(obj: *const Object, allocator: Allocator) void {
+        switch (obj.*) {
+            .array => |array| array.rc = 0,
+            .string => |string| string.rc = 0,
+            .function => |function| function.rc = 0,
+            else => {}
+        }
+
+        obj.deinit(allocator);
+
     }
 
     pub fn clone(obj: *const Object, allocator: Allocator) !Object {
@@ -153,17 +167,14 @@ pub const FunctionObject = struct {
     params: []const Identifier,
     body: BlockStatement,
     env: *Environment,
-    rc: usize = 0, // the env that owns the object have the responsebility to destroy it, if null it should deallocate
+    rc: usize = 0, 
 
     pub fn deinit(func_obj: *const FunctionObject, allocator: Allocator) void {
 
         // only deinit if obj dont have a owner
-
-        log.debug("trying to deinit fn obj, addr: {*}\n", .{func_obj});
-
-        if (func_obj.rc != 0) {
-            log.debug("dont deinits fnc_obj {*} since its referenced by {} other objects\n", .{ func_obj, func_obj.rc });
-        } else {
+        log.debug("trying to deinit fn object {*}", .{func_obj});
+        if (func_obj.rc == 0) {
+            log.debug("deinited fn object {*}", .{func_obj});
 
             // Only deinit if fnc_obj dont have a owner
 
@@ -172,18 +183,21 @@ pub const FunctionObject = struct {
             func_obj.body.deinit(allocator);
 
             allocator.free(func_obj.params);
+            log.debug("deinited fn obj, addr: {*}\n", .{func_obj});
 
             if (func_obj.env.outer) |_| {
                 log.debug("deinits func objects enclosed env: {*}\n", .{func_obj.env});
                 func_obj.env.rc -= 1;
                 func_obj.env.deinit(allocator);
-                // fnc_obj.allocator.destroy(fnc_obj.env);
+                allocator.destroy(func_obj.env);
 
             } else {
                 log.debug("func env.outer = null. dont deinits its env\n", .{});
                 // since its the main env
 
             }
+        } else {
+            log.debug("didnt deinits fnc_obj {*} since its referenced by {} other objects\n", .{ func_obj, func_obj.rc });
         }
 
         //
@@ -278,15 +292,15 @@ pub const StringObject = struct {
 
         @memcpy(new_val, so.value);
 
-        const so_ptr = try allocator.create(StringObject);
+        const str_ptr = try allocator.create(StringObject);
+        errdefer allocator.destroy(str_ptr);
 
-        so_ptr.* = StringObject{
+        str_ptr.* = StringObject{
             .value = new_val,
         };
 
         return Object{
-            .string = so_ptr
-
+            .string = str_ptr
         };
 
     }
@@ -303,7 +317,6 @@ pub const ArrayObject = struct {
             }
             allocator.free(array_object.elements);
         }
-
     }
 
     pub fn clone(ao: *const ArrayObject, allocator: Allocator) Allocator.Error!Object {
@@ -315,4 +328,3 @@ pub const ArrayObject = struct {
 
 };
 
-//

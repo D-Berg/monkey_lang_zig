@@ -24,3 +24,10 @@ bench: fast
 		"python3 python_comparisons/recursice.py"\
 		"zig-out/bin/monkey python_comparisons/recursice.mky"\
 
+
+bench-self: fast
+	poop "zig-out/testing/original/bin/monkey python_comparisons/factorial.mky"\
+		"zig-out/bin/monkey python_comparisons/factorial.mky"\
+		
+	poop "zig-out/testing/original/bin/monkey python_comparisons/recursice.mky"\
+		"zig-out/bin/monkey python_comparisons/recursice.mky"\

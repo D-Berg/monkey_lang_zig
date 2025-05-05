@@ -23,18 +23,18 @@ pub fn HashMap() type { // TODO: Remove generic
             key: []const u8,
             val: Object,
 
-            fn deinit(entry: *const Entry, allocator: Allocator) void {
+            fn deinit(entry: *Entry, allocator: Allocator) void {
+
+                log.debug("deinits entry: {s}\n", .{entry.key});
 
                 allocator.free(entry.key);
 
-                log.debug("deinits entry:\n", .{});
-
                 switch (entry.val) {
-                    .function => |fnc_obj| {
-                        fnc_obj.rc -= 1;
+                    .function => |*fnc_obj| {
+                        // fnc_obj.rc -= 1;
                         fnc_obj.deinit(allocator);
 
-                        allocator.destroy(fnc_obj);
+                        // allocator.destroy(fnc_obj);
                     },
 
                     .string => |str_obj| {
@@ -90,7 +90,7 @@ pub fn HashMap() type { // TODO: Remove generic
         pub fn deinit(self: *Self, allocator: Allocator) void {
             for (self.buckets) |maybe_bucket| {
                 if (maybe_bucket) |bucket| {
-                    for (bucket.items) |entry| {
+                    for (bucket.items) |*entry| {
                         entry.deinit(allocator);
                     }
 
@@ -137,10 +137,12 @@ pub fn HashMap() type { // TODO: Remove generic
             // TODO if collisions increase buckets until no collision
             // TODO:
             const new_key_str = try allocator.alloc(u8, key.len);
-            std.mem.copyForwards(u8, new_key_str, key);
+            errdefer allocator.free(new_key_str);
+
+            @memcpy(new_key_str, key);
 
             const new_entry = Entry{ .key = new_key_str, .val = value };
-            errdefer new_entry.deinit(allocator);
+            // errdefer new_entry.deinit(allocator);
 
             const h = hash(key);
             const b_idx = h % self.buckets.len;
@@ -150,7 +152,7 @@ pub fn HashMap() type { // TODO: Remove generic
             if (maybe_bucket) |bucket| {
                 // print("bucket not empty\n", .{});
 
-                for (bucket.items, 0..) |entry, i| {
+                for (bucket.items, 0..) |*entry, i| {
                     if (std.mem.eql(u8, new_entry.key, entry.key)) {
                         // print("key already exists, updading entry\n", .{});
                         entry.deinit(allocator);

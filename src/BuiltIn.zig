@@ -110,17 +110,18 @@ fn push(allocator: Allocator, args: []const Object) BuiltInError!Object {
         try new_elements.append(try elem.clone(allocator));
     }
 
+    // TODO: errdefer
     try new_elements.append(try args[1].clone(allocator));
- 
-    const new_array_ptr = try allocator.create(object.ArrayObject);
-    errdefer allocator.destroy(new_array_ptr);
 
-    new_array_ptr.* = object.ArrayObject {
+    const array_ptr = try allocator.create(object.ArrayObject);
+    errdefer allocator.destroy(array_ptr);
+
+    array_ptr.* = object.ArrayObject {
         .elements = try new_elements.toOwnedSlice(),
     };
 
     return Object{
-        .array = new_array_ptr
+        .array = array_ptr
     };
 
 }
