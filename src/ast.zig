@@ -189,6 +189,7 @@ pub const BlockStatement = struct {
 
         return try bs_str.toOwnedSlice(allocator);
     }
+
 };
 
 // Expressions ----------------------------------------------------------------------
@@ -251,6 +252,7 @@ pub const IntegerLiteralExpression = struct {
         const str = try std.fmt.allocPrint(allocator, "{}", .{ile.value});
         return str;
     }
+    
 };
 
 pub const BooleanLiteralExpression = struct {
@@ -505,7 +507,7 @@ pub const FnLiteralExpression = struct {
 pub const CallExpression = struct {
     token: Token, // the '('
     function: *const Expression, // fnlit or ident expr
-    args: []const Expression, // TODO: use slice
+    args: []const Expression,
 
     pub fn deinit(ce: *const CallExpression, allocator: Allocator) void {
         ce.function.deinit(allocator);
