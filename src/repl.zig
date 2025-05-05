@@ -71,7 +71,7 @@ pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_wri
             try writer.print("{s}\n", .{eval_str});
         }
 
-        env.print();
+        if (std.options.log_level == .debug) env.print();
         //
         // var tok = lex.NextToken();
         // while (tok.kind != Token.Kind.Eof) : (tok = lex.NextToken()) {

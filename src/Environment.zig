@@ -90,15 +90,15 @@ fn isMainEnv(env: *Environment) bool {
 
 /// debuging
 pub fn print(env: *Environment) void {
-    debug_print("env contians:\n", .{});
+    log.debug("env contians:\n", .{});
     var it = env.store.iterator();
 
     while  (it.next()) |entry| {
-        debug_print("key: {s}, val: {}\n", .{entry.key_ptr.*, entry.value_ptr.*});
+        log.debug("key: {s}, val: {}\n", .{entry.key_ptr.*, entry.value_ptr.*});
     }
 
     if (env.outer) |outer| {
-        debug_print("printing outer\n\n", .{});
+        log.debug("printing outer\n\n", .{});
         outer.print();
     }
 }
