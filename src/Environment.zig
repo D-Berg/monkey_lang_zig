@@ -61,6 +61,7 @@ pub fn deinit(self: *Environment, allocator: Allocator) void {
                 .function => |f| f.rc -= 1,
                 .string => |s| s.rc -= 1,
                 .array => |a| a.rc -= 1,
+                .dictionary => |d| d.rc -= 1,
                 else => {}
             }
             val.deinit(allocator);
@@ -138,6 +139,7 @@ pub fn put(env: *Environment, allocator: Allocator, key: []const u8, val: Object
             .function => |f| f.rc += 1,
             .string => |s| s.rc += 1,
             .array => |a| a.rc += 1,
+            .dictionary => |d| d.rc += 1,
             else => {}
         }
 

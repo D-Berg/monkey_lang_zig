@@ -6,6 +6,7 @@ const Environment = @import("Environment.zig");
 pub const FunctionObject = @import("objects/FunctionObject.zig");
 pub const ReturnObject = @import("objects/ReturnObject.zig");
 pub const StringObject = @import("objects/StringObject.zig");
+pub const DictionayObject = @import("objects/DictionaryObject.zig");
 
 
 const BuiltIn = @import("BuiltIn.zig");
@@ -27,7 +28,7 @@ pub const Object = union(enum) {
     string: *StringObject,
     built_in: BuiltIn.Kind,
     array: *ArrayObject,
-    // dictionary: *DictionayObject,
+    dictionary: *DictionayObject,
 
     // maybe frees memory depending on rc
     pub fn deinit(obj: *const Object, allocator: Allocator) void {
@@ -66,14 +67,14 @@ pub const Object = union(enum) {
                 }
             },
             
-            // .dictionary => |dict| {
-            //     if (dict.rc == 0) {
-            //         dict.deinit(allocator);
-            //         allocator.destroy(dict);
-            //     }
-            //
-            // },
-            //
+            .dictionary => |dict| {
+                if (dict.rc == 0) {
+                    dict.deinit(allocator);
+                    allocator.destroy(dict);
+                }
+
+            },
+
             else => {},
         }
     }
@@ -140,6 +141,32 @@ pub const Object = union(enum) {
                 return array_str.toOwnedSlice();
 
             },
+            .dictionary => |dict| {
+                var dict_str: ArrayList(u8) = .init(allocator);
+                errdefer dict_str.deinit();
+
+                const writer = dict_str.writer();
+
+                const n_entries = dict.inner.size;
+                var iterator = dict.inner.iterator();
+
+                try writer.print("{s}", .{"{ "});
+
+                var i: u32 = 0;
+                var extra = ", ";
+                while (iterator.next()) |entry| : (i += 1){
+                    const val_str = try entry.value_ptr.inspect(allocator);
+                    defer allocator.free(val_str);
+
+                    if (i + 1 == n_entries) extra = " }";
+
+                    try writer.print("{s}: {s}{s}", .{ 
+                        entry.key_ptr.*, val_str, extra
+                    }); 
+                } 
+
+                return try dict_str.toOwnedSlice();
+            },
             inline else => |case| {
                 const str = try std.fmt.allocPrint(allocator, "{}", .{case});
                 return str;
@@ -148,24 +175,6 @@ pub const Object = union(enum) {
     }
 };
 
-pub const DictionayObject = struct {
-    inner: std.StringHashMap(Object),
-    rc: usize = 0,
-
-    fn deinit(dictionary_obj: *const DictionayObject, allocator: Allocator) void {
-        var iterator = dictionary_obj.inner.iterator();
-
-        while (iterator.next()) |entry| {
-            // allocator.free(entry.key_ptr)
-            entry.value_ptr.deinit(allocator);
-        }
-
-        dictionary_obj.inner.deinit();
-
-    }
-
-
-};
 
 pub const ArrayObject = struct {
     elements: []const Object,

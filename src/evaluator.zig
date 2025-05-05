@@ -19,6 +19,7 @@ const Object = object.Object;
 const FuncionObject = object.FunctionObject;
 const StringObject = object.StringObject;
 const ArrayObject = object.ArrayObject;
+const DictionaryObject = object.DictionayObject;
 
 const Statement = ast.Statement;
 const LetStatement = ast.LetStatement;
@@ -33,9 +34,11 @@ const CallExpression = ast.CallExpression;
 const StringExpression = ast.StringExpression;
 const ArrayLiteralExpression = ast.ArrayLiteralExpression;
 const IndexExpression = ast.IndexExpression;
+const DictionaryExpression = ast.DictionaryExpression;
 
 const Program = ast.Program;
 const ArrayList = std.ArrayList;
+const StringHashMap = std.StringHashMapUnmanaged;
 
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
@@ -243,10 +246,16 @@ fn evalExpression(allocator: Allocator, expr: *const Expression, env: *Environme
             return try evalIndexExpression(allocator, ie, env);
         },
 
-        .dictionary => |*dict| {
-            _ = dict;
+        .dictionary => |*dict_expr| {
 
-            return EvalError.Unimplemented;
+            const dict_ptr = try allocator.create(DictionaryObject);
+            errdefer allocator.destroy(dict_ptr);
+
+            dict_ptr.* = try evalDictionaryExpression(allocator, dict_expr, env);
+
+            return Object {
+                .dictionary = dict_ptr,
+            };
 
         }
 
@@ -675,6 +684,39 @@ fn evalStringExpression(allocator: Allocator, string_expression: *const StringEx
 
     return StringObject{ .value = str };
 }
+
+fn evalDictionaryExpression(allocator: Allocator, dictionary_expression: *const DictionaryExpression, env: *Environment) EvalError!DictionaryObject {
+
+    var object_hm: StringHashMap(Object) = .empty;
+    errdefer {
+        var object_hm_it = object_hm.iterator();
+        while (object_hm_it.next()) |entry| {
+            allocator.free(entry.key_ptr.*);
+            entry.value_ptr.deinit(allocator);
+        }
+    }
+
+    var expression_hm_it = dictionary_expression.hash_map.iterator();
+
+    while (expression_hm_it.next()) |entry| {
+        const key_str = try allocator.dupe(u8, entry.key_ptr.*);
+        errdefer allocator.free(key_str);
+
+        const value_obj = try evalExpression(allocator, entry.value_ptr, env) orelse
+            return EvalError.NullObject;
+        errdefer value_obj.destroy(allocator);
+
+
+        try object_hm.put(allocator, key_str, value_obj);
+    }
+
+    return DictionaryObject {
+        .inner = object_hm,
+        .rc = 0
+    };
+
+}
+
 
 fn testEval(allocator: Allocator, env: *Environment, input: []const u8) !?object.Object {
 

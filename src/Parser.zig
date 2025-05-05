@@ -11,6 +11,8 @@ const Node = ast.Node;
 const ArrayList = std.ArrayList;
 
 const Allocator = std.mem.Allocator;
+const StringHashMap = std.StringHashMapUnmanaged;
+
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualStrings = std.testing.expectEqualStrings;
@@ -43,7 +45,9 @@ pub const ParseError = error {
     ExpectedNextTokenColon,
     FailedToConvertStringToInt,
     NoPrefixFunction,
-    NoInfixFunction
+    NoInfixFunction,
+    
+    DictionaryKeyWasNotString
 } || Allocator.Error || std.fmt.BufPrintError;
 
 const Precedence = enum {
@@ -612,41 +616,38 @@ fn parseDictionaryLiteral(parser: *Parser, allocator: Allocator) ParseError!Expr
 
     const curr_tok = parser.current_token;
 
-    var keys = ArrayList(Expression).init(allocator);
-    var values = ArrayList(Expression).init(allocator);
-
-    errdefer { // clean up on error
-        for (keys.items) |key| key.deinit(allocator);
-        for (values.items) |value| value.deinit(allocator);
-        keys.deinit(); values.deinit();
-    }
-
-    if (parser.peekTokenIs(.Rbrace)) { // empty dictionary
-        return Expression {
-            .dictionary = .{
-                .token = curr_tok,
-                .keys = try keys.toOwnedSlice(),
-                .values = try values.toOwnedSlice()
-            }
-        };
+    var hash_map: StringHashMap(Expression) = .empty;
+    errdefer {
+        var val_iterator = hash_map.valueIterator();
+        while (val_iterator.next()) |val| val.deinit(allocator);
     }
 
     var i: usize = 0;
-    const max_iterations = 1000;
-
-    while (!parser.peekTokenIs(.Rbrace) and i < max_iterations) : (i += 1) {
+    while (!parser.peekTokenIs(.Rbrace)) : (i += 1) {
 
         parser.nextToken();
 
         const key = try parser.parseExpression(allocator, .Lowest);
-        try keys.append(key);
+        errdefer key.deinit(allocator);
+
+
+        if (key != .string_expression) return ParseError.DictionaryKeyWasNotString;
+
+        const key_str = key.string_expression.value;
 
         if (!try parser.expectPeek(.Colon)) return ParseError.ExpectedNextTokenColon;
 
         parser.nextToken(); // skip colon
 
         const value = try parser.parseExpression(allocator, .Lowest);
-        try values.append(value);
+        errdefer value.deinit(allocator);
+
+        if (hash_map.getPtr(key_str)) |old_val| {
+            old_val.deinit(allocator);
+            old_val.* = value;
+        } else {
+            try hash_map.put(allocator, key_str, value);
+        }
 
         if (!parser.peekTokenIs(.Rbrace) and !try parser.expectPeek(.Comma)) {
             return ParseError.ExpectedNextTokenRbrace;
@@ -659,8 +660,7 @@ fn parseDictionaryLiteral(parser: *Parser, allocator: Allocator) ParseError!Expr
     return Expression {
         .dictionary = .{
             .token = curr_tok,
-            .keys = try keys.toOwnedSlice(),
-            .values = try values.toOwnedSlice()
+            .hash_map = hash_map
         }
     };
 
@@ -1302,8 +1302,6 @@ test "Array Literal" {
 
 test "Dictionary Literal" {
 
-    std.testing.log_level = .debug;
-
     const allocator = std.testing.allocator;
     const input = 
         \\{ "key1": 21, "key2": "string_val" }
@@ -1331,6 +1329,70 @@ test "Dictionary Literal" {
     defer allocator.free(prog_str);
     //
     try expectEqualStrings(prog_str, "{ key1: 21, key2: string_val }");
+
+}
+
+test "empty dictionary" {
+
+    const allocator = std.testing.allocator;
+    const input = 
+        \\{}
+    ;
+
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
+
+    var program = try parser.Program(allocator);
+    defer program.deinit(allocator);
+
+    const n_stmts = program.statements.len;
+
+    try expect(n_stmts == 1);
+
+    const stmt = program.statements[0];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr = stmt.expr_stmt.expression.*;
+
+    try expect(expr == .dictionary);
+
+    const prog_str = try program.String(allocator);
+    defer allocator.free(prog_str);
+    
+    try expectEqualStrings(prog_str, "{  }");
+}
+
+test "dict with expessions" {
+
+    const allocator = std.testing.allocator;
+    const input = 
+        \\{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}
+    ;
+
+    var parser = Parser.init(allocator, input);
+    defer parser.deinit(allocator);
+
+    var program = try parser.Program(allocator);
+    defer program.deinit(allocator);
+
+    const n_stmts = program.statements.len;
+
+    try expect(n_stmts == 1);
+
+    const stmt = program.statements[0];
+
+    try expect(stmt == .expr_stmt);
+
+    const expr = stmt.expr_stmt.expression.*;
+
+    try expect(expr == .dictionary);
+
+    const prog_str = try program.String(allocator);
+    defer allocator.free(prog_str);
+    
+    // note order is not kept
+    try expectEqualStrings("{ one: (0 + 1), three: (15 / 5), two: (10 - 8) }", prog_str);
 
 }
 test "Index Expr" {

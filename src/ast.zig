@@ -8,8 +8,7 @@ const log = std.log.scoped(.@"ast");
 const ExprIdx = usize;
 const StateIdx = usize;
 
-// TODO: remove
-// pub const Node = union(enum) { statement: Statement, expression: Expression };
+const StringHashMap = std.StringHashMapUnmanaged;
 
 
 // Statements ---------------------------------------------------------------------
@@ -580,6 +579,7 @@ pub const CallExpression = struct {
 
 };
 
+/// Does not manage allocation of value
 pub const StringExpression = struct {
     token: Token,
     value: []const u8,
@@ -655,19 +655,19 @@ pub const ArrayLiteralExpression = struct {
 
 pub const DictionaryExpression = struct {
     token: Token,
-    keys: []const Expression,
-    values: []const Expression,
+    hash_map: StringHashMap(Expression), // keys are not allocated
 
     fn deinit(dictionary: *const DictionaryExpression, allocator: Allocator) void {
-
     
-        for (dictionary.keys, dictionary.values) |key, value| {
-            key.deinit(allocator);
+        var hash_map = dictionary.hash_map;
+
+        var val_iterator = hash_map.valueIterator();
+
+        while (val_iterator.next()) |value| {
             value.deinit(allocator);
         }
-        
-        allocator.free(dictionary.keys);
-        allocator.free(dictionary.values);
+
+        hash_map.deinit(allocator);
     }
     
     fn String(dictionary: *const DictionaryExpression, allocator: Allocator) Allocator.Error![]const u8 {
@@ -675,20 +675,23 @@ pub const DictionaryExpression = struct {
         var str: ArrayList(u8) = .empty;
         errdefer str.deinit(allocator);
 
-        const n_items = dictionary.keys.len;
+        const n_items = dictionary.hash_map.size;
 
         const writer = str.writer(allocator);
 
         try str.appendSlice(allocator, "{ ");
+        
+        var hm_it = dictionary.hash_map.iterator();
 
-        for (dictionary.keys, dictionary.values, 0..) |key, val, i| {
-            const key_str = try key.String(allocator);
-            defer allocator.free(key_str);
+        var i: u32 = 0;
+        while (hm_it.next()) |entry| : (i += 1) {
+            const key = entry.key_ptr.*;
+            const val = entry.value_ptr.*;
 
             const val_str = try val.String(allocator);
             defer allocator.free(val_str);
             
-            try writer.print("{s}: {s}", .{key_str, val_str});
+            try writer.print("{s}: {s}", .{key, val_str});
 
             if ((i + 1) != n_items) {
                 try writer.print(", ", .{});
