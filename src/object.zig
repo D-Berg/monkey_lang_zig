@@ -141,6 +141,41 @@ pub const Object = union(enum) {
                 return array_str.toOwnedSlice(allocator);
 
             },
+            .function => |func| {
+                var string: ArrayList(u8) = .empty;
+                errdefer string.deinit(allocator);
+
+                const writer = string.writer(allocator);
+
+                try writer.print("fn ( ", .{});
+
+
+                const n_params = func.params.len;
+                for (func.params, 0..) |param, i| {
+
+                    try writer.print("{s}", .{param.token.literal});
+                    
+                    if (i + 1 < n_params) {
+                        try writer.print(", ", .{});
+                    } else {
+                        try writer.print(" ", .{});
+                    }
+
+                }
+                
+                try string.appendSlice(allocator, ") {");
+
+                const body_str = try func.body.String(allocator);
+                defer allocator.free(body_str);
+
+                try string.appendSlice(allocator, body_str);
+                
+                try string.appendSlice(allocator, " }");
+                
+                return try string.toOwnedSlice(allocator);
+                
+
+            },
             .dictionary => |dict| {
                 var dict_str: ArrayList(u8) = .empty;
                 errdefer dict_str.deinit(allocator);
