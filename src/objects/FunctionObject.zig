@@ -33,6 +33,7 @@ pub fn deinit(func_obj: *const FunctionObject, allocator: Allocator) void {
 
 
         log.debug("allocator: freeing fn params", .{});
+        for (func_obj.params) |p| allocator.free(p.token.literal);
         allocator.free(func_obj.params);
 
         log.debug("trying to deinit env, {*}", .{func_obj.env});

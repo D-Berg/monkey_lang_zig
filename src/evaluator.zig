@@ -287,9 +287,22 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) ?Object {
 }
 
 fn EvalFnExpr(allocator: Allocator, env: *Environment, fl: *const FnLiteralExpression) EvalError!FuncionObject {
+    const params = try allocator.alloc(Identifier, fl.parameters.len);
+    errdefer {
+        for (params) |p| allocator.free(p.token.literal);
+        allocator.free(params);
+    }
 
-    const params = try allocator.dupe(Identifier, fl.parameters);
-    errdefer allocator.free(params);
+    for (fl.parameters, 0..) |p, i| {
+        params[i] = Identifier {
+            .token = Token {
+                .literal = try allocator.dupe(u8, p.token.literal),
+                .loc = p.token.loc,
+                .kind = p.token.kind
+            }
+        };
+    }
+
 
     env.rc += 1; // increase rc of env since fn reference it
 
