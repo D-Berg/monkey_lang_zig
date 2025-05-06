@@ -11,7 +11,7 @@ pub const DictionayObject = @import("objects/DictionaryObject.zig");
 
 const BuiltIn = @import("BuiltIn.zig");
 
-const ArrayList = std.ArrayList;
+const ArrayList = std.ArrayListUnmanaged;
 const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
 const print = std.debug.print;
@@ -118,10 +118,10 @@ pub const Object = union(enum) {
             },
             .array => |array| {
                 
-                var array_str: ArrayList(u8) = .init(allocator);
-                errdefer array_str.deinit();
+                var array_str: ArrayList(u8) = .empty;
+                errdefer array_str.deinit(allocator);
             
-                try array_str.append('[');
+                try array_str.append(allocator, '[');
 
                 const n_elems = array.elements.len;
 
@@ -130,22 +130,22 @@ pub const Object = union(enum) {
                     const elem_str = try elem.inspect(allocator);
                     defer allocator.free(elem_str);
 
-                    try array_str.appendSlice(elem_str);
+                    try array_str.appendSlice(allocator, elem_str);
 
-                    if (i != n_elems - 1) try array_str.appendSlice(", ");
+                    if (i != n_elems - 1) try array_str.appendSlice(allocator, ", ");
 
                 }
                 
-                try array_str.append(']');
+                try array_str.append(allocator, ']');
 
-                return array_str.toOwnedSlice();
+                return array_str.toOwnedSlice(allocator);
 
             },
             .dictionary => |dict| {
-                var dict_str: ArrayList(u8) = .init(allocator);
-                errdefer dict_str.deinit();
+                var dict_str: ArrayList(u8) = .empty;
+                errdefer dict_str.deinit(allocator);
 
-                const writer = dict_str.writer();
+                const writer = dict_str.writer(allocator);
 
                 const n_entries = dict.inner.size;
                 var iterator = dict.inner.iterator();
@@ -165,7 +165,7 @@ pub const Object = union(enum) {
                     }); 
                 } 
 
-                return try dict_str.toOwnedSlice();
+                return try dict_str.toOwnedSlice(allocator);
             },
             inline else => |case| {
                 const str = try std.fmt.allocPrint(allocator, "{}", .{case});
