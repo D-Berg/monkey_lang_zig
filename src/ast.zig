@@ -144,6 +144,7 @@ pub const ExpressionStatement = struct {
     }
 };
 
+// TODO: Block Statements often live longer than one loop, allocate the token literals
 pub const BlockStatement = struct {
     token: Token,
     statements: []const Statement,
@@ -168,7 +169,7 @@ pub const BlockStatement = struct {
             try statements.append(allocator, try stmt.clone(allocator));
         }
 
-        return BlockStatement{
+        return BlockStatement {
             .token = self.token,
             .statements = try statements.toOwnedSlice(allocator),
         };

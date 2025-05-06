@@ -11,6 +11,7 @@ const DictionaryObject = @This();
 inner: StringHashMap(Object), // keys are allocated
 rc: usize,
 
+// TODO: decrease rc of stored objects
 pub fn deinit(dictionary_obj: *const DictionaryObject, allocator: Allocator) void {
     var inner_hm = dictionary_obj.inner;
 
@@ -18,7 +19,15 @@ pub fn deinit(dictionary_obj: *const DictionaryObject, allocator: Allocator) voi
 
     while (iterator.next()) |entry| {
         allocator.free(entry.key_ptr.*);
-        entry.value_ptr.deinit(allocator);
+        const value_obj = entry.value_ptr.*;
+        switch (value_obj) {
+            .function => |f| f.rc -= 1,
+            .string => |s| s.rc -= 1,
+            .array => |a| a.rc -= 1,
+            .dictionary => |d| d.rc -= 1,
+            else => {}
+        }
+        value_obj.deinit(allocator);
     }
 
     inner_hm.deinit(allocator);

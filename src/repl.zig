@@ -17,6 +17,7 @@ const prompt = ">> ";
 const buffer_size = 256;
 
 
+// TODO: save lines in a list
 pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_writer: AnyWriter) !void {
 
     var env: Environment = .empty;

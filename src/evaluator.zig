@@ -669,6 +669,16 @@ fn evalIndexExpression(allocator: Allocator, ie: *const IndexExpression, env: *E
         const idx_usize: usize = @intCast(idx);
         return left_obj.array.elements[idx_usize];
 
+    } else if (index_obj == .string and left_obj == .dictionary) {
+        
+        const key = index_obj.string.value; 
+
+        if (left_obj.dictionary.inner.get(key)) |value| {
+            return value;
+        } else {
+            return Object { .nullable = {} };
+        }
+
     } else {
         return error.EvalUnsupportedIndexType;
     }
@@ -719,6 +729,13 @@ fn evalDictionaryExpression(allocator: Allocator, dictionary_expression: *const 
             return EvalError.NullObject;
         errdefer value_obj.destroy(allocator);
 
+        switch (value_obj) {
+            .function => |f| f.rc += 1,
+            .string => |s| s.rc += 1,
+            .array => |a| a.rc += 1,
+            .dictionary => |d| d.rc += 1,
+            else => {}
+        }
 
         try object_hm.put(allocator, key_str, value_obj);
     }
