@@ -29,7 +29,7 @@ const importObject = {
     }
 };
 
-WebAssembly.instantiateStreaming(fetch("zig-out/bin/monkey_web.wasm"), importObject).then(
+WebAssembly.instantiateStreaming(fetch("../zig-out/bin/monkey_web.wasm"), importObject).then(
     (obj) => {
         const instance = obj.instance;
         memory = instance.exports.memory;
