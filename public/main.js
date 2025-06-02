@@ -2,7 +2,11 @@ const program = "3 + 3";
 let memory = null;
 let instance = null;
 
-const outputEl = document.getElementById("output");
+const console_element = document.getElementById("console");
+
+// Intercept input and store it for WASM to read
+//
+const stdin = document.getElementById("stdin");
 
 const importObject = {
     env: {
@@ -15,11 +19,11 @@ const importObject = {
                 switch (fd) {
                     case 1: // STDOUT
                         // outputEl.textContent += str;
-                        outputEl.innerHTML += `<span class="stdout">${str}</span>`;
+                        console_element.innerHTML += `<span class="stdout">${str}</span>`;
                         return len;
                     case 2: //STDERR
                         // outputEl.textContent += str;
-                        outputEl.innerHTML += `<span class="stderr">${str}</span>`;
+                        console_element.innerHTML += `<span class="stderr">${str}</span>`;
                         return len;
                 }
                 return 0; // in the case that 0 bytes were written
@@ -27,12 +31,6 @@ const importObject = {
                 return -1; // return -1 if an error occurs
             }
         },
-
-        js_read(fd, addr, len) {
-            return -1;
-        }
-
-
     }
 };
 
@@ -41,29 +39,35 @@ WebAssembly.instantiateStreaming(fetch("../zig-out/bin/monkey_web.wasm"), import
         const instance = obj.instance;
         memory = instance.exports.memory;
 
-        const web_main = instance.exports.web_main;
+        const eval = instance.exports.wasm_evaluate;
         const alloc = instance.exports.alloc;
         const free = instance.exports.free;
 
+        stdin.addEventListener('keydown', (e) => {
+            if (e.key == "Enter") {
+                console.log("pressed enter")
+                // console_element.innerHTML = ""
 
-        document.getElementById("runBtn").onclick = () => {
-            outputEl.innerHTML = ""
-            const input = document.getElementById("inputBox").value;
-            const encoder = new TextEncoder();
-            const encoded = encoder.encode(input);
+                const input = stdin.value;
+                console.log("stdin = ", input);
+                const encoder = new TextEncoder();
+                const encoded = encoder.encode(input);
 
-            const len = encoded.length + 1
-            const ptr = alloc(len);
-            const buf = new Uint8Array(memory.buffer, ptr, len);
-            buf.set(encoded);
-            buf[encoded.length] = 0;
+                const len = encoded.length
+                const ptr = alloc(len);
+                const buf = new Uint8Array(memory.buffer, ptr, len);
+                buf.set(encoded);
+                // buf[encoded.length] = 0;
 
-            const result = web_main(ptr);
+                const result = eval(ptr, len);
 
-            free(ptr, len);
+                free(ptr, len);
 
-            console.log("wasm exited with code:", result);
-        };
+                stdin.value = "";
+                console.log("wasm exited with code:", result);
+
+            }
+        });
 
 
     },

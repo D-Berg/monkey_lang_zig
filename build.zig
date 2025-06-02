@@ -32,24 +32,15 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
-        monkey_web_mod.export_symbol_names = &.{ "alloc", "free" };
-
-        // const wasm_lib = b.addLibrary(.{
-        //     .root_module = b.createModule(.{
-        //         .root_source_file = b.path("src/web_helpers/root.zig"),
-        //         .target = target,
-        //         .optimize = optimize,
-        //     }),
-        //     .linkage = .static,
-        //     .name = "heper_functions",
-        // });
+        monkey_web_mod.export_symbol_names = &.{ "alloc", "free", "wasm_evaluate" };
 
         const wasm_exe = b.addExecutable(.{
             .root_module = monkey_web_mod,
             .name = "monkey_web",
         });
 
-        wasm_exe.entry = .{ .symbol_name = "web_main" };
+        wasm_exe.entry = .disabled;
+        // wasm_exe.entry = .{ .symbol_name = "web_main" };
         b.installArtifact(wasm_exe);
     } else {
         const monkey_mod = b.addModule("monkey", .{

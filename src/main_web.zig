@@ -1,18 +1,18 @@
 const std = @import("std");
-const Environment = @import("Environment.zig");
-const Parser = @import("Parser.zig");
-const evaluator = @import("evaluator.zig");
-var write_buffer: [1000]u8 = undefined;
 const bufPrint = std.fmt.bufPrint;
-
 const allocator = std.heap.wasm_allocator;
+
+const Environment = @import("Environment.zig");
+const evaluator = @import("evaluator.zig");
+const Parser = @import("Parser.zig");
+
 const log = std.log.scoped(.Wasm);
 
-const STDIN_FILENO = 1;
 const STDOUT_FILENO = 1;
 const STDERR_FILENO = 2;
 
 const GenericWriter = std.io.GenericWriter(File, anyerror, File.write);
+
 // Posix "file"
 const File = struct {
     handle: i32,
@@ -40,14 +40,13 @@ const stderr = File{
 
 pub const std_options = std.Options{
     // Set the log level to info
-    .log_level = .debug,
+    .log_level = .err,
 
     // Define logFn to override the std implementation
     .logFn = wasmLogFn,
 };
 
 extern fn js_write(fd: i32, buf: usize, count: usize) i32;
-extern fn read(fd: i32, buf: usize, count: usize) i32;
 
 /// Allocated u8, to be called from js
 export fn alloc(len: usize) usize {
@@ -85,24 +84,23 @@ pub fn wasmLogFn(
     writer.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
 }
 
-pub export fn web_main(c_input: [*:0]const u8) u32 {
-    const sentinal_idx = std.mem.indexOfSentinel(u8, 0, c_input);
+var env: Environment = .empty;
 
-    run(c_input[0..sentinal_idx]) catch |err| {
-        log.err("failed to execute with error {s}", .{@errorName(err)});
-        return 420;
+export fn wasm_evaluate(input_ptr_int: usize, len: usize) usize {
+    var input: []u8 = undefined;
+    input.ptr = @ptrFromInt(input_ptr_int);
+    input.len = len;
+
+    eval(input, stdout.writer().any()) catch |err| {
+        log.err("Failed to evalutate, error: {s}", .{@errorName(err)});
+        return @intFromError(err);
     };
 
-    log.info("Program Succeded", .{});
-    return 69;
+    return 0;
 }
 
-fn run(input: []const u8) !void {
-    const writer = stdout.writer();
-    log.debug("input = {s}", .{input});
-
-    var env: Environment = .empty;
-    defer env.deinit(allocator);
+fn eval(input: []const u8, writer: std.io.AnyWriter) !void {
+    log.debug("got input = {s}", .{input});
 
     var parser = Parser.init(allocator, input);
 
@@ -115,6 +113,6 @@ fn run(input: []const u8) !void {
         defer evaluated.deinit(allocator);
         const eval_str = try evaluated.inspect(allocator);
         defer allocator.free(eval_str);
-        try writer.print("evaluated {s}\n", .{eval_str});
+        try writer.print("{s}\n", .{eval_str});
     }
 }
