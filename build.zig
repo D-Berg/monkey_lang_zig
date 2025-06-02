@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
-        monkey_web_mod.export_symbol_names = &.{ "alloc", "add" };
+        monkey_web_mod.export_symbol_names = &.{ "alloc", "free" };
 
         // const wasm_lib = b.addLibrary(.{
         //     .root_module = b.createModule(.{
@@ -50,7 +50,6 @@ pub fn build(b: *std.Build) void {
         });
 
         wasm_exe.entry = .{ .symbol_name = "web_main" };
-
         b.installArtifact(wasm_exe);
     } else {
         const monkey_mod = b.addModule("monkey", .{
