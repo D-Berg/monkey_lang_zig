@@ -1,24 +1,22 @@
 const std = @import("std");
-const build_options = @import("build_options");
-const repl = @import("repl.zig");
-const Lexer = @import("Lexer.zig");
-const Parser = @import("Parser.zig");
-const object = @import("object.zig");
-const evaluator = @import("evaluator.zig");
-const Environment = @import("Environment.zig");
-
-const builtin = @import("builtin");
 const print = std.debug.print;
 const log = std.log;
+const expect = std.testing.expect;
+const builtin = @import("builtin");
+const build_options = @import("build_options");
+
+const Environment = @import("Environment.zig");
+const evaluator = @import("evaluator.zig");
+const Lexer = @import("Lexer.zig");
+const object = @import("object.zig");
+const Parser = @import("Parser.zig");
+const repl = @import("repl.zig");
 
 pub const std_options: std.Options = .{
     .log_level = @enumFromInt(@intFromEnum(build_options.log_level)),
 };
 
-const expect = std.testing.expect;
-
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-
 
 const monkey =
     \\ .--.  .-"   "-.  .--.
@@ -34,11 +32,11 @@ const monkey =
 ;
 
 pub fn main() !void {
-
     const allocator, const is_debug = gpa: {
+        if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
         break :gpa switch (builtin.mode) {
             .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
-            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false }
+            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
         };
     };
     defer if (is_debug) {
@@ -46,7 +44,7 @@ pub fn main() !void {
 
         switch (check) {
             .ok => log.debug("no leaks", .{}),
-            .leak => log.err("leaked", .{})
+            .leak => log.err("leaked", .{}),
         }
     };
 
@@ -56,7 +54,7 @@ pub fn main() !void {
     for (args, 0..) |arg, i| {
         log.debug("arg {} = {s}\n", .{ i, arg });
     }
-    
+
     const stdout = std.io.getStdOut().writer();
 
     if (args.len == 1) {
