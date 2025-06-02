@@ -3,7 +3,19 @@
 ## Build
 
 ```
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=ReleaseFast # native
+zig build -Doptimize=ReleaseSmall -Doptimize="wasm32-freestanding" # web, outputs zig-out/bin/monkey_web.wasm
+zig build -Doptimize=ReleaseSmall -Doptimize="wasm32-wasi" # outputs zig-out/bin/monkey.wasm
+```
+
+## run
+
+```{sh}
+# native
+zig-out/bin/monkey <path/to/monkeyfile>
+
+# wasi
+wasmtime --dir=. zig-out/bin/monkey.wasm <path/to/monkeyfile>
 ```
 
 ## Test
