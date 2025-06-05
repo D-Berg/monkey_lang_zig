@@ -5,8 +5,8 @@ let instance = null;
 const console_element = document.getElementById("console");
 
 // Intercept input and store it for WASM to read
-//
 const stdin = document.getElementById("stdin");
+const run_button = document.getElementById("run");
 
 const importObject = {
     env: {
@@ -18,11 +18,9 @@ const importObject = {
                 let str = new TextDecoder().decode(buff);
                 switch (fd) {
                     case 1: // STDOUT
-                        // outputEl.textContent += str;
                         console_element.innerHTML += `<span class="stdout">${str}</span>`;
                         return len;
                     case 2: //STDERR
-                        // outputEl.textContent += str;
                         console_element.innerHTML += `<span class="stderr">${str}</span>`;
                         return len;
                 }
@@ -34,8 +32,9 @@ const importObject = {
     }
 };
 
-WebAssembly.instantiateStreaming(fetch("../zig-out/bin/monkey_web.wasm"), importObject).then(
+WebAssembly.instantiateStreaming(fetch("bin/monkey_web.wasm"), importObject).then(
     (obj) => {
+
         const instance = obj.instance;
         memory = instance.exports.memory;
 
@@ -43,32 +42,52 @@ WebAssembly.instantiateStreaming(fetch("../zig-out/bin/monkey_web.wasm"), import
         const alloc = instance.exports.alloc;
         const free = instance.exports.free;
 
-        stdin.addEventListener('keydown', (e) => {
-            if (e.key == "Enter") {
-                console.log("pressed enter")
-                // console_element.innerHTML = ""
+        run_button.addEventListener('click', () => {
+            console_element.innerHTML = ""
 
-                const input = stdin.value;
-                console.log("stdin = ", input);
-                const encoder = new TextEncoder();
-                const encoded = encoder.encode(input);
+            const input = stdin.value;
 
-                const len = encoded.length
-                const ptr = alloc(len);
-                const buf = new Uint8Array(memory.buffer, ptr, len);
-                buf.set(encoded);
-                // buf[encoded.length] = 0;
+            if (input.length == 0) {
+                console_element.innerHTML += "<span>Please provide a program\n</span>"
+                return;
+            };
 
-                const result = eval(ptr, len);
+            const encoder = new TextEncoder();
+            const encoded = encoder.encode(input);
 
-                free(ptr, len);
+            const len = encoded.length
+            const ptr = alloc(len);
+            const buf = new Uint8Array(memory.buffer, ptr, len);
+            buf.set(encoded);
 
-                stdin.value = "";
-                console.log("wasm exited with code:", result);
+            run_button.textContent = "Run 🔴";
+            const result = eval(ptr, len);
+            run_button.textContent = "Run 🟢";
 
-            }
+            free(ptr, len);
+
+            console.log("wasm exited with code:", result);
+
         });
 
 
     },
 );
+
+stdin.addEventListener('keydown', function(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+
+    // Get cursor position
+    const start = this.selectionStart;
+    const end = this.selectionEnd;
+
+    const tab = '    ';
+
+    // Set new value with tab inserted
+    this.value = this.value.substring(0, start) + tab + this.value.substring(end);
+
+    // Move cursor after inserted tab
+    this.selectionStart = this.selectionEnd = start + tab.length;
+  }
+});

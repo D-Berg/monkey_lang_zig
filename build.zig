@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main_web.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = true,
         });
         monkey_web_mod.export_symbol_names = &.{ "alloc", "free", "wasm_evaluate" };
 

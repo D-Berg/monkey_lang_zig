@@ -84,8 +84,6 @@ pub fn wasmLogFn(
     writer.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
 }
 
-var env: Environment = .empty;
-
 export fn wasm_evaluate(input_ptr_int: usize, len: usize) usize {
     var input: []u8 = undefined;
     input.ptr = @ptrFromInt(input_ptr_int);
@@ -101,6 +99,9 @@ export fn wasm_evaluate(input_ptr_int: usize, len: usize) usize {
 
 fn eval(input: []const u8, writer: std.io.AnyWriter) !void {
     log.debug("got input = {s}", .{input});
+
+    var env: Environment = .empty;
+    defer env.deinit(allocator);
 
     var parser = Parser.init(allocator, input);
 
