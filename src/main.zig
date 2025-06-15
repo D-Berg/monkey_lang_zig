@@ -97,6 +97,7 @@ pub fn main() !void {
                 try stdout.print("{s}\n", .{eval_str});
             }
         } else {
+            std.debug.print("n_args={}", .{args.len});
             return error.UnsupportedNumberOfArgs;
         }
     }

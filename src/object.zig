@@ -8,19 +8,18 @@ pub const ReturnObject = @import("objects/ReturnObject.zig");
 pub const StringObject = @import("objects/StringObject.zig");
 pub const DictionayObject = @import("objects/DictionaryObject.zig");
 
-
 const BuiltIn = @import("BuiltIn.zig");
 
 const ArrayList = std.ArrayListUnmanaged;
 const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
 const print = std.debug.print;
-const log = std.log.scoped(.@"Object");
+const log = std.log.scoped(.Object);
 
 const Allocator = std.mem.Allocator;
 
 pub const Object = union(enum) {
-    integer: i32,
+    integer: i64,
     boolean: bool,
     nullable,
     return_val_obj: ReturnObject,
@@ -66,13 +65,12 @@ pub const Object = union(enum) {
                     allocator.destroy(array);
                 }
             },
-            
+
             .dictionary => |dict| {
                 if (dict.rc == 0) {
                     dict.deinit(allocator);
                     allocator.destroy(dict);
                 }
-
             },
 
             else => {},
@@ -84,11 +82,10 @@ pub const Object = union(enum) {
             .array => |array| array.rc = 0,
             .string => |string| string.rc = 0,
             .function => |function| function.rc = 0,
-            else => {}
+            else => {},
         }
 
         obj.deinit(allocator);
-
     }
 
     pub fn clone(obj: *const Object, allocator: Allocator) !Object {
@@ -117,29 +114,25 @@ pub const Object = union(enum) {
                 return str;
             },
             .array => |array| {
-                
                 var array_str: ArrayList(u8) = .empty;
                 errdefer array_str.deinit(allocator);
-            
+
                 try array_str.append(allocator, '[');
 
                 const n_elems = array.elements.len;
 
                 for (array.elements, 0..) |elem, i| {
-
                     const elem_str = try elem.inspect(allocator);
                     defer allocator.free(elem_str);
 
                     try array_str.appendSlice(allocator, elem_str);
 
                     if (i != n_elems - 1) try array_str.appendSlice(allocator, ", ");
-
                 }
-                
+
                 try array_str.append(allocator, ']');
 
                 return array_str.toOwnedSlice(allocator);
-
             },
             .function => |func| {
                 var string: ArrayList(u8) = .empty;
@@ -149,32 +142,27 @@ pub const Object = union(enum) {
 
                 try writer.print("fn ( ", .{});
 
-
                 const n_params = func.params.len;
                 for (func.params, 0..) |param, i| {
-
                     try writer.print("{s}", .{param.token.literal});
-                    
+
                     if (i + 1 < n_params) {
                         try writer.print(", ", .{});
                     } else {
                         try writer.print(" ", .{});
                     }
-
                 }
-                
+
                 try string.appendSlice(allocator, ") {");
 
                 const body_str = try func.body.String(allocator);
                 defer allocator.free(body_str);
 
                 try string.appendSlice(allocator, body_str);
-                
-                try string.appendSlice(allocator, " }");
-                
-                return try string.toOwnedSlice(allocator);
-                
 
+                try string.appendSlice(allocator, " }");
+
+                return try string.toOwnedSlice(allocator);
             },
             .dictionary => |dict| {
                 var dict_str: ArrayList(u8) = .empty;
@@ -187,18 +175,16 @@ pub const Object = union(enum) {
 
                 try writer.print("{s}", .{"{ "});
 
-                var i: u32 = 0;
+                var i: usize = 0;
                 var extra = ", ";
-                while (iterator.next()) |entry| : (i += 1){
+                while (iterator.next()) |entry| : (i += 1) {
                     const val_str = try entry.value_ptr.inspect(allocator);
                     defer allocator.free(val_str);
 
                     if (i + 1 == n_entries) extra = " }";
 
-                    try writer.print("{s}: {s}{s}", .{ 
-                        entry.key_ptr.*, val_str, extra
-                    }); 
-                } 
+                    try writer.print("{s}: {s}{s}", .{ entry.key_ptr.*, val_str, extra });
+                }
 
                 return try dict_str.toOwnedSlice(allocator);
             },
@@ -209,7 +195,6 @@ pub const Object = union(enum) {
         }
     }
 };
-
 
 pub const ArrayObject = struct {
     elements: []const Object,
@@ -228,8 +213,5 @@ pub const ArrayObject = struct {
         _ = allocator;
         _ = ao;
         @panic("clone for ArrayObject not implemented");
-
     }
-
 };
-

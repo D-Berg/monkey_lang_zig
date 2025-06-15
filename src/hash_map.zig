@@ -24,7 +24,6 @@ pub fn HashMap() type { // TODO: Remove generic
             val: Object,
 
             fn deinit(entry: *Entry, allocator: Allocator) void {
-
                 log.debug("deinits entry: {s}\n", .{entry.key});
 
                 allocator.free(entry.key);
@@ -299,14 +298,14 @@ pub fn HashMap() type { // TODO: Remove generic
 test "init hashmap" {
     const allocator = std.testing.allocator;
 
-    const token1 = Token { .kind = .Ident, .literal = "a" };
+    const token1 = Token{ .kind = .Ident, .literal = "a" };
 
     const obj1 = Object{ .integer = 3 };
 
-    const token2 =  Token { .kind = .Ident, .literal = "b" };
+    const token2 = Token{ .kind = .Ident, .literal = "b" };
     const obj2 = Object{ .integer = 4 };
 
-    const token3 = Token { .kind = .Ident, .literal = "c" };
+    const token3 = Token{ .kind = .Ident, .literal = "c" };
     const obj3 = Object{ .integer = 5 };
 
     var store = try HashMap().init(allocator);
