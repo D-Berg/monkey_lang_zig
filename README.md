@@ -30,6 +30,16 @@ Test all with:
 zig build test # &> /dev/null supress errors for nicer output
 ```
 
+## References 
+
+- [WebAssembly Opcodes](https://pengowray.github.io/wasm-ops/)
+- [Build your own WebAssembly Compiler](https://blog.scottlogic.com/2019/05/17/webassembly-compiler.html)
+- [Creating and working with WebAssembly modules](https://hacks.mozilla.org/2017/02/creating-and-working-with-webassembly-modules/)
+- [WebAssembly specification](https://webassembly.github.io/spec/core/index.html)
+- [Wasm Exploerer](https://mbebenita.github.io/WasmExplorer/)
+- [Introduction to WebAssembly](https://rsms.me/wasm-intro)
+- [Index of instructions](https://webassembly.github.io/spec/core/appendix/index-instructions.html)
+
 ## Benchmark
 
 ```

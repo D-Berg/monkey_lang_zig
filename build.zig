@@ -26,7 +26,38 @@ pub fn build(b: *std.Build) void {
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
 
+    const monkey_runtime_mod = b.addModule("monkey_runtime", .{
+        .root_source_file = b.path("src/wasm_runtime.zig"),
+        .target = b.resolveTargetQuery(.{
+            .cpu_arch = .wasm32,
+            .os_tag = .wasi,
+        }),
+        .link_libc = true,
+        .optimize = .ReleaseSmall,
+    });
+
+    const monkey_runtime_exe = b.addExecutable(
+        .{
+            .name = "monkey_runtime",
+            .root_module = monkey_runtime_mod,
+        },
+    );
+
+    const install_runtime = b.addInstallArtifact(monkey_runtime_exe, .{});
+    const path_to_wasm = monkey_runtime_exe.getEmittedBin();
+
+    b.default_step.dependOn(&install_runtime.step);
+
+    const read_wasm = createReadWasm(b, options, path_to_wasm);
+    read_wasm.step.dependOn(&install_runtime.step);
+
+    // const files = b.addWriteFiles();
+    // const wasm_bytes_path = files.addCopyFile(b.path("zig-out/bin/monkey_runtime.wasm"), "monkey_runtime.wasm");
+    //
+    // files.step.dependOn(&install.step);
+
     if (target.result.cpu.arch == .wasm32 and target.result.os.tag == .freestanding) {
+        // for running monkey interpreter in web
         const monkey_web_mod = b.addModule("monkey_web", .{
             .root_source_file = b.path("src/main_web.zig"),
             .target = target,
@@ -50,21 +81,18 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
         });
 
+        // monkey_mod.addAnonymousImport("monkey_runtime", .{ .root_source_file = wasm_bytes_path });
+
         monkey_mod.addOptions("build_options", options);
 
         const exe = b.addExecutable(.{
             .name = "monkey",
             .root_module = monkey_mod,
         });
+        exe.step.dependOn(&monkey_runtime_exe.step);
 
-        // This declares intent for the executable to be installed into the
-        // standard location when the user invokes the "install" step (the default
-        // step when running `zig build`).
         b.installArtifact(exe);
 
-        // This *creates* a Run step in the build graph, to be executed when another
-        // step is evaluated that depends on it. The next line below will establish
-        // such a dependency.
         const run_cmd = b.addRunArtifact(exe);
 
         // By making the run step depend on the install step, it will be run from the
@@ -98,4 +126,50 @@ pub fn build(b: *std.Build) void {
         const test_step = b.step("test", "Run unit tests");
         test_step.dependOn(&run_exe_unit_tests.step);
     }
+}
+
+const ReadWasm = struct {
+    step: std.Build.Step,
+    options: *std.Build.Step.Options,
+    lazy_path: std.Build.LazyPath,
+
+    fn make(step: *std.Build.Step, make_options: std.Build.Step.MakeOptions) !void {
+        _ = make_options;
+        const read_wasm: *ReadWasm = @fieldParentPtr("step", step);
+
+        const file = std.fs.cwd().openFile(read_wasm.lazy_path.getPath(step.owner), .{}) catch return step.fail(
+            "couldnt open file",
+            .{},
+        );
+        defer file.close();
+
+        const stat = try file.stat();
+
+        const content = try file.readToEndAlloc(step.owner.allocator, stat.size);
+
+        read_wasm.options.addOption([]const u8, "runtime", content);
+    }
+};
+
+fn createReadWasm(owner: *std.Build, options: *std.Build.Step.Options, lazy_path: std.Build.LazyPath) *ReadWasm {
+    const read_wasm = owner.allocator.create(ReadWasm) catch @panic("OOM");
+
+    const step = std.Build.Step.init(.{
+        .name = "READ WAAASM",
+        .id = .custom,
+        .owner = owner,
+        .makeFn = ReadWasm.make,
+    });
+
+    read_wasm.* = ReadWasm{
+        .step = step,
+        .options = options,
+        .lazy_path = lazy_path,
+    };
+
+    // step2 runs before step1.
+    // step1.dependOn(&step2.step);
+    options.step.dependOn(&read_wasm.step);
+
+    return read_wasm;
 }

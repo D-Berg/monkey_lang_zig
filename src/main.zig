@@ -11,6 +11,7 @@ const Lexer = @import("Lexer.zig");
 const object = @import("object.zig");
 const Parser = @import("Parser.zig");
 const repl = @import("repl.zig");
+const compile = @import("compiler.zig").compile;
 
 pub const std_options: std.Options = .{
     .log_level = @enumFromInt(@intFromEnum(build_options.log_level)),
@@ -32,7 +33,7 @@ const monkey =
 ;
 
 pub fn main() !void {
-    const allocator, const is_debug = gpa: {
+    const gpa, const is_debug = gpa: {
         if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
         break :gpa switch (builtin.mode) {
             .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
@@ -48,8 +49,8 @@ pub fn main() !void {
         }
     };
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    const args = try std.process.argsAlloc(gpa);
+    defer std.process.argsFree(gpa, args);
 
     for (args, 0..) |arg, i| {
         log.debug("arg {} = {s}\n", .{ i, arg });
@@ -66,40 +67,44 @@ pub fn main() !void {
         const stdin = std.io.getStdIn().reader();
         const stderr = std.io.getStdErr().writer();
 
-        try repl.start(allocator, stdin.any(), stdout.any(), stderr.any());
-    } else {
-        if (args.len == 2) {
-            const path = args[1];
+        try repl.start(gpa, stdin.any(), stdout.any(), stderr.any());
+    } else if (args.len == 3) {
+        const path = args[2];
 
-            const file = try std.fs.cwd().openFile(path, .{});
-            defer file.close();
+        const file = try std.fs.cwd().openFile(path, .{});
+        defer file.close();
 
-            const input = try file.readToEndAlloc(allocator, 1024);
-            defer allocator.free(input);
+        const input = try file.readToEndAlloc(gpa, 1024);
+        defer gpa.free(input);
 
-            // print("file = {s}\n", .{input});
+        const action = args[1];
 
+        var parser = Parser.init(gpa, input);
+        defer parser.deinit(gpa);
+
+        var program = try parser.Program(gpa);
+        defer program.deinit(gpa);
+
+        if (std.mem.eql(u8, action, "run")) {
             var env: Environment = .empty;
-            defer env.deinit(allocator);
+            defer env.deinit(gpa);
 
-            var parser = Parser.init(allocator, input);
-            defer parser.deinit(allocator);
-
-            var program = try parser.Program(allocator);
-            defer program.deinit(allocator);
-
-            const maybe_evaluated = try evaluator.eval(allocator, &program, &env);
+            const maybe_evaluated = try evaluator.eval(gpa, &program, &env);
 
             if (maybe_evaluated) |evaluated| {
-                defer evaluated.deinit(allocator);
-                const eval_str = try evaluated.inspect(allocator);
-                defer allocator.free(eval_str);
+                defer evaluated.deinit(gpa);
+                const eval_str = try evaluated.inspect(gpa);
+                defer gpa.free(eval_str);
                 try stdout.print("{s}\n", .{eval_str});
             }
-        } else {
-            std.debug.print("n_args={}", .{args.len});
-            return error.UnsupportedNumberOfArgs;
+        } else if (std.mem.eql(u8, action, "build")) {
+            try compile(gpa, &program);
         }
+        // print("file = {s}\n", .{input});
+
+    } else {
+        std.debug.print("n_args={}", .{args.len});
+        return error.UnsupportedNumberOfArgs;
     }
 }
 
