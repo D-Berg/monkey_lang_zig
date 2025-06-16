@@ -83,3 +83,45 @@ Benchmark 3 (458 runs): zig-out/bin/monkey python_comparisons/recursice.mky
   wall_time          10.9ms ±  397us    10.4ms … 13.9ms         29 ( 6%)        💩+ 68.9% ±  1.5%
   peak_rss           6.00MB ± 2.30KB    6.00MB … 6.05MB          1 ( 0%)        ⚡- 45.8% ±  0.1%
 ```
+## Wasm
+
+To compile monkey code to wasm I need gc, easiest is to make a `runtime` in zig 
+which calls the function `monkey_main`. The current runtime is compiled with `wasm32-wasi`. 
+Exlore using `wasm32-emscripten` aswell for web.
+
+The `runtime` is built by zig build and then embedded into the compiler as a slice of bytes.
+
+TODO: runtime in javascript for running monkey executables in browser.
+
+The runtime can be built in any `language` but need to export the following helper functions
+    - `__allocate` allocates memory, also runs gc from time to time.
+
+`wasm-merge` is used to link(merge) the `runtime` with the executable built by monkey compiler 
+How the fuck can I do that by myself to remove dependency on external tool?
+
+- [wasm-merge](https://github.com/WebAssembly/binaryen/blob/c2b7a042890cf48bbd5ca08d0a28ba510d99dedb/src/tools/wasm-merge.cpp#L4) is used.
+
+```sh
+wasm-merge zig-out/bin/monkey_runtime.wasm _start remove.wasm env -o combined.wasm \
+    --enable-bulk-memory \
+    --rename-export-conflicts \
+    --enable-reference-types \
+    --enable-multimemory
+```
+
+Example of compiling of how the monkey produced wasm should look like use 
+```zig
+export fn monkey_main() i32 {
+    return 8;
+}
+```
+
+```sh
+```
+
+followed by `wasm2wat`.
+
+### Steps 
+    
+-[ ] compile a simple wasm module.
+

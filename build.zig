@@ -34,14 +34,15 @@ pub fn build(b: *std.Build) void {
         }),
         .link_libc = true,
         .optimize = .ReleaseSmall,
+        .strip = true,
     });
 
-    const monkey_runtime_exe = b.addExecutable(
-        .{
-            .name = "monkey_runtime",
-            .root_module = monkey_runtime_mod,
-        },
-    );
+    monkey_runtime_mod.export_symbol_names = &.{"__allocate"};
+
+    const monkey_runtime_exe = b.addExecutable(.{
+        .name = "monkey_runtime",
+        .root_module = monkey_runtime_mod,
+    });
 
     const install_runtime = b.addInstallArtifact(monkey_runtime_exe, .{});
     const path_to_wasm = monkey_runtime_exe.getEmittedBin();
