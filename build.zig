@@ -36,7 +36,7 @@ pub fn build(b: *std.Build) void {
         .strip = true,
     });
 
-    monkey_runtime_mod.export_symbol_names = &.{"__allocate"};
+    // monkey_runtime_mod.export_symbol_names = &.{"__allocate"};
 
     const monkey_runtime_exe = b.addExecutable(.{
         .name = "monkey_runtime",

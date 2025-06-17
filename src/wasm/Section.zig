@@ -1,0 +1,56 @@
+const std = @import("std");
+const wasm = @import("wasm.zig");
+// https://webassembly.github.io/spec/core/binary/modules.html#binary-typeidx
+const Section = @This();
+const Allocator = std.mem.Allocator;
+
+pub const ID = enum(u8) {
+    custom = 0x00,
+    type = 0x01,
+    import = 0x02,
+    function = 0x03,
+    table = 0x04,
+    memory = 0x05,
+    global = 0x06,
+    @"export" = 0x07,
+    start = 0x08,
+    element = 0x09,
+    code = 0x0a,
+    data = 0x0b,
+    data_cound = 0x0c,
+
+    fn byte(self: Section.ID) u8 {
+        return @intFromEnum(self);
+    }
+};
+
+ptr: *anyopaque,
+vtable: *const VTable,
+id: ID,
+
+const VTable = struct {
+    deinit: *const fn (*anyopaque, gpa: Allocator) void,
+    content: *const fn (*anyopaque, gpa: Allocator) anyerror![]const u8,
+};
+
+pub fn deinit(self: Section, gpa: Allocator) void {
+    self.vtable.deinit(self.ptr, gpa);
+}
+
+pub fn write(
+    self: Section,
+    gpa: Allocator,
+    writer: std.io.AnyWriter,
+) !void {
+    std.log.debug("writing {s} section: 0x{x}", .{ @tagName(self.id), self.id.byte() });
+    try writer.writeByte(self.id.byte());
+
+    const content = try self.vtable.content(self.ptr, gpa);
+    defer gpa.free(content);
+
+    var encoder = wasm.ULEB128Encoder(u32).init;
+
+    try writer.writeAll(encoder.encode(@intCast(content.len)));
+
+    try writer.writeAll(content);
+}

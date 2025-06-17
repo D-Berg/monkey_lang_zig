@@ -1,63 +1,73 @@
 //! Compiles Monkey code to wasm
 
 const std = @import("std");
+const wasm = @import("wasm/wasm.zig");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayListUnmanaged;
+const EnumArray = std.enums.EnumArray;
 // const runtime: []const u8 = @import("monkey_runtime");
 const Program = @import("ast.zig").Program;
 const runtime = @import("build_options").runtime;
-
+const assert = std.debug.assert;
 // https://webassembly.github.io/spec/core/appendix/index-instructions.html
-const OpCode = enum(u8) {
-    end = 0x0b,
-    @"i64.add" = 0x7c,
-    @"i64.const" = 0x42,
-};
 
-// https://webassembly.github.io/spec/core/binary/modules.html#binary-typeidx
-const SectionID = enum(u8) {
-    custom = 0,
-    type = 1,
-    import = 2,
-    function = 3,
-    table = 4,
-    memory = 5,
-    global = 6,
-    @"export" = 7,
-    start = 8,
-    element = 9,
-    code = 10,
-    data = 11,
-    data_cound = 12,
-};
+const MAX_SECTIONS = @typeInfo(wasm.Section.ID).@"enum".fields.len;
 
-const Type = enum(u8) {
-    i64 = 0x7e,
-    function = 0x60,
-};
-const MAGIC_MODULE_HEADER = [4]u8{ 0x00, 0x61, 0x73, 0x6d };
-const MODULE_VERSION = [4]u8{ 0x01, 0x00, 0x00, 0x00 };
+// TODO: make it work for signed
+
+// std.mem.Allocator()
+
+const TypeSection = struct {};
 
 pub fn compile(gpa: Allocator, program: *Program) !void {
     _ = program;
-    var wasm: ArrayList(u8) = .empty;
-    defer wasm.deinit(gpa);
-    //
-    // try wasm.appendSlice(gpa, MAGIC_MODULE_HEADER[0..]);
-    // try wasm.appendSlice(gpa, MODULE_VERSION[0..]);
 
-    try wasm.appendSlice(gpa, runtime[0..]);
+    var module: wasm.Module = .init;
+    defer module.deinit(gpa);
 
-    const out_file = try std.fs.cwd().createFile("main.wasm", std.fs.File.CreateFlags{ .truncate = false });
+    module.addSection(.type);
+    module.addSection(.function);
+    module.addSection(.code);
+    module.addSection(.@"export");
+
+    // __monkey_main
+    try module.addFunction(gpa, .{
+        .param_types = &.{},
+        .return_types = &.{.i32},
+        .body = &.{
+            .@"i32.const",
+            @enumFromInt(10),
+            .@"local.set",
+            @enumFromInt(0),
+            .@"local.get",
+            @enumFromInt(0),
+            .@"return",
+            .end,
+        },
+        .@"export" = true,
+        .name = "__monkey_main",
+    });
+
+    const out_file = try std.fs.cwd().createFile(
+        "main.wasm",
+        std.fs.File.CreateFlags{ .truncate = true },
+    );
     defer out_file.close();
 
     try out_file.chmod(0o0755);
 
-    try out_file.writeAll(wasm.items);
+    const file_writer = out_file.writer();
+
+    var buffered_writer = std.io.bufferedWriter(file_writer);
+    const bw = buffered_writer.writer();
+
+    try module.write(gpa, bw.any());
+
+    try buffered_writer.flush();
 }
 
 test "print magic" {
-    std.debug.print("{s}\n", .{MAGIC_MODULE_HEADER[0..]});
+    std.debug.print("{s}\n", .{wasm.MAGIC_MODULE_HEADER[0..]});
 }
 
 // test "write simple wasm_file" {
