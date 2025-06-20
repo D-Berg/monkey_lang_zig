@@ -14,6 +14,8 @@ pub const MODULE_VERSION = [4]u8{ 0x01, 0x00, 0x00, 0x00 };
 
 // https://pengowray.github.io/wasm-ops/
 pub const OpCode = enum(u8) {
+    @"if" = 0x04,
+    @"else" = 0x05,
     end = 0x0b,
     @"return" = 0x0f,
     /// throws away a single operand
@@ -32,8 +34,31 @@ pub const OpCode = enum(u8) {
     /// n: `i32`
     @"i32.const" = 0x41,
     @"i64.const" = 0x42,
-    @"i64.add" = 0x7c,
 
+    @"i32.eqz" = 0x45,
+    /// ==
+    @"i32.eq" = 0x46,
+    /// !=
+    @"i32.neq" = 0x47,
+    /// <
+    @"i32.lt_s" = 0x48,
+    /// >
+    @"i32.gt_s" = 0x4a,
+
+    @"i32.add" = 0x6a,
+    @"i32.sub" = 0x6b,
+    @"i32.mul" = 0x6c,
+    @"i32.div_s" = 0x6d,
+
+    @"i64.add" = 0x7c,
+    @"i64.sub" = 0x7d,
+    @"i64.mul" = 0x7e,
+    @"i64.div_s" = 0x7f,
+
+    @"f32.neg" = 0x8c,
+
+    @"f32.convert_i32_s" = 0xb2,
+    @"i32.reinterpret_f32" = 0xbc,
     _,
 };
 
@@ -49,6 +74,10 @@ pub const Type = enum(u8) {
 
     pub fn byte(self: Type) u8 {
         return @intFromEnum(self);
+    }
+
+    pub fn opcode(self: Type) OpCode {
+        return @enumFromInt(self.byte());
     }
 };
 

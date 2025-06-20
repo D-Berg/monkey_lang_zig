@@ -3,13 +3,12 @@ const std = @import("std");
 const ArrayList = std.ArrayListUnmanaged;
 const Allocator = std.mem.Allocator;
 const print = std.debug.print;
-const log = std.log.scoped(.@"ast");
+const log = std.log.scoped(.ast);
 
 const ExprIdx = usize;
 const StateIdx = usize;
 
 const StringHashMap = std.StringHashMapUnmanaged;
-
 
 // Statements ---------------------------------------------------------------------
 pub const Statement = union(enum) {
@@ -101,12 +100,10 @@ pub const ReturnStatement = struct {
 
         value_ptr.* = try rs.value.clone(allocator);
 
-        return Statement{ 
-            .ret_stmt = .{
-                .token = rs.token,
-                .value = value_ptr,
-            } 
-        };
+        return Statement{ .ret_stmt = .{
+            .token = rs.token,
+            .value = value_ptr,
+        } };
     }
 
     pub fn String(rs: *const ReturnStatement, allocator: Allocator) Allocator.Error![]const u8 {
@@ -131,12 +128,7 @@ pub const ExpressionStatement = struct {
         const expr_ptr = try allocator.create(Expression);
         expr_ptr.* = try expression_statement.expression.clone(allocator);
 
-        return Statement{ 
-            .expr_stmt = .{ 
-                .token = expression_statement.token, 
-                .expression = expr_ptr 
-            } 
-        };
+        return Statement{ .expr_stmt = .{ .token = expression_statement.token, .expression = expr_ptr } };
     }
 
     pub fn String(es: *const ExpressionStatement, allocator: Allocator) Allocator.Error![]const u8 {
@@ -150,12 +142,10 @@ pub const BlockStatement = struct {
     statements: []const Statement,
 
     pub fn deinit(bs: *const BlockStatement, allocator: Allocator) void {
-
         for (bs.statements) |stmt| {
             stmt.deinit(allocator);
         }
         allocator.free(bs.statements);
-
     }
 
     pub fn clone(self: *const BlockStatement, allocator: Allocator) Allocator.Error!BlockStatement {
@@ -169,14 +159,13 @@ pub const BlockStatement = struct {
             try statements.append(allocator, try stmt.clone(allocator));
         }
 
-        return BlockStatement {
+        return BlockStatement{
             .token = self.token,
             .statements = try statements.toOwnedSlice(allocator),
         };
     }
 
     pub fn String(bs: *const BlockStatement, allocator: Allocator) Allocator.Error![]const u8 {
-
         var bs_str: ArrayList(u8) = .empty;
         errdefer bs_str.deinit(allocator);
 
@@ -189,7 +178,6 @@ pub const BlockStatement = struct {
 
         return try bs_str.toOwnedSlice(allocator);
     }
-
 };
 
 // Expressions ----------------------------------------------------------------------
@@ -209,10 +197,7 @@ pub const Expression = union(enum) {
 
     pub fn deinit(expr: *const Expression, allocator: Allocator) void {
         switch (expr.*) {
-            .identifier,
-            .integer_literal, 
-            .boolean_literal, 
-            .string_expression => {},
+            .identifier, .integer_literal, .boolean_literal, .string_expression => {},
             inline else => |case| case.deinit(allocator),
         }
     }
@@ -220,13 +205,13 @@ pub const Expression = union(enum) {
     pub fn clone(expr: *const Expression, allocator: Allocator) Allocator.Error!Expression {
         switch (expr.*) {
             .identifier => |ident| {
-                return Expression { .identifier = ident };
+                return Expression{ .identifier = ident };
             },
             .integer_literal => |int| {
-                return Expression { .integer_literal = int };
+                return Expression{ .integer_literal = int };
             },
             .boolean_literal => |b| {
-                return Expression { .boolean_literal = b };
+                return Expression{ .boolean_literal = b };
             },
             inline else => |case| return try case.clone(allocator),
         }
@@ -252,7 +237,6 @@ pub const IntegerLiteralExpression = struct {
         const str = try std.fmt.allocPrint(allocator, "{}", .{ile.value});
         return str;
     }
-    
 };
 
 pub const BooleanLiteralExpression = struct {
@@ -280,28 +264,17 @@ pub const PrefixExpression = struct {
 
         right_ptr.* = try pe.right.clone(allocator);
 
-        return Expression {
-            .prefix_expression = .{
-                .token = pe.token,
-                .right = right_ptr
-            }
-        };
-        
+        return Expression{ .prefix_expression = .{ .token = pe.token, .right = right_ptr } };
     }
 
     /// Returns a String for PrefixExpression.
     /// Need to be freed by caller.
     pub fn String(pe: *const PrefixExpression, allocator: Allocator) Allocator.Error![]const u8 {
-
         const right_str = try pe.right.String(allocator);
         defer allocator.free(right_str);
 
-        return try std.fmt.allocPrint(allocator, "({s}{s})", .{
-            pe.token.literal, right_str
-        });
-
+        return try std.fmt.allocPrint(allocator, "({s}{s})", .{ pe.token.literal, right_str });
     }
-
 };
 
 pub const InfixExpression = struct {
@@ -317,7 +290,6 @@ pub const InfixExpression = struct {
     }
 
     pub fn clone(ie: *const InfixExpression, allocator: Allocator) Allocator.Error!Expression {
-
         const left_ptr = try allocator.create(Expression);
         errdefer allocator.destroy(left_ptr);
 
@@ -325,18 +297,10 @@ pub const InfixExpression = struct {
 
         const right_ptr = try allocator.create(Expression);
         errdefer allocator.destroy(right_ptr);
-    
+
         right_ptr.* = try ie.right.clone(allocator);
 
-        return Expression {
-            .infix_expression = .{
-                .token = ie.token,
-                .left = left_ptr,
-                .right = right_ptr
-            }
-
-        };
-
+        return Expression{ .infix_expression = .{ .token = ie.token, .left = left_ptr, .right = right_ptr } };
     }
 
     pub fn String(ie: *const InfixExpression, allocator: Allocator) Allocator.Error![]const u8 {
@@ -346,31 +310,25 @@ pub const InfixExpression = struct {
         const right_str = try ie.right.String(allocator);
         defer allocator.free(right_str);
 
-        return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{
-            left_str, ie.token.literal, right_str
-        });
-
+        return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{ left_str, ie.token.literal, right_str });
     }
     // TODO add string method
 
 };
 
-
 // Need dealloc
 pub const IfExpression = struct {
-    token: Token, 
+    token: Token,
     condition: *const Expression,
     consequence: BlockStatement,
     alternative: ?BlockStatement,
 
-
     pub fn deinit(ie: *const IfExpression, allocator: Allocator) void {
-        
         ie.condition.deinit(allocator);
         allocator.destroy(ie.condition);
 
         ie.consequence.deinit(allocator);
-        
+
         if (ie.alternative) |alt| alt.deinit(allocator);
     }
 
@@ -380,56 +338,44 @@ pub const IfExpression = struct {
 
         condition_ptr.* = try ie.condition.clone(allocator);
         errdefer condition_ptr.deinit(allocator);
-        
+
         var new_alt: ?BlockStatement = null;
-        
+
         if (ie.alternative) |alt| {
             new_alt = try alt.clone(allocator);
-        } 
+        }
 
-        return Expression {
-            .if_expression = .{
-                .token = ie.token,
-                .condition = condition_ptr,
-                .consequence = try ie.consequence.clone(allocator),
-                .alternative = new_alt,
-            }
-        };
-
+        return Expression{ .if_expression = .{
+            .token = ie.token,
+            .condition = condition_ptr,
+            .consequence = try ie.consequence.clone(allocator),
+            .alternative = new_alt,
+        } };
     }
 
     pub fn String(if_expr: *const IfExpression, allocator: Allocator) Allocator.Error![]const u8 {
-                const condition_str = try if_expr.condition.String(allocator);
-                defer allocator.free(condition_str);
-                
-                const consequence_str = try if_expr.consequence.String(allocator);
-                defer allocator.free(consequence_str);
-                const l_b = "{";
-                const r_b = "}";
+        const condition_str = try if_expr.condition.String(allocator);
+        defer allocator.free(condition_str);
 
-                // TODO: get string for BlockStatement
-                if (if_expr.alternative) |alt| {
-                    const alt_str = try alt.String(allocator);
-                    defer allocator.free(alt_str);
+        const consequence_str = try if_expr.consequence.String(allocator);
+        defer allocator.free(consequence_str);
+        const l_b = "{";
+        const r_b = "}";
 
-                    const format = "if ({s}) {s} {s} {s} else {s} {s} {s}";
-                    
-                    return try std.fmt.allocPrint(allocator, format, .{
-                        condition_str, 
-                        l_b,consequence_str, r_b,
-                        l_b, alt_str, r_b
-                    });
+        // TODO: get string for BlockStatement
+        if (if_expr.alternative) |alt| {
+            const alt_str = try alt.String(allocator);
+            defer allocator.free(alt_str);
 
-                } else {
-                    const format = "if ({s}) {s} {s} {s}";
+            const format = "if ({s}) {s} {s} {s} else {s} {s} {s}";
 
-                    return try std.fmt.allocPrint(allocator, format, .{
-                        condition_str, 
-                        l_b, consequence_str, r_b
-                    });
-                }
+            return try std.fmt.allocPrint(allocator, format, .{ condition_str, l_b, consequence_str, r_b, l_b, alt_str, r_b });
+        } else {
+            const format = "if ({s}) {s} {s} {s}";
+
+            return try std.fmt.allocPrint(allocator, format, .{ condition_str, l_b, consequence_str, r_b });
+        }
     }
-
 };
 
 // need dealloc
@@ -439,7 +385,6 @@ pub const FnLiteralExpression = struct {
     body: BlockStatement,
 
     pub fn deinit(fe: *const FnLiteralExpression, allocator: Allocator) void {
-
         allocator.free(fe.parameters);
 
         fe.body.deinit(allocator);
@@ -464,7 +409,6 @@ pub const FnLiteralExpression = struct {
 
     // TODO: use ArrayList(u8)
     pub fn String(fle: *const FnLiteralExpression, allocator: Allocator) Allocator.Error![]const u8 {
-
         var str_len: usize = 0;
         var params_str = try allocator.alloc(u8, 0);
         defer allocator.free(params_str);
@@ -488,21 +432,16 @@ pub const FnLiteralExpression = struct {
                 str_len += p_str.len + 2;
             }
         }
-        
+
         const body_str = try fle.body.String(allocator);
         defer allocator.free(body_str);
 
         const l_b = "{";
         const r_b = "}";
 
-        return try std.fmt.allocPrint(allocator, "fn({s}) {s} {s} {s}", .{
-            params_str, l_b, body_str, r_b
-        });
-        
+        return try std.fmt.allocPrint(allocator, "fn({s}) {s} {s} {s}", .{ params_str, l_b, body_str, r_b });
     }
-    
 };
-
 
 pub const CallExpression = struct {
     token: Token, // the '('
@@ -516,68 +455,54 @@ pub const CallExpression = struct {
         for (ce.args) |arg| {
             arg.deinit(allocator);
         }
-        
+
         allocator.free(ce.args);
     }
 
     pub fn clone(ce: *const CallExpression, allocator: Allocator) Allocator.Error!Expression {
-        
         const func_ptr = try allocator.create(Expression);
         errdefer allocator.destroy(func_ptr);
 
         func_ptr.* = try ce.function.clone(allocator);
-        
+
         var args: ArrayList(Expression) = .empty;
         errdefer {
             for (args.items) |expr| expr.deinit(allocator);
             args.deinit(allocator);
         }
-        
+
         for (ce.args) |arg| { // TODO: errdefer
             try args.append(allocator, try arg.clone(allocator));
         }
 
-        return Expression {
-            .call_expression = .{
-                .token = ce.token,
-                .function = func_ptr,
-                .args = try args.toOwnedSlice(allocator)
-
-            }
-            
-        };
-
+        return Expression{ .call_expression = .{ .token = ce.token, .function = func_ptr, .args = try args.toOwnedSlice(allocator) } };
     }
 
     pub fn String(ce: *const CallExpression, allocator: Allocator) Allocator.Error![]const u8 {
-        
         const fn_str = try ce.function.String(allocator);
         defer allocator.free(fn_str);
 
         var result_str: ArrayList(u8) = .empty;
         errdefer result_str.deinit(allocator);
 
-        try result_str.appendSlice(allocator,  fn_str);
+        try result_str.appendSlice(allocator, fn_str);
         try result_str.append(allocator, '(');
 
         const n_args = ce.args.len;
 
         for (ce.args, 0..) |arg_expr, i| {
-
             const arg_str = try arg_expr.String(allocator);
             defer allocator.free(arg_str);
 
             try result_str.appendSlice(allocator, arg_str);
 
             if (i != n_args - 1) try result_str.appendSlice(allocator, ", ");
-
         }
 
         try result_str.append(allocator, ')');
 
         return result_str.toOwnedSlice(allocator);
     }
-
 };
 
 /// Does not manage allocation of value
@@ -588,64 +513,48 @@ pub const StringExpression = struct {
     pub fn clone(se: *const StringExpression, allocator: Allocator) Allocator.Error!Expression {
         _ = allocator;
         const cloned_token = se.token;
-        
-        return Expression {
-            .string_expression = .{
-                .token = cloned_token,
-                .value = cloned_token.literal
-            }
-        };
 
+        return Expression{ .string_expression = .{ .token = cloned_token, .value = cloned_token.literal } };
     }
 
     pub fn String(se: *const StringExpression, allocator: Allocator) Allocator.Error![]const u8 {
-
         const str = try allocator.alloc(u8, se.token.literal.len);
         @memcpy(str, se.value);
         return str;
-
     }
-
 };
-
 
 pub const ArrayLiteralExpression = struct {
     token: Token, // [
     elements: []const Expression,
 
     pub fn deinit(array_lit: *const ArrayLiteralExpression, allocator: Allocator) void {
-
         for (array_lit.elements) |expr| expr.deinit(allocator);
 
         allocator.free(array_lit.elements);
-
     }
 
     pub fn clone(array_lit: *const ArrayLiteralExpression, allocator: Allocator) Allocator.Error!Expression {
         _ = array_lit;
         _ = allocator;
         @panic("clone for array_literal_expr not implemented");
-
     }
 
     pub fn String(array_lit: *const ArrayLiteralExpression, allocator: Allocator) Allocator.Error![]const u8 {
-
         var elem_str: ArrayList(u8) = .empty;
         errdefer elem_str.deinit(allocator);
-    
+
         try elem_str.append(allocator, '[');
 
         const n_elem = array_lit.elements.len;
 
         for (array_lit.elements, 0..) |elem_expr, i| {
-
             const e_str = try elem_expr.String(allocator);
             defer allocator.free(e_str);
-            
-            try elem_str.appendSlice(allocator, e_str);
-            
-            if (i != n_elem - 1) try elem_str.appendSlice(allocator, ", ");
 
+            try elem_str.appendSlice(allocator, e_str);
+
+            if (i != n_elem - 1) try elem_str.appendSlice(allocator, ", ");
         }
 
         try elem_str.append(allocator, ']');
@@ -659,7 +568,6 @@ pub const DictionaryExpression = struct {
     hash_map: StringHashMap(Expression), // keys are not allocated
 
     fn deinit(dictionary: *const DictionaryExpression, allocator: Allocator) void {
-    
         var hash_map = dictionary.hash_map;
 
         var val_iterator = hash_map.valueIterator();
@@ -670,9 +578,8 @@ pub const DictionaryExpression = struct {
 
         hash_map.deinit(allocator);
     }
-    
-    fn String(dictionary: *const DictionaryExpression, allocator: Allocator) Allocator.Error![]const u8 {
 
+    fn String(dictionary: *const DictionaryExpression, allocator: Allocator) Allocator.Error![]const u8 {
         var str: ArrayList(u8) = .empty;
         errdefer str.deinit(allocator);
 
@@ -681,7 +588,7 @@ pub const DictionaryExpression = struct {
         const writer = str.writer(allocator);
 
         try str.appendSlice(allocator, "{ ");
-        
+
         var hm_it = dictionary.hash_map.iterator();
 
         var i: u32 = 0;
@@ -691,19 +598,17 @@ pub const DictionaryExpression = struct {
 
             const val_str = try val.String(allocator);
             defer allocator.free(val_str);
-            
-            try writer.print("{s}: {s}", .{key, val_str});
+
+            try writer.print("{s}: {s}", .{ key, val_str });
 
             if ((i + 1) != n_items) {
                 try writer.print(", ", .{});
             }
-
         }
 
         try str.appendSlice(allocator, " }");
-        
-        return try str.toOwnedSlice(allocator);
 
+        return try str.toOwnedSlice(allocator);
     }
 
     fn clone(dictionary: *const DictionaryExpression, allocator: Allocator) Allocator.Error!Expression {
@@ -712,9 +617,7 @@ pub const DictionaryExpression = struct {
         _ = dictionary;
 
         @panic("unimplemented clone for DictionaryExpression");
-
     }
-
 };
 
 pub const IndexExpression = struct {
@@ -723,10 +626,9 @@ pub const IndexExpression = struct {
     index: *Expression,
 
     pub fn deinit(ie: *const IndexExpression, allocator: Allocator) void {
-
         ie.left.deinit(allocator);
         allocator.destroy(ie.left);
-        
+
         ie.index.deinit(allocator);
         allocator.destroy(ie.index);
     }
@@ -736,23 +638,19 @@ pub const IndexExpression = struct {
         _ = ie;
 
         @panic("clone for IndexExpression not implemented");
-
     }
 
     /// Returns a String that needs to be deallocated by caller.
     pub fn String(ie: *const IndexExpression, allocator: Allocator) Allocator.Error![]const u8 {
-        
         const left_str = try ie.left.String(allocator);
         defer allocator.free(left_str);
 
         const index_str = try ie.index.String(allocator);
         defer allocator.free(index_str);
 
-        return try std.fmt.allocPrint(allocator, "({s}[{s}])", .{left_str, index_str});
+        return try std.fmt.allocPrint(allocator, "({s}[{s}])", .{ left_str, index_str });
     }
-
 };
-
 
 // Identifier --------------------------------------------------------------
 pub const Identifier = struct {
@@ -772,7 +670,6 @@ pub const Program = struct {
     statements: []const Statement = &[_]Statement{}, //
 
     pub fn deinit(program: *Program, allocator: Allocator) void {
-
         for (program.statements) |stmt| {
             stmt.deinit(allocator);
         }
@@ -781,8 +678,7 @@ pub const Program = struct {
     }
 
     /// String need to be deallocated by caller
-    pub fn String(program: *Program, allocator: Allocator) Allocator.Error![]const u8 { 
-
+    pub fn String(program: *Program, allocator: Allocator) Allocator.Error![]const u8 {
         var prog_str: ArrayList(u8) = .empty;
         errdefer prog_str.deinit(allocator);
 

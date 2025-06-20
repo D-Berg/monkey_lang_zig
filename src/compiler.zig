@@ -23,6 +23,7 @@ const TypeSection = struct {};
 
 pub const Error = error{
     InvalidInfixOperator,
+    InvalidPrefixOperator,
 } || Allocator.Error;
 
 pub fn compile(gpa: Allocator, program: *Program, writer: std.io.AnyWriter) !void {
@@ -39,7 +40,7 @@ pub fn compile(gpa: Allocator, program: *Program, writer: std.io.AnyWriter) !voi
 
     current_func.name = "__monkey_main";
     current_func.param_types = &.{};
-    current_func.return_types = &.{.i64};
+    current_func.return_types = &.{.i32};
     current_func.@"export" = true;
 
     // wasm.Function{
@@ -58,15 +59,7 @@ pub fn compile(gpa: Allocator, program: *Program, writer: std.io.AnyWriter) !voi
     // };
     module.current_function = &current_func;
 
-    for (program.statements) |stmt| {
-        switch (stmt) {
-            .expr_stmt => |ex| {
-                try compileExpression(gpa, ex.expression, &module);
-                // try current_func.body.append(gpa, .drop);
-            },
-            else => {},
-        }
-    }
+    try compileStatements(gpa, program.statements, &module);
 
     try current_func.body.append(gpa, .@"return");
     try current_func.body.append(gpa, .end);
@@ -79,14 +72,29 @@ pub fn compile(gpa: Allocator, program: *Program, writer: std.io.AnyWriter) !voi
     try module.write(gpa, writer);
 }
 
+fn compileStatements(
+    gpa: Allocator,
+    statements: []const ast.Statement,
+    module: *wasm.Module,
+) !void {
+    for (statements) |stmt| {
+        switch (stmt) {
+            .expr_stmt => |ex| {
+                try compileExpression(gpa, ex.expression, module);
+                // try current_func.body.append(gpa, .drop);
+            },
+            else => {},
+        }
+    }
+}
+
 fn compileExpression(gpa: Allocator, expr: *const ast.Expression, module: *wasm.Module) compiler.Error!void {
     switch (expr.*) {
-        .integer_literal => |*il| {
-            try compileIntegerLiteralExpression(gpa, il, module);
-        },
-        .infix_expression => |*ie| {
-            try compileInfixExpression(gpa, ie, module);
-        },
+        .integer_literal => |*il| try compileIntegerLiteralExpression(gpa, il, module),
+        .prefix_expression => |*pe| try compilePrefixExpression(gpa, pe, module),
+        .infix_expression => |*ie| try compileInfixExpression(gpa, ie, module),
+        .boolean_literal => |*bl| try compileBooleanLiteralExpression(gpa, bl, module),
+        .if_expression => |*ie| try compileIfExpression(gpa, ie, module),
         else => {},
     }
 }
@@ -96,12 +104,49 @@ fn compileIntegerLiteralExpression(
     int_lit: *const ast.IntegerLiteralExpression,
     module: *wasm.Module,
 ) !void {
-    var encoder = wasm.LEB128Encoder(i64).init;
-    try module.current_function.body.append(gpa, .@"i64.const");
+    var encoder = wasm.LEB128Encoder(i32).init;
+    try module.current_function.body.append(gpa, .@"i32.const");
     try module.current_function.body.appendSlice(
         gpa,
         @ptrCast(encoder.encode(@intCast(int_lit.value))),
     );
+}
+
+fn compileBooleanLiteralExpression(
+    gpa: Allocator,
+    bool_lit: *const ast.BooleanLiteralExpression,
+    module: *wasm.Module,
+) !void {
+    try module.current_function.body.append(gpa, .@"i32.const");
+
+    var encoder = wasm.LEB128Encoder(i32).init;
+    if (bool_lit.value) {
+        try module.current_function.body.appendSlice(gpa, @ptrCast(encoder.encode(1)));
+    } else {
+        try module.current_function.body.appendSlice(gpa, @ptrCast(encoder.encode(0)));
+    }
+}
+
+fn compilePrefixExpression(
+    gpa: Allocator,
+    prefix_expr: *const ast.PrefixExpression,
+    module: *wasm.Module,
+) !void {
+    switch (prefix_expr.token.kind) {
+        .Bang => {
+            try compileExpression(gpa, prefix_expr.right, module);
+            try module.current_function.body.append(gpa, .@"i32.eqz");
+        },
+        .Minus => {
+            try module.current_function.body.appendSlice(gpa, &.{
+                .@"i32.const",
+                @enumFromInt(0),
+            });
+            try compileExpression(gpa, prefix_expr.right, module);
+            try module.current_function.body.append(gpa, .@"i32.sub");
+        },
+        else => return Error.InvalidPrefixOperator,
+    }
 }
 
 fn compileInfixExpression(
@@ -113,9 +158,35 @@ fn compileInfixExpression(
     try compileExpression(gpa, infix_expr.right, module);
 
     switch (infix_expr.token.kind) {
-        .Plus => try module.current_function.body.append(gpa, .@"i64.add"),
+        .Plus => try module.current_function.body.append(gpa, .@"i32.add"),
+        .Minus => try module.current_function.body.append(gpa, .@"i32.sub"),
+        .Asterisk => try module.current_function.body.append(gpa, .@"i32.mul"),
+        .Slash => try module.current_function.body.append(gpa, .@"i32.div_s"),
+        .Eq => try module.current_function.body.append(gpa, .@"i32.eq"),
+        .Gt => try module.current_function.body.append(gpa, .@"i32.gt_s"),
+        .Lt => try module.current_function.body.append(gpa, .@"i32.lt_s"),
         else => return Error.InvalidInfixOperator,
     }
+}
+
+fn compileIfExpression(
+    gpa: Allocator,
+    if_expr: *const ast.IfExpression,
+    module: *wasm.Module,
+) !void {
+    try compileExpression(gpa, if_expr.condition, module);
+
+    try module.current_function.body.appendSlice(gpa, &.{ .@"if", wasm.Type.i32.opcode() });
+
+    try compileStatements(gpa, if_expr.consequence.statements, module);
+
+    if (if_expr.alternative) |alt| {
+        try module.current_function.body.append(gpa, .@"else");
+
+        try compileStatements(gpa, alt.statements, module);
+    }
+
+    try module.current_function.body.append(gpa, .end);
 }
 
 fn testCompiler(
@@ -187,8 +258,43 @@ test "integer_literal" {
 test "infix_expr" {
     const gpa = std.testing.allocator;
 
-    const result = try testCompiler(gpa, "infix_expr", "4 + 5;");
+    const result = try testCompiler(gpa, "infix_expr", "4 * 5;");
     defer gpa.free(result);
 
-    try std.testing.expectEqualStrings("9", result);
+    try std.testing.expectEqualStrings("20", result);
+}
+
+test "bool" {
+    const gpa = std.testing.allocator;
+
+    const result = try testCompiler(gpa, "bool", "3 == 3");
+    defer gpa.free(result);
+
+    try std.testing.expectEqualStrings("1", result);
+}
+
+test "if" {
+    const gpa = std.testing.allocator;
+
+    const input =
+        \\if (4 > 2) {
+        \\  10
+        \\} else {
+        \\  20
+        \\}
+    ;
+
+    const result = try testCompiler(gpa, "if", input);
+    defer gpa.free(result);
+
+    try std.testing.expectEqualStrings("10", result);
+}
+
+test "prefix" {
+    const gpa = std.testing.allocator;
+
+    const result = try testCompiler(gpa, "prefix", "-(10 - 20)");
+    defer gpa.free(result);
+
+    try std.testing.expectEqualStrings("10", result);
 }
