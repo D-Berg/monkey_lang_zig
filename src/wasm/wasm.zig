@@ -1,4 +1,6 @@
 const std = @import("std");
+const ArrayList = std.ArrayListUnmanaged;
+const Allocator = std.mem.Allocator;
 pub const wasm = @This();
 pub const Module = @import("Module.zig");
 pub const Section = @import("Section.zig");
@@ -14,6 +16,8 @@ pub const MODULE_VERSION = [4]u8{ 0x01, 0x00, 0x00, 0x00 };
 pub const OpCode = enum(u8) {
     end = 0x0b,
     @"return" = 0x0f,
+    /// throws away a single operand
+    drop = 0x1a,
     @"local.get" = 0x20,
     /// # local.set x
     /// This instruction sets the value of a variable
@@ -63,15 +67,39 @@ pub const ExportDescription = struct {
 pub const Function = struct {
     param_types: []const wasm.Type,
     return_types: []const wasm.Type,
-    body: []const wasm.OpCode,
-    locals: std.enums.EnumMap(wasm.Type, u32) = .init(.{}),
-    @"export": bool = false,
-    name: []const u8 = "",
+    body: ArrayList(wasm.OpCode),
+    locals: std.enums.EnumMap(wasm.Type, u32),
+    @"export": bool,
+    name: []const u8,
+
+    pub const init = Function{
+        .param_types = &[_]wasm.Type{},
+        .return_types = &[_]wasm.Type{},
+        .body = .empty,
+        .locals = .init(.{}),
+        .@"export" = false,
+        .name = "",
+    };
+
+    pub fn deinit(self: *Function, gpa: Allocator) void {
+        self.body.deinit(gpa);
+    }
 };
 
 // TODO: make it decode as well
-pub fn ULEB128Encoder(T: type) type {
+pub fn LEB128Encoder(T: type) type {
     const len = @sizeOf(T) / @sizeOf(u8);
+
+    if (!(T == u32 or
+        T == u64 or
+        T == i32 or
+        T == i64)) @compileError("unsupported type");
+
+    const isSigned: bool = if (T == u32 or T == u64)
+        false
+    else
+        true;
+
     return struct {
         const Self = @This();
 
@@ -85,20 +113,44 @@ pub fn ULEB128Encoder(T: type) type {
             var i: usize = 0;
 
             while (true) {
-                var byte: u8 = @intCast(val & 0x7F);
-                val >>= 7;
+                if (isSigned) {
+                    var byte: u8 = @intCast(val & 0x7F);
+                    const sign_bit_set = (byte & 0x40) != 0;
 
-                if (val != 0) {
-                    byte |= 0x80; // More bytes follow
+                    val >>= 7;
+
+                    const done = (val == 0 and !sign_bit_set) or (val == -1 and sign_bit_set);
+
+                    if (!done) {
+                        byte |= 0x80; // More bytes follow
+                    }
+
+                    self.buf[i] = byte;
+                    i += 1;
+
+                    if (done) break;
+                } else {
+                    var byte: u8 = @intCast(val & 0x7F);
+                    val >>= 7;
+
+                    if (val != 0) {
+                        byte |= 0x80; // More bytes follow
+                    }
+
+                    self.buf[i] = byte;
+                    i += 1;
+
+                    if (val == 0) break;
                 }
-
-                self.buf[i] = byte;
-                i += 1;
-
-                if (val == 0) break;
             }
-
             return self.buf[0..i];
         }
     };
+}
+
+test "LEB" {
+    const expected_u64 = [_]u8{ 0xe5, 0x8e, 0x26 };
+    var u64_encoder = LEB128Encoder(u64).init;
+
+    try std.testing.expectEqualSlices(u8, &expected_u64, u64_encoder.encode(624485));
 }

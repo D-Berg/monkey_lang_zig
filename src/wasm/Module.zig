@@ -13,6 +13,7 @@ type_section: wasm.TypeSection = .empty,
 function_section: wasm.FunctionSection = .empty,
 export_section: wasm.ExportSection = .empty,
 code_section: wasm.CodeSection = .empty,
+current_function: *wasm.Function = undefined,
 
 pub const init = Module{};
 

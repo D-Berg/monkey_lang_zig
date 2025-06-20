@@ -26,7 +26,7 @@ pub fn content(ctx: *anyopaque, gpa: Allocator) ![]const u8 {
 
     const writer = out.writer(gpa);
 
-    var u32_encoder = wasm.ULEB128Encoder(u32).init;
+    var u32_encoder = wasm.LEB128Encoder(u32).init;
 
     const n_exports: u32 = @intCast(self.exports.count());
 

@@ -48,7 +48,7 @@ pub fn write(
     const content = try self.vtable.content(self.ptr, gpa);
     defer gpa.free(content);
 
-    var encoder = wasm.ULEB128Encoder(u32).init;
+    var encoder = wasm.LEB128Encoder(u32).init;
 
     try writer.writeAll(encoder.encode(@intCast(content.len)));
 

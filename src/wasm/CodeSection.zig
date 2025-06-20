@@ -24,7 +24,7 @@ pub fn content(ctx: *anyopaque, gpa: Allocator) ![]const u8 {
 
     const writer = out.writer(gpa);
 
-    var u32_encoder = wasm.ULEB128Encoder(u32).init;
+    var u32_encoder = wasm.LEB128Encoder(u32).init;
 
     const n_funcs: u32 = @intCast(self.functions.items.len);
 
@@ -35,7 +35,7 @@ pub fn content(ctx: *anyopaque, gpa: Allocator) ![]const u8 {
         defer function_section.deinit(gpa);
 
         try function_section.appendSlice(gpa, &.{ 1, 1, 0x7f }); // locals
-        try function_section.appendSlice(gpa, @ptrCast(func.body));
+        try function_section.appendSlice(gpa, @ptrCast(func.body.items));
 
         try writer.writeAll(u32_encoder.encode(@intCast(function_section.items.len)));
         try writer.writeAll(function_section.items);

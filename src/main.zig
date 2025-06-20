@@ -98,7 +98,25 @@ pub fn main() !void {
                 try stdout.print("{s}\n", .{eval_str});
             }
         } else if (std.mem.eql(u8, action, "build")) {
-            try compile(gpa, &program);
+
+            // TODO: name out file after input file
+            // TODO: put it in a dir monkey-out
+            const out_file = try std.fs.cwd().createFile(
+                "main.wasm",
+                std.fs.File.CreateFlags{ .truncate = true },
+            );
+            defer out_file.close();
+
+            try out_file.chmod(0o0755);
+
+            const file_writer = out_file.writer();
+
+            var buffered_writer = std.io.bufferedWriter(file_writer);
+            const bw = buffered_writer.writer();
+
+            try compile(gpa, &program, bw.any());
+
+            try buffered_writer.flush();
         }
         // print("file = {s}\n", .{input});
 
