@@ -8,6 +8,7 @@ pub const TypeSection = @import("TypeSection.zig");
 pub const FunctionSection = @import("FunctionSection.zig");
 pub const ExportSection = @import("ExportSection.zig");
 pub const CodeSection = @import("CodeSection.zig");
+pub const GlobalSection = @import("GlobalSection.zig");
 
 pub const MAGIC_MODULE_HEADER = [4]u8{ 0x00, 0x61, 0x73, 0x6d };
 pub const MODULE_VERSION = [4]u8{ 0x01, 0x00, 0x00, 0x00 };
@@ -62,7 +63,7 @@ pub const OpCode = enum(u8) {
     _,
 };
 
-pub const Type = enum(u8) {
+pub const ValType = enum(u8) {
     i32 = 0x7f,
     i64 = 0x7e,
     f32 = 0x7d,
@@ -72,11 +73,11 @@ pub const Type = enum(u8) {
     function = 0x60,
     result = 0x40,
 
-    pub fn byte(self: Type) u8 {
+    pub fn byte(self: ValType) u8 {
         return @intFromEnum(self);
     }
 
-    pub fn opcode(self: Type) OpCode {
+    pub fn opcode(self: ValType) OpCode {
         return @enumFromInt(self.byte());
     }
 };
@@ -94,16 +95,16 @@ pub const ExportDescription = struct {
 };
 
 pub const Function = struct {
-    param_types: []const wasm.Type,
-    return_types: []const wasm.Type,
+    param_types: []const wasm.ValType,
+    return_types: []const wasm.ValType,
     body: ArrayList(wasm.OpCode),
-    locals: std.enums.EnumMap(wasm.Type, u32),
+    locals: std.enums.EnumMap(wasm.ValType, u32),
     @"export": bool,
     name: []const u8,
 
     pub const init = Function{
-        .param_types = &[_]wasm.Type{},
-        .return_types = &[_]wasm.Type{},
+        .param_types = &[_]wasm.ValType{},
+        .return_types = &[_]wasm.ValType{},
         .body = .empty,
         .locals = .init(.{}),
         .@"export" = false,
@@ -174,7 +175,32 @@ pub fn LEB128Encoder(T: type) type {
             }
             return self.buf[0..i];
         }
+
+        pub const Decoded = struct {
+            value: T,
+            len: usize,
+        };
+
+        pub fn decode(self: *Self, bytes: []const u8) !Decoded {
+            _ = self;
+            var result: T = 0;
+            var i: usize = 0;
+
+            while (i < bytes.len and i < len) : (i += 1) {
+                const byte = bytes[i];
+
+                result += @as(T, @intCast(byte & 0x7f)) << @intCast(i * 7);
+
+                if (byte & 0x80 == 0) return Decoded{ .value = result, .len = i + 1 };
+            }
+
+            return error.Invalid128encoding;
+        }
     };
+}
+
+test "all" {
+    std.testing.refAllDecls(wasm);
 }
 
 test "LEB" {
@@ -182,4 +208,5 @@ test "LEB" {
     var u64_encoder = LEB128Encoder(u64).init;
 
     try std.testing.expectEqualSlices(u8, &expected_u64, u64_encoder.encode(624485));
+    try std.testing.expectEqual((try u64_encoder.decode(&expected_u64)).value, 624485);
 }

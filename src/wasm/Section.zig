@@ -1,3 +1,4 @@
+//! Interface for the different sections
 const std = @import("std");
 const wasm = @import("wasm.zig");
 // https://webassembly.github.io/spec/core/binary/modules.html#binary-typeidx
@@ -17,20 +18,21 @@ pub const ID = enum(u8) {
     element = 0x09,
     code = 0x0a,
     data = 0x0b,
-    data_cound = 0x0c,
+    data_count = 0x0c,
 
-    fn byte(self: Section.ID) u8 {
+    pub inline fn byte(self: Section.ID) u8 {
         return @intFromEnum(self);
     }
 };
 
 ptr: *anyopaque,
 vtable: *const VTable,
-id: ID,
+id: ID, // TODO: dont store id, get it from idx instead in module
 
 const VTable = struct {
     deinit: *const fn (*anyopaque, gpa: Allocator) void,
     content: *const fn (*anyopaque, gpa: Allocator) anyerror![]const u8,
+    parse: *const fn (*anyopaque, gpa: Allocator, bytes: []const u8) anyerror!void,
 };
 
 pub fn deinit(self: Section, gpa: Allocator) void {
@@ -53,4 +55,8 @@ pub fn write(
     try writer.writeAll(encoder.encode(@intCast(content.len)));
 
     try writer.writeAll(content);
+}
+
+pub fn parse(self: Section, gpa: Allocator, bytes: []const u8) !void {
+    try self.vtable.parse(self.ptr, gpa, bytes);
 }

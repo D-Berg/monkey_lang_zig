@@ -2,6 +2,7 @@ const std = @import("std");
 const wasm = @import("wasm.zig");
 const Section = wasm.Section;
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.TypeSection);
 
 const ArrayList = std.ArrayListUnmanaged;
 
@@ -34,7 +35,7 @@ pub fn content(ctx: *anyopaque, gpa: Allocator) ![]const u8 {
         const p_len: u32 = @intCast(func.param_types.len);
         const r_len: u32 = @intCast(func.return_types.len);
 
-        try writer.writeByte(wasm.Type.function.byte());
+        try writer.writeByte(wasm.ValType.function.byte());
 
         try writer.writeAll(u32_encoder.encode(p_len));
         try writer.writeAll(@ptrCast(func.param_types));
@@ -52,7 +53,15 @@ pub fn section(self: *Self) Section {
         .vtable = &.{
             .deinit = deinit,
             .content = content,
+            .parse = parse,
         },
         .id = .type,
     };
+}
+
+pub fn parse(ctx: *anyopaque, gpa: Allocator, bytes: []const u8) !void {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    _ = self;
+    _ = gpa;
+    log.debug("decoding, len = {}, {x}", .{ bytes.len, bytes });
 }

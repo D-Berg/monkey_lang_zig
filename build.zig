@@ -36,7 +36,10 @@ pub fn build(b: *std.Build) void {
         .strip = true,
     });
 
-    // monkey_runtime_mod.export_symbol_names = &.{"__allocate"};
+    monkey_runtime_mod.export_symbol_names = &.{
+        "__allocate_string",
+        "__print_object",
+    };
 
     const monkey_runtime_exe = b.addExecutable(.{
         .name = "monkey_runtime",
@@ -81,9 +84,16 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
         });
 
+        const wasm_mod = b.addModule("wasm", .{
+            .target = target,
+            .optimize = optimize,
+            .root_source_file = b.path("src/wasm/wasm.zig"),
+        });
+
         // monkey_mod.addAnonymousImport("monkey_runtime", .{ .root_source_file = wasm_bytes_path });
 
         monkey_mod.addOptions("build_options", options);
+        wasm_mod.addOptions("build_options", options);
 
         const exe = b.addExecutable(.{
             .name = "monkey",
@@ -118,13 +128,20 @@ pub fn build(b: *std.Build) void {
             .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
         });
 
+        const exe_wasm_unit_tests = b.addTest(.{
+            .root_module = wasm_mod,
+        });
+
         const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
+        const run_exe_wasm_unit_tests = b.addRunArtifact(exe_wasm_unit_tests);
 
         // Similar to creating the run step earlier, this exposes a `test` step to
         // the `zig build --help` menu, providing a way for the user to request
         // running the unit tests.
         const test_step = b.step("test", "Run unit tests");
+        const wasm_test_step = b.step("test-wasm", "Run unit tests for wasm mod");
         test_step.dependOn(&run_exe_unit_tests.step);
+        wasm_test_step.dependOn(&run_exe_wasm_unit_tests.step);
     }
 }
 

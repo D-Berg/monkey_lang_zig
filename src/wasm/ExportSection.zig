@@ -2,6 +2,7 @@ const std = @import("std");
 const wasm = @import("wasm.zig");
 const Section = wasm.Section;
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.ExportSection);
 
 const ArrayList = std.ArrayListUnmanaged;
 const StringHashMap = std.StringHashMapUnmanaged;
@@ -52,7 +53,15 @@ pub fn section(self: *Self) Section {
         .vtable = &.{
             .deinit = deinit,
             .content = content,
+            .parse = parse,
         },
         .id = .@"export",
     };
+}
+
+pub fn parse(ctx: *anyopaque, gpa: Allocator, bytes: []const u8) !void {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    _ = self;
+    _ = gpa;
+    log.debug("decoding len = {}, {x}", .{ bytes.len, bytes });
 }

@@ -83,18 +83,34 @@ fn compileStatements(
                 try compileExpression(gpa, ex.expression, module);
                 // try current_func.body.append(gpa, .drop);
             },
+            .let_stmt => {},
             else => {},
         }
     }
 }
 
-fn compileExpression(gpa: Allocator, expr: *const ast.Expression, module: *wasm.Module) compiler.Error!void {
+fn compileLetStatement(
+    gpa: Allocator,
+    let_stmt: *const ast.LetStatement,
+    module: *wasm.Module,
+) !void {
+    _ = gpa;
+    _ = let_stmt;
+    _ = module;
+}
+
+fn compileExpression(
+    gpa: Allocator,
+    expr: *const ast.Expression,
+    module: *wasm.Module,
+) compiler.Error!void {
     switch (expr.*) {
         .integer_literal => |*il| try compileIntegerLiteralExpression(gpa, il, module),
         .prefix_expression => |*pe| try compilePrefixExpression(gpa, pe, module),
         .infix_expression => |*ie| try compileInfixExpression(gpa, ie, module),
         .boolean_literal => |*bl| try compileBooleanLiteralExpression(gpa, bl, module),
         .if_expression => |*ie| try compileIfExpression(gpa, ie, module),
+        .string_expression => |*se| try compileStringExpression(gpa, se, module),
         else => {},
     }
 }
@@ -176,7 +192,7 @@ fn compileIfExpression(
 ) !void {
     try compileExpression(gpa, if_expr.condition, module);
 
-    try module.current_function.body.appendSlice(gpa, &.{ .@"if", wasm.Type.i32.opcode() });
+    try module.current_function.body.appendSlice(gpa, &.{ .@"if", wasm.ValType.i32.opcode() });
 
     try compileStatements(gpa, if_expr.consequence.statements, module);
 
@@ -187,6 +203,16 @@ fn compileIfExpression(
     }
 
     try module.current_function.body.append(gpa, .end);
+}
+
+fn compileStringExpression(
+    gpa: Allocator,
+    string_expr: *const ast.StringExpression,
+    module: *wasm.Module,
+) !void {
+    _ = gpa;
+    _ = string_expr;
+    _ = module;
 }
 
 fn testCompiler(
