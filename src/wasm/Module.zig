@@ -71,8 +71,11 @@ pub fn addFunction(self: *Module, gpa: Allocator, func: wasm.Function) !void {
     );
     try self.type_section.functions.append(gpa, type_func);
     try self.code_section.functions.append(gpa, func);
+
+    const n_funcs = self.type_section.functions.items.len;
+    std.debug.assert(n_funcs > 0);
     const type_idx = self.type_section.functions.items.len - 1;
-    try self.function_section.mapping.append(gpa, type_idx);
+    try self.function_section.mapping.append(gpa, @intCast(type_idx));
 
     if (func.@"export") {
         try self.export_section.exports.put(gpa, func.name, .{ .kind = .function, .idx = 0 });
