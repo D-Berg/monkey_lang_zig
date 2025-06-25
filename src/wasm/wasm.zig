@@ -176,12 +176,9 @@ pub fn LEB128Encoder(T: type) type {
             return self.buf[0..i];
         }
 
-        pub const Decoded = struct {
-            value: T,
-            len: usize,
-        };
-
-        pub fn decode(self: *Self, bytes: []const u8) !Decoded {
+        /// Returns the decoded value and the number of bytes the encoded
+        /// integer was.
+        pub fn decode(self: *Self, bytes: []const u8) !struct { T, usize } {
             _ = self;
             var result: T = 0;
             var i: usize = 0;
@@ -191,7 +188,7 @@ pub fn LEB128Encoder(T: type) type {
 
                 result += @as(T, @intCast(byte & 0x7f)) << @intCast(i * 7);
 
-                if (byte & 0x80 == 0) return Decoded{ .value = result, .len = i + 1 };
+                if (byte & 0x80 == 0) return .{ result, i + 1 };
             }
 
             return error.Invalid128encoding;
@@ -208,5 +205,9 @@ test "LEB" {
     var u64_encoder = LEB128Encoder(u64).init;
 
     try std.testing.expectEqualSlices(u8, &expected_u64, u64_encoder.encode(624485));
-    try std.testing.expectEqual((try u64_encoder.decode(&expected_u64)).value, 624485);
+
+    const u64_decoded, const enc_len = try u64_encoder.decode(&expected_u64);
+    try std.testing.expectEqual(3, enc_len);
+
+    try std.testing.expectEqual(u64_decoded, 624485);
 }

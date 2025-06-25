@@ -4,6 +4,7 @@ const wasm = @import("wasm.zig");
 // https://webassembly.github.io/spec/core/binary/modules.html#binary-typeidx
 const Section = @This();
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.Section);
 
 pub const ID = enum(u8) {
     custom = 0x00,
@@ -44,7 +45,7 @@ pub fn write(
     gpa: Allocator,
     writer: std.io.AnyWriter,
 ) !void {
-    std.log.debug("writing {s} section: 0x{x}", .{ @tagName(self.id), self.id.byte() });
+    log.debug("writing {s} section: 0x{x}", .{ @tagName(self.id), self.id.byte() });
     try writer.writeByte(self.id.byte());
 
     const content = try self.vtable.content(self.ptr, gpa);

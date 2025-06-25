@@ -64,7 +64,12 @@ pub fn getSection(self: *Module, id: Section.ID) ?Section {
 }
 
 pub fn addFunction(self: *Module, gpa: Allocator, func: wasm.Function) !void {
-    try self.type_section.functions.append(gpa, func);
+    const type_func = try wasm.TypeSection.Function.init(
+        gpa,
+        func.param_types,
+        func.return_types,
+    );
+    try self.type_section.functions.append(gpa, type_func);
     try self.code_section.functions.append(gpa, func);
     self.function_section.n_funcs += 1;
 
@@ -154,12 +159,12 @@ fn sliceSection(at: *usize, bytes: []const u8) ![]const u8 {
     var u32_converter = wasm.LEB128Encoder(u32).init;
 
     at.* += 1;
-    const u32_decoded = try u32_converter.decode(bytes[at.*..]);
-    const section_len: usize = @intCast(u32_decoded.value);
 
-    at.* += u32_decoded.len;
+    const section_len, const enc_len = try u32_converter.decode(bytes[at.*..]);
 
-    const section = bytes[at.*..(at.* + section_len)];
+    at.* += enc_len;
+
+    const section = bytes[at.*..(at.* + @as(usize, @intCast(section_len)))];
 
     at.* += section.len;
 
