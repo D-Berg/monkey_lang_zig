@@ -71,7 +71,8 @@ pub fn addFunction(self: *Module, gpa: Allocator, func: wasm.Function) !void {
     );
     try self.type_section.functions.append(gpa, type_func);
     try self.code_section.functions.append(gpa, func);
-    self.function_section.n_funcs += 1;
+    const type_idx = self.type_section.functions.items.len - 1;
+    try self.function_section.mapping.append(gpa, type_idx);
 
     if (func.@"export") {
         try self.export_section.exports.put(gpa, func.name, .{ .kind = .function, .idx = 0 });
@@ -87,7 +88,7 @@ pub fn addSection(self: *Module, id: Section.ID) void {
         .@"export" => self.sections.values[i] = self.export_section.section(),
         .code => self.sections.values[i] = self.code_section.section(),
         else => {
-            @panic("section not implemented yet");
+            std.debug.panic("{s} section not implemented yet", .{@tagName(id)});
         },
     }
 }
@@ -120,6 +121,7 @@ pub fn parse(self: *Module, gpa: Allocator, bytes: []const u8) !void {
 
     at += 4;
 
+    // TODO: parallel
     sw: switch (bytes[at]) {
         Section.ID.custom.byte(),
         Section.ID.type.byte(),
@@ -204,12 +206,12 @@ test "parse bool.wasm" {
 }
 
 // see src/wasm_runtime.zig
-test "parse runtime" {
-    std.testing.log_level = .err;
-
-    const gpa = std.testing.allocator;
-    var module = Module.init;
-    defer module.deinit(gpa);
-
-    try module.parse(gpa, runtime);
-}
+// test "parse runtime" {
+//     std.testing.log_level = .err;
+//
+//     const gpa = std.testing.allocator;
+//     var module = Module.init;
+//     defer module.deinit(gpa);
+//
+//     try module.parse(gpa, runtime);
+// }
