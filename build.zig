@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
     // for restricting supported target set are available.
     //
     const log_level = b.option(std.log.Level, "log", "Set log level") orelse std.log.Level.info;
+    const strip = b.option(bool, "strip", "strip debug info from binary");
 
     var options = b.addOptions();
     options.addOption(@TypeOf(log_level), "log_level", log_level);
@@ -82,6 +83,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .root_source_file = b.path("src/main.zig"),
+            .strip = strip,
         });
 
         const wasm_mod = b.addModule("wasm", .{
