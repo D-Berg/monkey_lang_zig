@@ -22,7 +22,8 @@ wasmtime --dir=. zig-out/bin/monkey.wasm <path/to/monkeyfile>
 
 Test one with:
 ```
-zig test src/filename.zig
+zig build test -- Parser
+<!-- zig test src/filename.zig -->
 ```
 
 Test all with:
