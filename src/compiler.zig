@@ -1,7 +1,7 @@
 //! Compiles Monkey code to wasm
 
 const std = @import("std");
-const wasm = @import("wasm/wasm.zig");
+const wasm = @import("wasm.zig");
 const compiler = @This();
 const Parser = @import("Parser.zig");
 const Allocator = std.mem.Allocator;
@@ -9,7 +9,7 @@ const ArrayList = std.ArrayListUnmanaged;
 const EnumArray = std.enums.EnumArray;
 const ast = @import("ast.zig");
 const Program = ast.Program;
-const runtime = @import("build_options").runtime;
+const runtime = @import("runtime").bytes;
 const assert = std.debug.assert;
 // https://webassembly.github.io/spec/core/appendix/index-instructions.html
 

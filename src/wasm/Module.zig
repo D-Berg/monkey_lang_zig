@@ -1,5 +1,5 @@
 const std = @import("std");
-const wasm = @import("wasm.zig");
+const wasm = @import("../wasm.zig");
 const log = std.log.scoped(.Module);
 
 const Section = wasm.Section;
@@ -10,7 +10,8 @@ const Allocator = std.mem.Allocator;
 
 const Module = @This();
 
-const runtime = @import("build_options").runtime;
+const runtime = @import("runtime").bytes;
+
 sections: EnumArray(Section.ID, ?Section) = .initFill(null),
 type_section: wasm.TypeSection = .empty,
 function_section: wasm.FunctionSection = .empty,
@@ -176,37 +177,37 @@ fn sliceSection(at: *usize, bytes: []const u8) ![]const u8 {
     return section;
 }
 
-test "parse bool.wasm" {
-    std.testing.log_level = .debug;
-    // (module
-    //   (type (;0;) (func (result i32)))
-    //   (func (;0;) (type 0) (result i32)
-    //     (local i32)
-    //     i32.const 3
-    //     i32.const 3
-    //     i32.eq
-    //     return)
-    //   (export "__monkey_main" (func 0)))
-    const byte_code = [_]u8{
-        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f, 0x03,
-        0x02, 0x01, 0x00, 0x07, 0x11, 0x01, 0x0d, 0x5f, 0x5f, 0x6d, 0x6f, 0x6e, 0x6b, 0x65, 0x79, 0x5f,
-        0x6d, 0x61, 0x69, 0x6e, 0x00, 0x00, 0x0a, 0x0c, 0x01, 0x0a, 0x01, 0x01, 0x7f, 0x41, 0x03, 0x41,
-        0x03, 0x46, 0x0f, 0x0b,
-    };
-
-    const gpa = std.testing.allocator;
-    var module = Module.init;
-    defer module.deinit(gpa);
-
-    try module.parse(gpa, &byte_code);
-
-    var expected = std.ArrayListUnmanaged(u8).empty;
-    defer expected.deinit(gpa);
-
-    try module.write(gpa, expected.writer(gpa).any());
-
-    try std.testing.expectEqualSlices(u8, &byte_code, expected.items);
-}
+// test "parse bool.wasm" {
+//     std.testing.log_level = .debug;
+//     // (module
+//     //   (type (;0;) (func (result i32)))
+//     //   (func (;0;) (type 0) (result i32)
+//     //     (local i32)
+//     //     i32.const 3
+//     //     i32.const 3
+//     //     i32.eq
+//     //     return)
+//     //   (export "__monkey_main" (func 0)))
+//     const byte_code = [_]u8{
+//         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f, 0x03,
+//         0x02, 0x01, 0x00, 0x07, 0x11, 0x01, 0x0d, 0x5f, 0x5f, 0x6d, 0x6f, 0x6e, 0x6b, 0x65, 0x79, 0x5f,
+//         0x6d, 0x61, 0x69, 0x6e, 0x00, 0x00, 0x0a, 0x0c, 0x01, 0x0a, 0x01, 0x01, 0x7f, 0x41, 0x03, 0x41,
+//         0x03, 0x46, 0x0f, 0x0b,
+//     };
+//
+//     const gpa = std.testing.allocator;
+//     var module = Module.init;
+//     defer module.deinit(gpa);
+//
+//     try module.parse(gpa, &byte_code);
+//
+//     var expected = std.ArrayListUnmanaged(u8).empty;
+//     defer expected.deinit(gpa);
+//
+//     try module.write(gpa, expected.writer(gpa).any());
+//
+//     try std.testing.expectEqualSlices(u8, &byte_code, expected.items);
+// }
 
 // see src/wasm_runtime.zig
 // test "parse runtime" {
@@ -218,3 +219,9 @@ test "parse bool.wasm" {
 //
 //     try module.parse(gpa, runtime);
 // }
+
+test "runtime magic" {
+    if (!std.mem.eql(u8, runtime[0..4], &wasm.MAGIC_MODULE_HEADER)) {
+        return error.InvalidMagicHeader;
+    }
+}

@@ -1,5 +1,5 @@
 const std = @import("std");
-const wasm = @import("wasm.zig");
+const wasm = @import("../wasm.zig");
 const Section = wasm.Section;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.TypeSection);

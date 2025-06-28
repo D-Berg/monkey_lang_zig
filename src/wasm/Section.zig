@@ -1,6 +1,6 @@
 //! Interface for the different sections
 const std = @import("std");
-const wasm = @import("wasm.zig");
+const wasm = @import("../wasm.zig");
 // https://webassembly.github.io/spec/core/binary/modules.html#binary-typeidx
 const Section = @This();
 const Allocator = std.mem.Allocator;

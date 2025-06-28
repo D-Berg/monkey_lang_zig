@@ -8,10 +8,26 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    const out = std.io.getStdOut().writer();
+    var arg_it = std.process.ArgIterator.init();
+    defer arg_it.deinit();
 
-    
-    var n_tests: u32= 0;
+    var arena_alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena_alloc.deinit();
+
+    const arena = arena_alloc.allocator();
+
+    const args = try std.process.argsAlloc(arena);
+
+    var hm: std.StringHashMapUnmanaged([]const u8) = .empty;
+
+    for (args, 0..) |arg, i| {
+        if (i == 0) continue;
+        try hm.put(arena, arg, arg);
+    }
+
+    const stdout = std.io.getStdOut().writer();
+
+    var n_tests: u32 = 0;
     var passed_tests: u32 = 0;
     var n_leaks: u32 = 0;
     const passed = "\u{001b}[32mpassed\u{001b}[0m";
@@ -25,39 +41,56 @@ pub fn main() !void {
         const name = extractName(t);
         const file = extractFile(t);
 
+        const root = extractRoot(file);
+
+        if (hm.get(root) == null) continue;
+
         std.testing.allocator_instance = .{};
         const result = t.func();
         const leaked = std.testing.allocator_instance.detectLeaks();
 
         if (leaked) n_leaks += 1;
-        
+
         if (result) {
             passed_tests += 1;
-            try std.fmt.format(out, "{s:<10} | {s:<20} | {s} | leaked: {}\n", .{
-                file, name, passed, leaked
+            try std.fmt.format(stdout, "{s:<20} | {s:<20} | {s} | leaked: {}\n", .{
+                file,
+                name,
+                passed,
+                leaked,
             });
         } else |err| {
-            try std.fmt.format(out, "{s:<10} | {s:<20} | {s} | leaked: {} | error: {}\n", .{
-                file, name, failed, leaked, err
+            try std.fmt.format(stdout, "{s:<20} | {s:<20} | {s} | leaked: {} | error: {}\n", .{
+                file,
+                name,
+                failed,
+                leaked,
+                err,
             });
         }
 
         n_tests += 1;
     }
 
-    try std.fmt.format(out, "passing: {}/{}, leaks: {}/{}\n", .{
-        passed_tests, n_tests, n_leaks, n_tests
+    try std.fmt.format(stdout, "passing: {}/{}, leaks: {}/{}\n", .{
+        passed_tests,
+        n_tests,
+        n_leaks,
+        n_tests,
     });
-
 }
 
 fn extractFile(t: std.builtin.TestFn) []const u8 {
     const marker = std.mem.lastIndexOf(u8, t.name, ".test.") orelse return t.name;
     return t.name[0..marker];
-
 }
 
 fn extractName(t: std.builtin.TestFn) []const u8 {
     const marker = std.mem.lastIndexOf(u8, t.name, ".test.") orelse return t.name;
-    return t.name[marker+6..];
+    return t.name[marker + 6 ..];
+}
+
+fn extractRoot(file_name: []const u8) []const u8 {
+    const marker = std.mem.indexOfScalar(u8, file_name, '.') orelse return file_name;
+    return file_name[0..marker];
 }

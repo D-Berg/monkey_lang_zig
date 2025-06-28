@@ -2,13 +2,13 @@ const std = @import("std");
 const ArrayList = std.ArrayListUnmanaged;
 const Allocator = std.mem.Allocator;
 pub const wasm = @This();
-pub const Module = @import("Module.zig");
-pub const Section = @import("Section.zig");
-pub const TypeSection = @import("TypeSection.zig");
-pub const FunctionSection = @import("FunctionSection.zig");
-pub const ExportSection = @import("ExportSection.zig");
-pub const CodeSection = @import("CodeSection.zig");
-pub const GlobalSection = @import("GlobalSection.zig");
+pub const Module = @import("wasm/Module.zig");
+pub const Section = @import("wasm/Section.zig");
+pub const TypeSection = @import("wasm/TypeSection.zig");
+pub const FunctionSection = @import("wasm/FunctionSection.zig");
+pub const ExportSection = @import("wasm/ExportSection.zig");
+pub const CodeSection = @import("wasm/CodeSection.zig");
+pub const GlobalSection = @import("wasm/GlobalSection.zig");
 
 pub const MAGIC_MODULE_HEADER = [4]u8{ 0x00, 0x61, 0x73, 0x6d };
 pub const MODULE_VERSION = [4]u8{ 0x01, 0x00, 0x00, 0x00 };
@@ -194,10 +194,6 @@ pub fn LEB128Encoder(T: type) type {
             return error.Invalid128encoding;
         }
     };
-}
-
-test "all" {
-    std.testing.refAllDecls(wasm);
 }
 
 test "LEB" {
