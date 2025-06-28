@@ -6,7 +6,7 @@ on:
   push:
     branches:
       - main
-      - compile # TODO: remove
+      - compiler # TODO: remove
 jobs:
   test:
     steps:
