@@ -32,8 +32,8 @@ pub fn main() !void {
     var n_leaks: u32 = 0;
     const passed = "\u{001b}[32mpassed\u{001b}[0m";
     const failed = "\u{001b}[31mfailed\u{001b}[0m";
-    // TODO: take arg if leaks should be checked
-    // const leaked = true;
+
+    var did_fail = false; // some test failed
 
     for (builtin.test_functions, 0..) |t, i| {
         if (i == 0) continue;
@@ -41,9 +41,11 @@ pub fn main() !void {
         const name = extractName(t);
         const file = extractFile(t);
 
-        const root = extractRoot(file);
-
-        if (hm.get(root) == null) continue;
+        // filter tests
+        if (args.len > 1) {
+            const root = extractRoot(file);
+            if (hm.get(root) == null) continue;
+        }
 
         std.testing.allocator_instance = .{};
         const result = t.func();
@@ -60,6 +62,7 @@ pub fn main() !void {
                 leaked,
             });
         } else |err| {
+            did_fail = true;
             try std.fmt.format(stdout, "{s:<20} | {s:<20} | {s} | leaked: {} | error: {}\n", .{
                 file,
                 name,
@@ -78,6 +81,8 @@ pub fn main() !void {
         n_leaks,
         n_tests,
     });
+
+    if (did_fail) return error.TestingFailure;
 }
 
 fn extractFile(t: std.builtin.TestFn) []const u8 {
