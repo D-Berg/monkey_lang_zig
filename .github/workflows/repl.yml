@@ -2,10 +2,9 @@ name: repl
 
 run-name: Update REPL
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
-    branches: [compiler] # TODO: chane to main
+  push:
+    branches:
+      - compiler # TODO: chane to main
 
 concurrency:
   cancel-in-progress: true
@@ -29,7 +28,7 @@ jobs:
       - name: Set up Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: 0.14.0
+          version: 0.14.1
       - name: Build REPL
         run: zig build web
       - name: Upload pages artifact
