@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) !void {
         // },
     });
     const monkey_runtime_mod = b.addModule("monkey_runtime", .{
-        .root_source_file = b.path("src/wasm_runtime.zig"),
+        .root_source_file = b.path("src/wasm/runtime.zig"),
         .target = runtime_target,
         .optimize = .ReleaseSmall,
         .strip = true,
