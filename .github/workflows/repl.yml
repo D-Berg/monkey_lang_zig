@@ -1,0 +1,41 @@
+name: repl
+
+run-name: Update REPL
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [compile] # TODO: chane to main
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{github.workflow}}-${{github.ref_name}}
+
+permissions:
+  pages: write
+  id-token: write
+
+jobs:
+  repl:
+    runs-on: ubuntu-latest
+    name: Publish repl on GitHub pages
+    if: github.event.workflow_run.conclusion == 'success'
+    environment:
+      name: github-pages
+      url: ${{steps.deployment.outputs.page_url}}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.14.0
+      - name: Build REPL
+        run: zig build web
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: zig-out/web
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
