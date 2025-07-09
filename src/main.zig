@@ -1,17 +1,20 @@
 const std = @import("std");
-const print = std.debug.print;
-const log = std.log;
-const expect = std.testing.expect;
 const builtin = @import("builtin");
 const build_options = @import("build_options");
 
+const print = std.debug.print;
+const log = std.log;
+const expect = std.testing.expect;
+const Allocator = std.mem.Allocator;
+const io = std.io;
+const cli_args = @import("cli_args.zig");
+const compile = @import("compiler.zig").compile;
 const Environment = @import("Environment.zig");
 const evaluator = @import("evaluator.zig");
 const Lexer = @import("Lexer.zig");
 const object = @import("object.zig");
 const Parser = @import("Parser.zig");
 const repl = @import("repl.zig");
-const compile = @import("compiler.zig").compile;
 
 pub const std_options: std.Options = .{
     .log_level = @enumFromInt(@intFromEnum(build_options.log_level)),
@@ -58,76 +61,109 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
-    for (args, 0..) |arg, i| {
-        log.debug("arg {} = {s}\n", .{ i, arg });
+    const stdout = std.io.getStdOut().writer().any();
+    const stdin = std.io.getStdIn().reader().any();
+    const stderr = std.io.getStdErr().writer().any();
+
+    const parsed_args = cli_args.parse(gpa, args[1..]);
+    switch (parsed_args) {
+        .repl => try monkeyRepl(gpa, stdout, stdin, stderr),
+        .run => |run_args| try monkeyRun(gpa, run_args, stdout, stderr),
+        .build => |build_args| try monkeyBuild(gpa, build_args, stdout, stderr),
+        .problem => |err_msg| {
+            try stderr.print("Error: {s}\n", .{err_msg});
+        },
+        else => {},
     }
+}
 
-    const stdout = std.io.getStdOut().writer();
+fn monkeyRepl(
+    gpa: Allocator,
+    stdout: io.AnyWriter,
+    stdin: io.AnyReader,
+    stderr: io.AnyWriter,
+) !void {
+    try stdout.print("Hello! This is the monkey programming language!\n", .{});
+    try stdout.print("{s}\n", .{monkey});
+    try stdout.print("Feel free to type in commands\n", .{});
+    try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
 
-    if (args.len == 1) {
-        try stdout.print("Hello! This is the monkey programming language!\n", .{});
-        try stdout.print("{s}\n", .{monkey});
-        try stdout.print("Feel free to type in commands\n", .{});
-        try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
+    try repl.start(gpa, stdin, stdout, stderr);
+}
 
-        const stdin = std.io.getStdIn().reader();
-        const stderr = std.io.getStdErr().writer();
-
-        try repl.start(gpa, stdin.any(), stdout.any(), stderr.any());
-    } else if (args.len == 3) {
-        const path = args[2];
-
-        const file = try std.fs.cwd().openFile(path, .{});
+fn monkeyRun(
+    gpa: Allocator,
+    run_args: cli_args.RunArgs,
+    stdout: io.AnyWriter,
+    stderr: io.AnyWriter,
+) !void {
+    _ = stderr;
+    const input = input: {
+        const file = try std.fs.cwd().openFile(run_args.path, .{});
         defer file.close();
+        break :input try file.readToEndAlloc(gpa, 1024);
+    };
+    defer gpa.free(input);
 
-        const input = try file.readToEndAlloc(gpa, 1024);
-        defer gpa.free(input);
+    var parser = Parser.init(gpa, input);
+    defer parser.deinit(gpa);
 
-        const action = args[1];
+    var program = try parser.Program(gpa);
+    defer program.deinit(gpa);
 
-        var parser = Parser.init(gpa, input);
-        defer parser.deinit(gpa);
+    var env: Environment = .empty;
+    defer env.deinit(gpa);
 
-        var program = try parser.Program(gpa);
-        defer program.deinit(gpa);
+    const maybe_evaluated = try evaluator.eval(gpa, &program, &env);
 
-        if (std.mem.eql(u8, action, "run")) {
-            var env: Environment = .empty;
-            defer env.deinit(gpa);
-
-            const maybe_evaluated = try evaluator.eval(gpa, &program, &env);
-
-            if (maybe_evaluated) |evaluated| {
-                defer evaluated.deinit(gpa);
-                const eval_str = try evaluated.inspect(gpa);
-                defer gpa.free(eval_str);
-                try stdout.print("{s}\n", .{eval_str});
-            }
-        } else if (std.mem.eql(u8, action, "build")) {
-
-            // TODO: name out file after input file
-            // TODO: put it in a dir monkey-out
-            const out_file = try std.fs.cwd().createFile(
-                "main.wasm",
-                std.fs.File.CreateFlags{ .truncate = true },
-            );
-            defer out_file.close();
-
-            const file_writer = out_file.writer();
-
-            var buffered_writer = std.io.bufferedWriter(file_writer);
-            const bw = buffered_writer.writer();
-
-            try compile(gpa, &program, bw.any());
-
-            try buffered_writer.flush();
-        }
-        // print("file = {s}\n", .{input});
-
-    } else {
-        std.debug.print("n_args={}", .{args.len});
-        return error.UnsupportedNumberOfArgs;
+    if (maybe_evaluated) |evaluated| {
+        defer evaluated.deinit(gpa);
+        const eval_str = try evaluated.inspect(gpa);
+        defer gpa.free(eval_str);
+        try stdout.print("{s}\n", .{eval_str});
     }
+}
+
+fn monkeyBuild(
+    gpa: Allocator,
+    build_args: cli_args.BuildArgs,
+    stdout: io.AnyWriter,
+    stderr: io.AnyWriter,
+) !void {
+    _ = stdout;
+    const input = input: {
+        const file = std.fs.cwd().openFile(build_args.path, .{}) catch |err| {
+            try stderr.print("error: Couldnt open file: '{s}'\n", .{build_args.path});
+            return err;
+        };
+        defer file.close();
+        break :input try file.readToEndAlloc(gpa, 1024);
+    };
+    defer gpa.free(input);
+
+    var parser = Parser.init(gpa, input);
+    defer parser.deinit(gpa);
+
+    var program = try parser.Program(gpa);
+    defer program.deinit(gpa);
+
+    // TODO: name out file after input file
+    // TODO: put it in a dir monkey-out
+    //
+    const out_file = try std.fs.cwd().createFile(
+        build_args.out_name,
+        std.fs.File.CreateFlags{ .truncate = true },
+    );
+    defer out_file.close();
+
+    const file_writer = out_file.writer();
+
+    var buffered_writer = std.io.bufferedWriter(file_writer);
+    const bw = buffered_writer.writer();
+
+    try compile(gpa, &program, bw.any());
+
+    try buffered_writer.flush();
 }
 
 test "all" {
