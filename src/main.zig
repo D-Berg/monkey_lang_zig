@@ -34,10 +34,16 @@ const monkey =
 
 pub fn main() !void {
     const gpa, const is_debug = gpa: {
-        if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
         break :gpa switch (builtin.mode) {
+            // debug_allocator uses wasm_allocator under the hood
             .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
-            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
+            .ReleaseFast, .ReleaseSmall => .{
+                if (builtin.os.tag == .wasi)
+                    std.heap.wasm_allocator
+                else
+                    std.heap.smp_allocator,
+                false,
+            },
         };
     };
     defer if (is_debug) {
@@ -106,8 +112,6 @@ pub fn main() !void {
                 std.fs.File.CreateFlags{ .truncate = true },
             );
             defer out_file.close();
-
-            try out_file.chmod(0o0755);
 
             const file_writer = out_file.writer();
 
