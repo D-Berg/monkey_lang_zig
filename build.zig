@@ -58,6 +58,9 @@ pub fn build(b: *std.Build) !void {
 
     b.installArtifact(exe);
 
+    // makes it possible to do `zig build run -Dtarget="wasm32-wasi`
+    b.enable_wasmtime = true;
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
 
@@ -77,8 +80,60 @@ pub fn build(b: *std.Build) !void {
     }
 
     const test_step = b.step("test", "Run unit tests");
-
     test_step.dependOn(&run_exe_unit_tests.step);
+
+    buildRelease(b, build_options, embed_wasm);
+
+    const clean_step = b.step("clean", "clean artififacts");
+    const rm = b.addSystemCommand(&.{ "rm", "-r", "zig-out", ".zig-cache" });
+    clean_step.dependOn(&rm.step);
+}
+
+/// Makes a release step
+fn buildRelease(
+    b: *std.Build,
+    build_options: *std.Build.Step.Options,
+    embed_wasm: *EmbedWasm,
+) void {
+    const release_step = b.step("release", "make a release build for all supported targets");
+    const release_target = [_]std.Target.Query{
+        .{ .os_tag = .macos, .cpu_arch = .aarch64 },
+        .{ .os_tag = .macos, .cpu_arch = .x86_64 },
+        .{ .os_tag = .linux, .cpu_arch = .aarch64, .abi = .musl },
+        .{ .os_tag = .linux, .cpu_arch = .x86_64, .abi = .musl },
+        .{ .os_tag = .windows, .cpu_arch = .x86_64 },
+        .{ .os_tag = .wasi, .cpu_arch = .wasm32 },
+    };
+
+    for (release_target) |target_query| {
+        const resolved_target = b.resolveTargetQuery(target_query);
+        const t = resolved_target.result;
+
+        const release_mod = b.addModule("monkey", .{
+            .target = resolved_target,
+            .optimize = .ReleaseFast,
+            .root_source_file = b.path("src/main.zig"),
+            .strip = true,
+        });
+        release_mod.addOptions("build_options", build_options);
+        release_mod.addOptions("runtime", embed_wasm.options);
+
+        const rel_exe = b.addExecutable(.{
+            .name = "monkey",
+            .root_module = release_mod,
+            .strip = true,
+        });
+
+        const install_release = b.addInstallArtifact(rel_exe, .{
+            .dest_dir = .{ .override = .{ .custom = "release" } },
+            .dest_sub_path = b.fmt("{s}-{s}-{s}", .{
+                @tagName(t.cpu.arch), @tagName(t.os.tag), rel_exe.name,
+            }),
+        });
+
+        install_release.step.dependOn(&rel_exe.step);
+        release_step.dependOn(&install_release.step);
+    }
 }
 
 fn buildWeb(b: *std.Build) void {
