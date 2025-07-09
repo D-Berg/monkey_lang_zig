@@ -8,9 +8,6 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    var arg_it = std.process.ArgIterator.init();
-    defer arg_it.deinit();
-
     var arena_alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_alloc.deinit();
 
