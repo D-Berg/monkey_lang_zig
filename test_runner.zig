@@ -53,6 +53,7 @@ pub fn main() !void {
 
         if (leaked) n_leaks += 1;
 
+        try stdout.print("[{d:>3}/{d:<3}] ", .{ n_tests + 1, builtin.test_functions.len - 1 });
         if (result) {
             passed_tests += 1;
             try std.fmt.format(stdout, "{s:<20} | {s:<20} | {s} | leaked: {}\n", .{
