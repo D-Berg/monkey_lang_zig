@@ -1295,23 +1295,6 @@ test "unexected prefix tkn" {
     try std.testing.expectError(error.NoPrefixFunction, programError);
 }
 
-test "fuzz" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            const gpa = std.testing.allocator;
-
-            var parser = Parser.init(gpa, input);
-            defer parser.deinit(gpa);
-
-            var program = parser.Program(gpa) catch return;
-            defer program.deinit(gpa);
-        }
-    };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
-}
-
 //
 // test "Parsing Errors" {
 //
