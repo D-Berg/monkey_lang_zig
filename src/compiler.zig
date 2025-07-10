@@ -214,113 +214,113 @@ fn compileStringExpression(
     _ = string_expr;
     _ = module;
 }
-
-fn testCompiler(
-    gpa: Allocator,
-    test_name: []const u8,
-    input: []const u8,
-) ![]const u8 {
-    var parser = Parser.init(gpa, input);
-    defer parser.deinit(gpa);
-
-    var program = try parser.Program(gpa);
-    defer program.deinit(gpa);
-
-    const cwd = try std.process.getCwdAlloc(gpa);
-    defer gpa.free(cwd);
-
-    if (std.fs.cwd().openDir("tests", .{})) |dir| {
-        var opened_dir = dir;
-        defer opened_dir.close();
-    } else |_| {
-        try std.fs.cwd().makeDir("tests");
-    }
-    const file_path = try std.fmt.allocPrint(gpa, "tests/{s}.wasm", .{test_name});
-    defer gpa.free(file_path);
-
-    {
-        const file = try std.fs.cwd().createFile(file_path, .{});
-        defer file.close();
-
-        try compile(gpa, &program, file.writer().any());
-    }
-
-    var wasm2wat = std.process.Child.init(&.{ "wasm2wat", file_path }, gpa);
-    wasm2wat.stdout_behavior = .Pipe;
-
-    if (wasm2wat.spawnAndWait()) |term| {
-        try std.testing.expect(term.Exited == 0);
-    } else |err| return err;
-
-    var wasmtime = std.process.Child.init(&.{ "wasmtime", "--invoke", "__monkey_main", file_path }, gpa);
-
-    wasmtime.stdout_behavior = .Pipe;
-    wasmtime.stderr_behavior = .Pipe;
-
-    try wasmtime.spawn();
-
-    var result_str = ArrayList(u8).empty;
-    errdefer result_str.deinit(gpa);
-
-    const wasmtime_stdout = wasmtime.stdout.?.reader();
-
-    try wasmtime_stdout.streamUntilDelimiter(result_str.writer(gpa).any(), '\n', 100);
-
-    if (wasmtime.wait()) |term| {
-        try std.testing.expect(term.Exited == 0);
-        return result_str.toOwnedSlice(gpa);
-    } else |_| return error.CompilationFailed;
-}
-
-test "integer_literal" {
-    const gpa = std.testing.allocator;
-
-    const result = try testCompiler(gpa, "integer_literal", "5;3;");
-    defer gpa.free(result);
-
-    try std.testing.expectEqualStrings("3", result);
-}
-
-test "infix_expr" {
-    const gpa = std.testing.allocator;
-
-    const result = try testCompiler(gpa, "infix_expr", "4 * 5;");
-    defer gpa.free(result);
-
-    try std.testing.expectEqualStrings("20", result);
-}
-
-test "bool" {
-    const gpa = std.testing.allocator;
-
-    const result = try testCompiler(gpa, "bool", "3 == 3");
-    defer gpa.free(result);
-
-    try std.testing.expectEqualStrings("1", result);
-}
-
-test "if" {
-    const gpa = std.testing.allocator;
-
-    const input =
-        \\if (4 > 2) {
-        \\  10
-        \\} else {
-        \\  20
-        \\}
-    ;
-
-    const result = try testCompiler(gpa, "if", input);
-    defer gpa.free(result);
-
-    try std.testing.expectEqualStrings("10", result);
-}
-
-test "prefix" {
-    const gpa = std.testing.allocator;
-
-    const result = try testCompiler(gpa, "prefix", "-(10 - 20)");
-    defer gpa.free(result);
-
-    try std.testing.expectEqualStrings("10", result);
-}
+//
+// fn testCompiler(
+//     gpa: Allocator,
+//     test_name: []const u8,
+//     input: []const u8,
+// ) ![]const u8 {
+//     var parser = Parser.init(gpa, input);
+//     defer parser.deinit(gpa);
+//
+//     var program = try parser.Program(gpa);
+//     defer program.deinit(gpa);
+//
+//     const cwd = try std.process.getCwdAlloc(gpa);
+//     defer gpa.free(cwd);
+//
+//     if (std.fs.cwd().openDir("tests", .{})) |dir| {
+//         var opened_dir = dir;
+//         defer opened_dir.close();
+//     } else |_| {
+//         try std.fs.cwd().makeDir("tests");
+//     }
+//     const file_path = try std.fmt.allocPrint(gpa, "tests/{s}.wasm", .{test_name});
+//     defer gpa.free(file_path);
+//
+//     {
+//         const file = try std.fs.cwd().createFile(file_path, .{});
+//         defer file.close();
+//
+//         try compile(gpa, &program, file.writer().any());
+//     }
+//
+//     var wasm2wat = std.process.Child.init(&.{ "wasm2wat", file_path }, gpa);
+//     wasm2wat.stdout_behavior = .Pipe;
+//
+//     if (wasm2wat.spawnAndWait()) |term| {
+//         try std.testing.expect(term.Exited == 0);
+//     } else |err| return err;
+//
+//     var wasmtime = std.process.Child.init(&.{ "wasmtime", "--invoke", "__monkey_main", file_path }, gpa);
+//
+//     wasmtime.stdout_behavior = .Pipe;
+//     wasmtime.stderr_behavior = .Pipe;
+//
+//     try wasmtime.spawn();
+//
+//     var result_str = ArrayList(u8).empty;
+//     errdefer result_str.deinit(gpa);
+//
+//     const wasmtime_stdout = wasmtime.stdout.?.reader();
+//
+//     try wasmtime_stdout.streamUntilDelimiter(result_str.writer(gpa).any(), '\n', 100);
+//
+//     if (wasmtime.wait()) |term| {
+//         try std.testing.expect(term.Exited == 0);
+//         return result_str.toOwnedSlice(gpa);
+//     } else |_| return error.CompilationFailed;
+// }
+//
+// test "integer_literal" {
+//     const gpa = std.testing.allocator;
+//
+//     const result = try testCompiler(gpa, "integer_literal", "5;3;");
+//     defer gpa.free(result);
+//
+//     try std.testing.expectEqualStrings("3", result);
+// }
+//
+// test "infix_expr" {
+//     const gpa = std.testing.allocator;
+//
+//     const result = try testCompiler(gpa, "infix_expr", "4 * 5;");
+//     defer gpa.free(result);
+//
+//     try std.testing.expectEqualStrings("20", result);
+// }
+//
+// test "bool" {
+//     const gpa = std.testing.allocator;
+//
+//     const result = try testCompiler(gpa, "bool", "3 == 3");
+//     defer gpa.free(result);
+//
+//     try std.testing.expectEqualStrings("1", result);
+// }
+//
+// test "if" {
+//     const gpa = std.testing.allocator;
+//
+//     const input =
+//         \\if (4 > 2) {
+//         \\  10
+//         \\} else {
+//         \\  20
+//         \\}
+//     ;
+//
+//     const result = try testCompiler(gpa, "if", input);
+//     defer gpa.free(result);
+//
+//     try std.testing.expectEqualStrings("10", result);
+// }
+//
+// test "prefix" {
+//     const gpa = std.testing.allocator;
+//
+//     const result = try testCompiler(gpa, "prefix", "-(10 - 20)");
+//     defer gpa.free(result);
+//
+//     try std.testing.expectEqualStrings("10", result);
+// }

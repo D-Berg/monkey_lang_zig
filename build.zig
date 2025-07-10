@@ -69,7 +69,7 @@ pub fn build(b: *std.Build) !void {
 
     const exe_unit_tests = b.addTest(.{
         .root_module = monkey_mod,
-        .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
+        // .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
