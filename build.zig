@@ -124,7 +124,6 @@ fn buildRelease(
         const rel_exe = b.addExecutable(.{
             .name = "monkey",
             .root_module = release_mod,
-            .strip = true,
         });
 
         const install_release = b.addInstallArtifact(rel_exe, .{

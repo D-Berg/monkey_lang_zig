@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const Lexer = @import("Lexer.zig");
 const Token = @import("Token.zig");
 const Parser = @import("Parser.zig");
@@ -16,36 +17,34 @@ const AnyWriter = std.io.AnyWriter;
 const prompt = ">> ";
 const buffer_size = 256;
 
-
 // TODO: save lines in a list
-pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_writer: AnyWriter) !void {
-
+pub fn start(
+    gpa: Allocator,
+    reader: *std.Io.Reader,
+    writer: *std.Io.Writer,
+    err_writer: *std.Io.Writer,
+) !void {
     var env: Environment = .empty;
-    defer env.deinit(allocator);
-
-    var buffer: [2048]u8 = undefined;
-    var fixed_buf_allocator: std.heap.FixedBufferAllocator = .init(buffer[0..]);
-    
-    const fba = fixed_buf_allocator.allocator();
+    defer env.deinit(gpa);
 
     while (true) {
         try writer.print("{s}", .{prompt});
+        try writer.flush();
 
-        var line_array = ArrayList(u8).init(fba);
-        try reader.streamUntilDelimiter(line_array.writer(), '\n', null);
+        var buffer: [258]u8 = undefined;
+        var buf_writer = std.Io.Writer.fixed(&buffer);
+        const line_len = try reader.streamDelimiter(&buf_writer, '\n');
+        assert(try reader.discard(.limited(1)) == 1);
 
-        const line = try line_array.toOwnedSlice();  // TODO: handle error better
-        defer fba.free(line);
+        const line = buffer[0..line_len];
 
         if (isExit(line)) break;
 
+        var parser = Parser.init(line);
+        defer parser.deinit(gpa);
 
-        var parser = Parser.init(allocator, line);
-        defer parser.deinit(allocator);
-
-        var program = parser.Program(allocator) catch |err| switch (err) {
-            ParseError.NoSpaceLeft,
-            ParseError.OutOfMemory => |e| {
+        var program = parser.Program(gpa) catch |err| switch (err) {
+            ParseError.NoSpaceLeft, ParseError.OutOfMemory => |e| {
                 return e;
             },
             else => {
@@ -53,22 +52,21 @@ pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_wri
                     try err_writer.print("Parse Error: {s}\n", .{monkey_err.msg});
                 }
                 continue;
-            }
+            },
         };
-        defer program.deinit(allocator);
+        defer program.deinit(gpa);
 
-        const prog_str = try program.String(allocator);
-        defer allocator.free(prog_str);
-
+        const prog_str = try program.String(gpa);
+        defer gpa.free(prog_str);
 
         // std.debug.print("Program: {s}\n", .{prog_str});
 
-        const maybe_evaluated = try evaluator.eval(allocator, &program, &env);
+        const maybe_evaluated = try evaluator.eval(gpa, &program, &env);
 
         if (maybe_evaluated) |evaluated| {
-            defer evaluated.deinit(allocator);
-            const eval_str = try evaluated.inspect(allocator);
-            defer allocator.free(eval_str);
+            defer evaluated.deinit(gpa);
+            const eval_str = try evaluated.inspect(gpa);
+            defer gpa.free(eval_str);
             try writer.print("{s}\n", .{eval_str});
         }
 
@@ -78,6 +76,8 @@ pub fn start(allocator: Allocator, reader: AnyReader, writer: AnyWriter, err_wri
         // while (tok.kind != Token.Kind.Eof) : (tok = lex.NextToken()) {
         //     std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.tokenLiteral()});
         // }
+
+        try writer.flush();
     }
 }
 
@@ -103,15 +103,8 @@ test "exit" {
 
     stdin.reset();
 
-    try start(
-        allocator, 
-        stdin.reader().any(), 
-        stdout.writer().any(), 
-        stderr.writer().any()
-    );
-
+    try start(allocator, stdin.reader().any(), stdout.writer().any(), stderr.writer().any());
 }
-
 
 test "failing allocator" {
     const allocator = std.testing.failing_allocator;
@@ -128,13 +121,7 @@ test "failing allocator" {
 
     stdin.reset();
 
-    const err =  start(
-        allocator, 
-        stdin.reader().any(), 
-        stdout.writer().any(), 
-        stderr.writer().any()
-    );
+    const err = start(allocator, stdin.reader().any(), stdout.writer().any(), stderr.writer().any());
 
     try std.testing.expectError(Allocator.Error.OutOfMemory, err);
-
 }

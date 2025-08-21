@@ -43,7 +43,7 @@ pub fn deinit(self: Section, gpa: Allocator) void {
 pub fn write(
     self: Section,
     gpa: Allocator,
-    writer: std.io.AnyWriter,
+    writer: *std.Io.Writer,
 ) !void {
     log.debug("writing {s} section: 0x{x}", .{ @tagName(self.id), self.id.byte() });
     try writer.writeByte(self.id.byte());
@@ -56,6 +56,8 @@ pub fn write(
     try writer.writeAll(encoder.encode(@intCast(content.len)));
 
     try writer.writeAll(content);
+
+    try writer.flush();
 }
 
 pub fn parse(self: Section, gpa: Allocator, bytes: []const u8) !void {

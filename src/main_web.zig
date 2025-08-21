@@ -103,7 +103,7 @@ fn eval(input: []const u8, writer: std.io.AnyWriter) !void {
     var env: Environment = .empty;
     defer env.deinit(allocator);
 
-    var parser = Parser.init(allocator, input);
+    var parser = Parser.init(input);
 
     var program = try parser.Program(allocator);
     defer program.deinit(allocator);

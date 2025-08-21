@@ -27,10 +27,7 @@ pub fn Execute(allocator: Allocator, kind: Kind, args: []const Object) BuiltInEr
     }
 }
 
-
-
 fn len(args: []const Object) BuiltInError!Object {
-
     if (args.len != 1) return error.WrongNumberOfArgs;
 
     const arg = args[0];
@@ -53,75 +50,61 @@ fn len(args: []const Object) BuiltInError!Object {
 }
 
 fn first(args: []const Object) BuiltInError!Object {
-
     if (args.len != 1) return error.WrongNumberOfArgs;
 
     const arg = args[0];
 
     switch (arg) {
         .array => |array| {
-
             if (array.elements.len > 0) return array.elements[0];
-            
-            return Object {.nullable = {}};
 
+            return Object{ .nullable = {} };
         },
         else => return error.UnsupportedObjectType,
-
     }
 }
 
 fn last(args: []const Object) BuiltInError!Object {
-
     if (args.len != 1) return error.WrongNumberOfArgs;
 
     const arg = args[0];
 
     switch (arg) {
-            
         .array => |array| {
             const last_idx = array.elements.len;
 
             if (last_idx > 0) return array.elements[last_idx - 1];
-            
-            return Object {.nullable = {}};
+
+            return Object{ .nullable = {} };
         },
         else => return error.UnsupportedObjectType,
-
-
-
     }
 }
 
-fn push(allocator: Allocator, args: []const Object) BuiltInError!Object {
-
+fn push(gpa: Allocator, args: []const Object) BuiltInError!Object {
     if (args.len != 2) return error.WrongNumberOfArgs;
-
 
     if (args[0] != .array) return error.WrongArgType;
 
-    var new_elements = ArrayList(Object).init(allocator);
+    var new_elements: ArrayList(Object) = .empty;
     errdefer {
-        for (new_elements.items) |obj| obj.deinit(allocator);
-        new_elements.deinit();
+        for (new_elements.items) |obj| obj.deinit(gpa);
+        new_elements.deinit(gpa);
     }
 
     for (args[0].array.elements) |elem| {
-        try new_elements.append(try elem.clone(allocator));
+        try new_elements.append(gpa, try elem.clone(gpa));
     }
 
     // TODO: errdefer
-    try new_elements.append(try args[1].clone(allocator));
+    try new_elements.append(gpa, try args[1].clone(gpa));
 
-    const array_ptr = try allocator.create(object.ArrayObject);
-    errdefer allocator.destroy(array_ptr);
+    const array_ptr = try gpa.create(object.ArrayObject);
+    errdefer gpa.destroy(array_ptr);
 
-    array_ptr.* = object.ArrayObject {
-        .elements = try new_elements.toOwnedSlice(),
+    array_ptr.* = object.ArrayObject{
+        .elements = try new_elements.toOwnedSlice(gpa),
     };
 
-    return Object{
-        .array = array_ptr
-    };
-
+    return Object{ .array = array_ptr };
 }

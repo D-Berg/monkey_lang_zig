@@ -1,6 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayListUnmanaged;
+const ArrayList = std.ArrayList;
 const log = std.log.scoped(.runtime);
 
 pub const std_options: std.Options = .{
@@ -10,7 +10,9 @@ pub const std_options: std.Options = .{
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 var global_allocator = debug_allocator.allocator();
 
-const stdout = std.io.getStdOut().writer();
+var stdout_buffer: [1024]u8 = undefined;
+var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+const stdout = &stdout_writer.interface;
 
 const GC = struct {
     roots: ArrayList(*GC.Node) = .empty,
@@ -128,6 +130,7 @@ export fn __print_object(gc_node_addr: usize) void {
             stdout.print("{s}", .{obj_str.str}) catch |err| {
                 log.debug("Failed to print string, {}", .{err});
             };
+            stdout.flush() catch return;
         },
         // else => {},
     }

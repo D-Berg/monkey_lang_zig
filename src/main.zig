@@ -6,7 +6,6 @@ const print = std.debug.print;
 const log = std.log;
 const expect = std.testing.expect;
 const Allocator = std.mem.Allocator;
-const io = std.io;
 const cli_args = @import("cli_args.zig");
 const compile = @import("compiler.zig").compile;
 const Environment = @import("Environment.zig");
@@ -61,9 +60,17 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
-    const stdout = std.io.getStdOut().writer().any();
-    const stdin = std.io.getStdIn().reader().any();
-    const stderr = std.io.getStdErr().writer().any();
+    var stdin_buffer: [1024]u8 = undefined;
+    var stdout_buffer: [1024]u8 = undefined;
+    var stderr_buffer: [1024]u8 = undefined;
+
+    var stdin_reader = std.fs.File.stdin().reader(&stdin_buffer);
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+
+    const stdin = &stdin_reader.interface;
+    const stdout = &stdout_writer.interface;
+    const stderr = &stderr_writer.interface;
 
     const parsed_args = cli_args.parse(gpa, args[1..]);
     switch (parsed_args) {
@@ -79,14 +86,15 @@ pub fn main() !void {
 
 fn monkeyRepl(
     gpa: Allocator,
-    stdout: io.AnyWriter,
-    stdin: io.AnyReader,
-    stderr: io.AnyWriter,
+    stdout: *std.Io.Writer,
+    stdin: *std.Io.Reader,
+    stderr: *std.Io.Writer,
 ) !void {
     try stdout.print("Hello! This is the monkey programming language!\n", .{});
     try stdout.print("{s}\n", .{monkey});
     try stdout.print("Feel free to type in commands\n", .{});
     try stdout.print("You can exit any time by CTRL-C or typing typing in command exit\n", .{});
+    try stdout.flush();
 
     try repl.start(gpa, stdin, stdout, stderr);
 }
@@ -94,8 +102,8 @@ fn monkeyRepl(
 fn monkeyRun(
     gpa: Allocator,
     run_args: cli_args.RunArgs,
-    stdout: io.AnyWriter,
-    stderr: io.AnyWriter,
+    stdout: *std.Io.Writer,
+    stderr: *std.Io.Writer,
 ) !void {
     _ = stderr;
     const input = input: {
@@ -105,7 +113,7 @@ fn monkeyRun(
     };
     defer gpa.free(input);
 
-    var parser = Parser.init(gpa, input);
+    var parser = Parser.init(input);
     defer parser.deinit(gpa);
 
     var program = try parser.Program(gpa);
@@ -127,8 +135,8 @@ fn monkeyRun(
 fn monkeyBuild(
     gpa: Allocator,
     build_args: cli_args.BuildArgs,
-    stdout: io.AnyWriter,
-    stderr: io.AnyWriter,
+    stdout: *std.Io.Writer,
+    stderr: *std.Io.Writer,
 ) !void {
     _ = stdout;
     const input = input: {
@@ -141,7 +149,7 @@ fn monkeyBuild(
     };
     defer gpa.free(input);
 
-    var parser = Parser.init(gpa, input);
+    var parser = Parser.init(input);
     defer parser.deinit(gpa);
 
     var program = try parser.Program(gpa);
@@ -156,14 +164,13 @@ fn monkeyBuild(
     );
     defer out_file.close();
 
-    const file_writer = out_file.writer();
+    var file_writer_buffer: [1024]u8 = undefined;
+    var file_writer = out_file.writer(&file_writer_buffer);
+    const fw = &file_writer.interface;
 
-    var buffered_writer = std.io.bufferedWriter(file_writer);
-    const bw = buffered_writer.writer();
+    try compile(gpa, &program, fw);
 
-    try compile(gpa, &program, bw.any());
-
-    try buffered_writer.flush();
+    try fw.flush();
 }
 
 test "all" {

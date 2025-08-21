@@ -26,7 +26,7 @@ pub const Error = error{
     InvalidPrefixOperator,
 } || Allocator.Error;
 
-pub fn compile(gpa: Allocator, program: *Program, writer: std.io.AnyWriter) !void {
+pub fn compile(gpa: Allocator, program: *Program, writer: *std.Io.Writer) !void {
     var module: wasm.Module = .init;
     defer module.deinit(gpa);
 

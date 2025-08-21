@@ -99,7 +99,7 @@ pub fn addSection(self: *Module, id: Section.ID) void {
 
 // pub fn getGlobalByName(name: []const u8) ?*
 
-pub fn write(self: *Module, gpa: Allocator, writer: std.io.AnyWriter) !void {
+pub fn write(self: *Module, gpa: Allocator, writer: *std.Io.Writer) !void {
     try writer.writeAll(wasm.MAGIC_MODULE_HEADER[0..]);
     try writer.writeAll(wasm.MODULE_VERSION[0..]);
 
@@ -108,6 +108,8 @@ pub fn write(self: *Module, gpa: Allocator, writer: std.io.AnyWriter) !void {
     while (it.next()) |entry| {
         if (entry.value.*) |section| try section.write(gpa, writer);
     }
+
+    try writer.flush();
 }
 
 pub fn parse(self: *Module, gpa: Allocator, bytes: []const u8) !void {
