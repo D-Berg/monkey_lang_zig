@@ -11,32 +11,71 @@ const log = std.log.scoped(.Wasm);
 const STDOUT_FILENO = 1;
 const STDERR_FILENO = 2;
 
-const GenericWriter = std.io.GenericWriter(File, anyerror, File.write);
-
 // Posix "file"
-const File = struct {
+const FakeFile = struct {
     handle: i32,
 
-    fn write(self: File, bytes: []const u8) !usize {
-        const written = js_write(self.handle, @intFromPtr(bytes.ptr), bytes.len);
-
-        if (written < 0) return error.FailedToWrite;
-
-        return @intCast(written);
+    fn writer(self: *const FakeFile, buffer: []u8) Writer {
+        return Writer{ .file = self, .interface = std.Io.Writer{
+            .buffer = buffer,
+            .vtable = &.{ .drain = Writer.drain },
+        } };
     }
 
-    fn writer(self: File) GenericWriter {
-        return GenericWriter{ .context = self };
-    }
+    const Writer = struct {
+        file: *const FakeFile,
+        interface: std.Io.Writer,
+
+        fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
+            const w: *Writer = @fieldParentPtr("interface", io_w);
+
+            const buffered = io_w.buffered();
+
+            if (buffered.len != 0) {
+                const n = write(w.file.handle, buffered) catch {
+                    return error.WriteFailed;
+                };
+
+                return io_w.consume(n);
+            }
+
+            if (data.len == 0) return 0;
+
+            for (data[0 .. data.len - 1]) |buf| {
+                const n = write(w.file.handle, buf) catch {
+                    return error.WriteFailed;
+                };
+
+                return io_w.consume(n);
+            }
+
+            const pattern = data[data.len - 1];
+            if (pattern.len == 0 or splat == 0) return 0;
+
+            var n: usize = 0;
+            for (0..splat) |_| {
+                n += write(w.file.handle, pattern) catch {
+                    return error.WriteFailed;
+                };
+            }
+            return io_w.consume(n);
+        }
+    };
 };
 
-const stdout = File{
+const stdout_file = FakeFile{
     .handle = STDOUT_FILENO,
 };
+var stdout_buffer: [256]u8 = undefined;
+var stdout_writer = stdout_file.writer(&stdout_buffer);
+const stdout = &stdout_writer.interface;
 
-const stderr = File{
+const stderr_file = FakeFile{
     .handle = STDERR_FILENO,
 };
+var stderr_buffer: [256]u8 = undefined;
+var stderr_writer = stderr_file.writer(&stderr_buffer);
+const stderr = &stderr_writer.interface;
 
 pub const std_options = std.Options{
     // Set the log level to info
@@ -47,6 +86,12 @@ pub const std_options = std.Options{
 };
 
 extern fn js_write(fd: i32, buf: usize, count: usize) i32;
+
+fn write(fd: i32, bytes: []const u8) !usize {
+    const rc = js_write(fd, @intFromPtr(bytes.ptr), bytes.len);
+    if (rc < 0) return error.FailedToWrite;
+    return @intCast(rc);
+}
 
 /// Allocated u8, to be called from js
 export fn alloc(len: usize) usize {
@@ -80,8 +125,8 @@ pub fn wasmLogFn(
     // Print the message to stderr, silently ignoring any errors
     // const log_str = bufPrint(&write_buffer, prefix ++ format ++ "\n", args) catch return;
 
-    const writer = stderr.writer();
-    writer.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
+    stderr.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
+    stderr.flush() catch return;
 }
 
 export fn wasm_evaluate(input_ptr_int: usize, len: usize) usize {
@@ -89,7 +134,7 @@ export fn wasm_evaluate(input_ptr_int: usize, len: usize) usize {
     input.ptr = @ptrFromInt(input_ptr_int);
     input.len = len;
 
-    eval(input, stdout.writer().any()) catch |err| {
+    eval(input, stdout) catch |err| {
         log.err("Failed to evalutate, error: {s}", .{@errorName(err)});
         return @intFromError(err);
     };
@@ -97,7 +142,7 @@ export fn wasm_evaluate(input_ptr_int: usize, len: usize) usize {
     return 0;
 }
 
-fn eval(input: []const u8, writer: std.io.AnyWriter) !void {
+fn eval(input: []const u8, writer: *std.Io.Writer) !void {
     log.debug("got input = {s}", .{input});
 
     var env: Environment = .empty;
@@ -116,4 +161,6 @@ fn eval(input: []const u8, writer: std.io.AnyWriter) !void {
         defer allocator.free(eval_str);
         try writer.print("{s}\n", .{eval_str});
     }
+
+    try writer.flush();
 }
