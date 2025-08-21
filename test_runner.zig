@@ -7,6 +7,10 @@ pub const std_options: std.Options = .{
     .log_level = .warn,
 };
 
+var stdout_buffer: [1024]u8 = undefined;
+var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+const stdout = &stdout_writer.interface;
+
 pub fn main() !void {
     var arena_alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_alloc.deinit();
@@ -21,8 +25,6 @@ pub fn main() !void {
         if (i == 0) continue;
         try hm.put(arena, arg, arg);
     }
-
-    const stdout = std.io.getStdOut().writer();
 
     var n_tests: u32 = 0;
     var passed_tests: u32 = 0;
@@ -53,7 +55,7 @@ pub fn main() !void {
         try stdout.print("[{d:>3}/{d:<3}] ", .{ n_tests + 1, builtin.test_functions.len - 1 });
         if (result) {
             passed_tests += 1;
-            try std.fmt.format(stdout, "{s:<20} | {s:<20} | {s} | leaked: {}\n", .{
+            try stdout.print("{s:<20} | {s:<20} | {s} | leaked: {}\n", .{
                 file,
                 name,
                 passed,
@@ -61,7 +63,7 @@ pub fn main() !void {
             });
         } else |err| {
             did_fail = true;
-            try std.fmt.format(stdout, "{s:<20} | {s:<20} | {s} | leaked: {} | error: {}\n", .{
+            try stdout.print("{s:<20} | {s:<20} | {s} | leaked: {} | error: {}\n", .{
                 file,
                 name,
                 failed,
@@ -73,7 +75,7 @@ pub fn main() !void {
         n_tests += 1;
     }
 
-    try std.fmt.format(stdout, "passing: {}/{}, leaks: {}/{}\n", .{
+    try stdout.print("passing: {}/{}, leaks: {}/{}\n", .{
         passed_tests,
         n_tests,
         n_leaks,
@@ -81,6 +83,8 @@ pub fn main() !void {
     });
 
     if (did_fail) return error.TestingFailure;
+
+    try stdout.flush();
 }
 
 fn extractFile(t: std.builtin.TestFn) []const u8 {

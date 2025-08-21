@@ -689,7 +689,7 @@ fn evalDictionaryExpression(allocator: Allocator, dictionary_expression: *const 
 }
 
 fn testEval(allocator: Allocator, env: *Environment, input: []const u8) !?object.Object {
-    var parser = Parser.init(allocator, input);
+    var parser = Parser.init(input);
     defer parser.deinit(allocator);
 
     var program = try parser.Program(allocator);
@@ -908,7 +908,7 @@ test "multi input fn appl" {
     defer env.deinit(allocator);
 
     for (inputs, 0..) |inp, idx| {
-        var parser = Parser.init(allocator, inp);
+        var parser = Parser.init(inp);
         defer parser.deinit(allocator);
 
         var program = try parser.Program(allocator);

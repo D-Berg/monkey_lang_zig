@@ -87,41 +87,33 @@ fn isExit(line: []const u8) bool {
     return std.mem.eql(u8, line, exit);
 }
 
-// TODO: test repl by passing a writer and reader
-test "exit" {
-    const allocator = std.testing.allocator;
-
+fn testRepl(gpa: Allocator, input: []const u8) !void {
     var out_buffer: [300]u8 = undefined;
     var in_buffer: [300]u8 = undefined;
     var err_buffer: [300]u8 = undefined;
 
-    var stdout = std.io.fixedBufferStream(out_buffer[0..]);
-    var stdin = std.io.fixedBufferStream(in_buffer[0..]);
-    var stderr = std.io.fixedBufferStream(err_buffer[0..]);
+    var stdout = std.Io.Writer.fixed(out_buffer[0..]);
+    var stdin = std.Io.Reader.fixed(in_buffer[0..]);
+    var stderr = std.Io.Writer.fixed(err_buffer[0..]);
 
-    _ = try stdin.write("let x = 4;\nx\nexit\n");
+    @memcpy(in_buffer[0..input.len], input);
 
-    stdin.reset();
+    try start(gpa, &stdin, &stdout, &stderr);
+}
 
-    try start(allocator, stdin.reader().any(), stdout.writer().any(), stderr.writer().any());
+// TODO: test repl by passing a writer and reader
+test "exit" {
+    const gpa = std.testing.allocator;
+
+    const input = "let x = 4;\nx\nexit\n";
+
+    try testRepl(gpa, input);
 }
 
 test "failing allocator" {
-    const allocator = std.testing.failing_allocator;
+    const gpa = std.testing.failing_allocator;
+    const input = "let x = 4;\nx\nexit\n";
 
-    var out_buffer: [300]u8 = undefined;
-    var in_buffer: [300]u8 = undefined;
-    var err_buffer: [300]u8 = undefined;
-
-    var stdout = std.io.fixedBufferStream(out_buffer[0..]);
-    var stdin = std.io.fixedBufferStream(in_buffer[0..]);
-    var stderr = std.io.fixedBufferStream(err_buffer[0..]);
-
-    _ = try stdin.write("let x = 4;\nx\nexit\n");
-
-    stdin.reset();
-
-    const err = start(allocator, stdin.reader().any(), stdout.writer().any(), stderr.writer().any());
-
-    try std.testing.expectError(Allocator.Error.OutOfMemory, err);
+    const repl_res = testRepl(gpa, input);
+    try std.testing.expectError(Allocator.Error.OutOfMemory, repl_res);
 }

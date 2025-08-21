@@ -938,26 +938,26 @@ test "Infix Expression" {
 }
 
 test "Get Program String" {
-    const allocator = std.testing.allocator;
+    const gpa = std.testing.allocator;
 
-    var statements = ArrayList(Statement).init(allocator);
+    var statements = ArrayList(Statement).empty;
 
     const expr = Expression{ .identifier = .{ .token = .{ .kind = .Ident, .literal = "anotherVar" } } };
 
-    const expr_ptr = try allocator.create(Expression);
+    const expr_ptr = try gpa.create(Expression);
     expr_ptr.* = expr;
 
-    try statements.append(Statement{ .let_stmt = .{ .token = .{ .kind = .Let, .literal = "let" }, .name = Identifier{
+    try statements.append(gpa, Statement{ .let_stmt = .{ .token = .{ .kind = .Let, .literal = "let" }, .name = Identifier{
         .token = .{ .kind = .Ident, .literal = "myVar" },
     }, .value = expr_ptr } });
 
     var prog = ast.Program{
-        .statements = try statements.toOwnedSlice(),
+        .statements = try statements.toOwnedSlice(gpa),
     };
-    defer prog.deinit(allocator);
+    defer prog.deinit(gpa);
 
-    const prog_str = try prog.String(allocator);
-    defer allocator.free(prog_str);
+    const prog_str = try prog.String(gpa);
+    defer gpa.free(prog_str);
 
     try expectEqualStrings("let myVar = anotherVar;", prog_str);
 }
