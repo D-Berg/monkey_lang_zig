@@ -4,7 +4,8 @@ run-name: Update REPL
 on:
   push:
     branches:
-      - compiler # TODO: chane to main
+      - main
+      - dev
 
 
 permissions:
