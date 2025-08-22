@@ -34,11 +34,11 @@ pub fn start(
         var buffer: [258]u8 = undefined;
         var buf_writer = std.Io.Writer.fixed(&buffer);
         const line_len = try reader.streamDelimiter(&buf_writer, '\n');
-        assert(try reader.discard(.limited(1)) == 1);
+        reader.toss(1); // remove '\n'
 
         const line = buffer[0..line_len];
 
-        if (isExit(line)) break;
+        if (std.mem.eql(u8, "exit", line)) break;
 
         var parser = Parser.init(line);
         defer parser.deinit(gpa);
@@ -51,6 +51,7 @@ pub fn start(
                 for (parser.errors.items) |monkey_err| {
                     try err_writer.print("Parse Error: {s}\n", .{monkey_err.msg});
                 }
+                try err_writer.flush();
                 continue;
             },
         };
@@ -79,12 +80,6 @@ pub fn start(
 
         try writer.flush();
     }
-}
-
-fn isExit(line: []const u8) bool {
-    const exit = "exit";
-    // std.debug.print("{s}", .{line});
-    return std.mem.eql(u8, line, exit);
 }
 
 fn testRepl(gpa: Allocator, input: []const u8) !void {

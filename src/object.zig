@@ -19,6 +19,7 @@ const log = std.log.scoped(.Object);
 const Allocator = std.mem.Allocator;
 
 pub const Object = union(enum) {
+    pub const ID = enum(u32) { _ };
     integer: i64,
     boolean: bool,
     nullable,

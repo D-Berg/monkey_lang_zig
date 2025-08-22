@@ -44,7 +44,7 @@ pub const ParseError = error{
     NoPrefixFunction,
     NoInfixFunction,
     DictionaryKeyWasNotString,
-} || Allocator.Error || std.fmt.BufPrintError;
+} || Allocator.Error || std.fmt.BufPrintError || std.Io.Writer.Error;
 
 const Precedence = enum {
     Lowest,
@@ -130,13 +130,13 @@ fn parseStatement(parser: *Parser, allocator: Allocator) ParseError!Statement {
 fn parseLetStatement(parser: *Parser, allocator: Allocator) ParseError!LetStatement {
     const token = parser.current_token;
 
-    if (!try parser.expectPeek(Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
+    if (!try parser.expectPeek(allocator, Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
 
     const ident_token = parser.current_token;
 
     const identifier = Identifier{ .token = ident_token };
 
-    if (!(try parser.expectPeek(Token.Kind.Assign))) return ParseError.ExpectedNextTokenAssign;
+    if (!(try parser.expectPeek(allocator, Token.Kind.Assign))) return ParseError.ExpectedNextTokenAssign;
 
     parser.nextToken();
 
@@ -326,7 +326,7 @@ fn parseGroupedExpression(parser: *Parser, allocator: Allocator) ParseError!Expr
 
     const expr = try parser.parseExpression(allocator, .Lowest);
 
-    if (!try parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(allocator, .Rparen)) {
         return ParseError.ExpectedNextTokenRparen;
     }
 
@@ -338,16 +338,16 @@ fn parseIfExpression(parser: *Parser, allocator: Allocator) ParseError!Expressio
 
     // print("if curr_tot = {}\n", .{curr_tok.kind});
 
-    if (!try parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
+    if (!try parser.expectPeek(allocator, .Lparen)) return ParseError.ExpectedNextTokenLparen;
 
     parser.nextToken();
     const condition = try parser.parseExpression(allocator, .Lowest);
     errdefer condition.deinit(allocator);
     // print("if condition = {}\n", .{condition});
 
-    if (!try parser.expectPeek(.Rparen)) return ParseError.ExpectedNextTokenRparen;
+    if (!try parser.expectPeek(allocator, .Rparen)) return ParseError.ExpectedNextTokenRparen;
 
-    if (!try parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
+    if (!try parser.expectPeek(allocator, .Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
     const consequence = try parser.parseBlockStatement(allocator);
     errdefer consequence.deinit(allocator);
@@ -364,7 +364,7 @@ fn parseIfExpression(parser: *Parser, allocator: Allocator) ParseError!Expressio
     if (parser.peekTokenIs(.Else)) {
         parser.nextToken();
 
-        if (!try parser.expectPeek(.Lbrace)) return ParseError.ExpectedNextTokenLbrace;
+        if (!try parser.expectPeek(allocator, .Lbrace)) return ParseError.ExpectedNextTokenLbrace;
 
         alternative = try parser.parseBlockStatement(allocator);
     }
@@ -404,12 +404,12 @@ fn parseBlockStatement(parser: *Parser, gpa: Allocator) ParseError!BlockStatemen
 fn parseFunctionLiteral(parser: *Parser, allocator: Allocator) ParseError!Expression {
     const curr_tok = parser.current_token;
 
-    if (!try parser.expectPeek(.Lparen)) return ParseError.ExpectedNextTokenLparen;
+    if (!try parser.expectPeek(allocator, .Lparen)) return ParseError.ExpectedNextTokenLparen;
 
     const parameters = try parser.parseFunctionParameters(allocator);
     errdefer allocator.free(parameters);
 
-    if (!try parser.expectPeek(.Lbrace)) {
+    if (!try parser.expectPeek(allocator, .Lbrace)) {
         return ParseError.ExpectedNextTokenLbrace;
     }
 
@@ -445,7 +445,7 @@ fn parseFunctionParameters(parser: *Parser, gpa: Allocator) ParseError![]const I
         try identifiers.append(gpa, .{ .token = token });
     }
 
-    if (!try parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(gpa, .Rparen)) {
         return error.ExpectedNextTokenRparen;
     }
 
@@ -496,7 +496,7 @@ fn parseCallArguments(parser: *Parser, gpa: Allocator) ParseError![]const Expres
     }
 
     // TODO: handle if !expectpeek(.Rparent) return null
-    if (!try parser.expectPeek(.Rparen)) {
+    if (!try parser.expectPeek(gpa, .Rparen)) {
         return ParseError.ExpectedNextTokenRparen;
     }
 
@@ -538,7 +538,7 @@ fn parseArrayLiteral(parser: *Parser, gpa: Allocator) ParseError!Expression {
         try elements.append(gpa, try parser.parseExpression(gpa, .Lowest));
     }
 
-    if (!try parser.expectPeek(.Rbracket)) return error.ExpectedNextTokenRbraket;
+    if (!try parser.expectPeek(gpa, .Rbracket)) return error.ExpectedNextTokenRbraket;
 
     return Expression{ .array_literal_expr = .{
         .token = curr_tok,
@@ -566,7 +566,7 @@ fn parseDictionaryLiteral(parser: *Parser, allocator: Allocator) ParseError!Expr
 
         const key_str = key.string_expression.value;
 
-        if (!try parser.expectPeek(.Colon)) return ParseError.ExpectedNextTokenColon;
+        if (!try parser.expectPeek(allocator, .Colon)) return ParseError.ExpectedNextTokenColon;
 
         parser.nextToken(); // skip colon
 
@@ -580,12 +580,12 @@ fn parseDictionaryLiteral(parser: *Parser, allocator: Allocator) ParseError!Expr
             try hash_map.put(allocator, key_str, value);
         }
 
-        if (!parser.peekTokenIs(.Rbrace) and !try parser.expectPeek(.Comma)) {
+        if (!parser.peekTokenIs(.Rbrace) and !try parser.expectPeek(allocator, .Comma)) {
             return ParseError.ExpectedNextTokenRbrace;
         }
     }
 
-    if (!try parser.expectPeek(.Rbrace)) return ParseError.ExpectedNextTokenRbrace;
+    if (!try parser.expectPeek(allocator, .Rbrace)) return ParseError.ExpectedNextTokenRbrace;
 
     return Expression{ .dictionary = .{ .token = curr_tok, .hash_map = hash_map } };
 }
@@ -602,7 +602,7 @@ fn parseIndexExpression(parser: *Parser, allocator: Allocator, left: Expression)
     }
     index_ptr.* = try parser.parseExpression(allocator, .Lowest);
 
-    if (!try parser.expectPeek(.Rbracket)) return ParseError.ExpectedNextTokenRbraket;
+    if (!try parser.expectPeek(allocator, .Rbracket)) return ParseError.ExpectedNextTokenRbraket;
 
     const left_ptr = try allocator.create(Expression);
     left_ptr.* = left;
@@ -619,12 +619,12 @@ fn peekTokenIs(parser: *Parser, kind: Token.Kind) bool {
     return parser.peek_token.kind == kind;
 }
 
-fn expectPeek(parser: *Parser, kind: Token.Kind) ParseError!bool {
+fn expectPeek(parser: *Parser, gpa: Allocator, kind: Token.Kind) ParseError!bool {
     if (parser.peekTokenIs(kind)) {
         parser.nextToken();
         return true;
     } else {
-        try parser.peekError(kind);
+        try parser.peekError(gpa, kind);
         return false;
     }
 }
@@ -660,20 +660,19 @@ fn checkParseErrors(parser: *Parser) error{ParsingError}!void {
     if (parser.errors.items.len > 0) return error.ParsingError;
 }
 
-fn peekError(parser: *Parser, kind: Token.Kind) ParseError!void {
-    _ = parser;
-    _ = kind;
+fn peekError(parser: *Parser, gpa: Allocator, kind: Token.Kind) ParseError!void {
+    var writer = std.Io.Writer.Allocating.init(gpa);
+    errdefer writer.deinit();
 
-    // FIX:
-    // const err_str = try std.fmt.allocPrint(
-    //     gpa,
-    //     "expected next token to be {}, got {} instead",
-    //     .{ kind, parser.peek_token.kind },
-    // );
-    //
-    // const mnky_error: MonkeyError = .{ .msg = err_str };
-    //
-    // try parser.errors.append(gpa, mnky_error);
+    try writer.writer.print(
+        "expected next token to be {}, got {} instead",
+        .{ kind, parser.peek_token.kind },
+    );
+
+    const err_str = try writer.toOwnedSlice();
+    errdefer gpa.free(err_str);
+
+    try parser.errors.append(gpa, .{ .msg = err_str, .line = 0 });
 }
 
 // BUG: should append a mnky error
