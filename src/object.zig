@@ -104,94 +104,73 @@ pub const Object = union(enum) {
     }
 
     /// return string of value, str need to be deallocated by caller
-    pub fn inspect(obj: *const Object, allocator: Allocator) Allocator.Error![]const u8 {
+    pub fn inspect(obj: *const Object, out: *std.Io.Writer) !void {
         switch (obj.*) {
             .nullable => {
-                const str = try std.fmt.allocPrint(allocator, "null", .{});
-                return str;
+                try out.print("null", .{});
             },
             .string => |so| {
-                const str = try std.fmt.allocPrint(allocator, "{s}", .{so.value});
-                return str;
+                try out.print("{s}", .{so.value});
             },
             .array => |array| {
-                var array_str: ArrayList(u8) = .empty;
-                errdefer array_str.deinit(allocator);
-
-                try array_str.append(allocator, '[');
+                try out.print("{s}", .{"["});
 
                 const n_elems = array.elements.len;
 
                 for (array.elements, 0..) |elem, i| {
-                    const elem_str = try elem.inspect(allocator);
-                    defer allocator.free(elem_str);
+                    try elem.inspect(out);
 
-                    try array_str.appendSlice(allocator, elem_str);
-
-                    if (i != n_elems - 1) try array_str.appendSlice(allocator, ", ");
+                    if (i != n_elems - 1) try out.print(", ", .{});
                 }
 
-                try array_str.append(allocator, ']');
-
-                return array_str.toOwnedSlice(allocator);
+                try out.print("]", .{});
             },
             .function => |func| {
-                var string: ArrayList(u8) = .empty;
-                errdefer string.deinit(allocator);
-
-                const writer = string.writer(allocator);
-
-                try writer.print("fn ( ", .{});
+                try out.print("fn ( ", .{});
 
                 const n_params = func.params.len;
                 for (func.params, 0..) |param, i| {
-                    try writer.print("{s}", .{param.token.literal});
+                    try out.print("{s}", .{param.token.literal});
 
                     if (i + 1 < n_params) {
-                        try writer.print(", ", .{});
+                        try out.print(", ", .{});
                     } else {
-                        try writer.print(" ", .{});
+                        try out.print(" ", .{});
                     }
                 }
 
-                try string.appendSlice(allocator, ") {");
+                try out.print("{s}", .{") {"});
 
-                const body_str = try func.body.String(allocator);
-                defer allocator.free(body_str);
-
-                try string.appendSlice(allocator, body_str);
-
-                try string.appendSlice(allocator, " }");
-
-                return try string.toOwnedSlice(allocator);
+                // TODO: fix no allocation
+                // const body_str = try func.body.String(allocator);
+                // defer allocator.free(body_str);
+                //
+                // try string.appendSlice(allocator, body_str);
+                //
+                // try string.appendSlice(allocator, " }");
+                //
+                // return try string.toOwnedSlice(allocator);
             },
             .dictionary => |dict| {
-                var dict_str: ArrayList(u8) = .empty;
-                errdefer dict_str.deinit(allocator);
-
-                const writer = dict_str.writer(allocator);
-
                 const n_entries = dict.inner.size;
                 var iterator = dict.inner.iterator();
 
-                try writer.print("{s}", .{"{ "});
+                try out.print("{s}", .{"{ "});
 
                 var i: usize = 0;
-                var extra = ", ";
                 while (iterator.next()) |entry| : (i += 1) {
-                    const val_str = try entry.value_ptr.inspect(allocator);
-                    defer allocator.free(val_str);
+                    try out.print("{s}: ", .{entry.key_ptr.*});
+                    try entry.value_ptr.inspect(out);
 
-                    if (i + 1 == n_entries) extra = " }";
-
-                    try writer.print("{s}: {s}{s}", .{ entry.key_ptr.*, val_str, extra });
+                    if (i + 1 == n_entries) {
+                        try out.print("{s}", .{" }"});
+                    } else {
+                        try out.print(", ", .{});
+                    }
                 }
-
-                return try dict_str.toOwnedSlice(allocator);
             },
             inline else => |case| {
-                const str = try std.fmt.allocPrint(allocator, "{}", .{case});
-                return str;
+                try out.print("{}", .{case});
             },
         }
     }

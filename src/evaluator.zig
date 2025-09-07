@@ -60,7 +60,7 @@ pub const EvalError = error{
 } || Allocator.Error || std.fmt.BufPrintError || BuiltIn.BuiltInError;
 
 /// Returns an Object that needs to be deinitiated or null
-pub fn eval(allocator: Allocator, program: *Program, env: *Environment) EvalError!?Object {
+pub fn eval(allocator: Allocator, program: *Program, env: *Environment) EvalError!Object {
     if (std.options.log_level == .debug) {
         const prg_str = try program.String(allocator);
         defer allocator.free(prg_str);
@@ -73,8 +73,7 @@ pub fn eval(allocator: Allocator, program: *Program, env: *Environment) EvalErro
 
     log.debug("evaluating program statements", .{});
 
-    var maybe_result: ?Object = null;
-
+    var result: Object = .nullable;
     for (program.statements) |stmt| {
         if (std.options.log_level == .debug) {
             const stmt_str = try stmt.String(allocator);
@@ -82,36 +81,26 @@ pub fn eval(allocator: Allocator, program: *Program, env: *Environment) EvalErro
             log.debug("evaluating stmt: {s}", .{stmt_str});
         }
 
-        maybe_result = try evalStatement(allocator, &stmt, env);
-
-        if (maybe_result) |result| {
-            log.debug("evaluated stmt to object: {s}", .{@tagName(result)});
-
-            if (result == .return_val_obj) {
-                log.debug("got a return obj\n", .{});
-
-                defer result.return_val_obj.deinit(allocator);
-                const val = result.return_val_obj.value.*;
-
-                // print("returning obj = {}\n", .{val});
+        result = try evalStatement(allocator, &stmt, env);
+        switch (result) {
+            .return_val_obj => |*rvo| {
+                defer rvo.deinit(allocator);
+                const val = rvo.value.*;
 
                 return val;
-            }
+            },
+            else => {},
         }
-
-        log.debug("stmt evaluated to null", .{});
     }
 
-    log.debug("returning null", .{});
-
-    return maybe_result;
+    return result;
 }
 
-fn evalStatement(gpa: Allocator, stmt: *const Statement, env: *Environment) EvalError!?object.Object {
+fn evalStatement(gpa: Allocator, stmt: *const Statement, env: *Environment) EvalError!object.Object {
     switch (stmt.*) {
         .let_stmt => |*ls| {
             try evalLetStatement(gpa, ls, env);
-            return null;
+            return .nullable;
         },
         .ret_stmt => |*rs| {
             return try evalReturnStatement(gpa, rs, env);
@@ -134,15 +123,13 @@ fn evalLetStatement(gpa: Allocator, ls: *const LetStatement, env: *Environment) 
 
     log.debug("Evaluating let stmt: {s}\n", .{name});
 
-    const maybe_val = try evalExpression(gpa, ls.value, env);
-    errdefer if (maybe_val) |val| val.deinit(gpa); // deinit because store.put clones val
+    const val = try evalExpression(gpa, ls.value, env);
+    errdefer val.deinit(gpa); // deinit because store.put clones val
 
     // print("putting ident: {s} with val: {}\n", .{name, val.?});
-    //
-    if (maybe_val) |val| {
-        try env.put(gpa, name, val);
-    } else {
-        return EvalError.FailedEvalLet;
+    switch (val) {
+        .nullable => {},
+        else => try env.put(gpa, name, val),
     }
 
     // TODO: errors p.137
@@ -153,18 +140,20 @@ fn evalReturnStatement(gpa: Allocator, rs: *const ReturnStatement, env: *Environ
 
     // print("evaluating  return stmt\n", .{});
     const val = try evalExpression(gpa, rs.value, env);
-    errdefer if (val) |v| v.deinit(gpa);
+    errdefer val.deinit(gpa);
 
-    const res = try gpa.create(Object);
-    // TODO: handle null
-    res.* = val.?;
+    const val_ptr = try gpa.create(Object);
+    val_ptr.* = val;
 
     return object.Object{
-        .return_val_obj = .{ .value = res, .owner = null }, // somehow this works lol
+        .return_val_obj = .{
+            .value = val_ptr,
+            .owner = null,
+        },
     };
 }
 
-fn evalExpression(gpa: Allocator, expr: *const Expression, env: *Environment) EvalError!?object.Object {
+fn evalExpression(gpa: Allocator, expr: *const Expression, env: *Environment) EvalError!object.Object {
     switch (expr.*) {
         .identifier => |*ident| {
             return EvalIdentExpr(ident, env);
@@ -247,7 +236,7 @@ fn evalExpression(gpa: Allocator, expr: *const Expression, env: *Environment) Ev
 }
 
 /// Retrieves a cloned obj from env
-fn EvalIdentExpr(ident: *const Identifier, env: *Environment) ?Object {
+fn EvalIdentExpr(ident: *const Identifier, env: *Environment) Object {
     const ident_name = ident.token.literal;
     if (BuiltIn.getBuiltInFn(ident_name)) |built_in| {
         return Object{ .built_in = built_in };
@@ -263,7 +252,7 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) ?Object {
     } else {
         log.debug("couldn't find variable {s}", .{ident_name});
         // TODO: print error message to user to stderr
-        return null;
+        return .nullable;
     }
 }
 
@@ -294,16 +283,14 @@ fn EvalFnExpr(gpa: Allocator, env: *Environment, fl: *const FnLiteralExpression)
     };
 }
 
-fn evalCallExpression(gpa: Allocator, ce: *const CallExpression, env: *Environment) EvalError!?Object {
+fn evalCallExpression(gpa: Allocator, ce: *const CallExpression, env: *Environment) EvalError!Object {
     if (std.options.log_level == .debug) {
         const call_str = try ce.String(gpa);
         defer gpa.free(call_str);
         log.debug("calling {s}", .{call_str});
     }
 
-    const maybe_func = try evalExpression(gpa, ce.function, env);
-
-    var func = maybe_func orelse return EvalError.NullObject;
+    const func = try evalExpression(gpa, ce.function, env);
     defer func.deinit(gpa); // only deinit if fnc dont have a owner
 
     const args = try gpa.alloc(Object, ce.args.len);
@@ -316,8 +303,7 @@ fn evalCallExpression(gpa: Allocator, ce: *const CallExpression, env: *Environme
 
     // evalExpressions p.144
     for (ce.args, 0..) |*arg, i| {
-        args[i] = try evalExpression(gpa, arg, env) orelse
-            return EvalError.NullObject;
+        args[i] = try evalExpression(gpa, arg, env);
     }
 
     switch (func) {
@@ -332,7 +318,7 @@ fn evalCallExpression(gpa: Allocator, ce: *const CallExpression, env: *Environme
     }
 }
 
-fn applyFunction(gpa: Allocator, func: *FuncionObject, args: []const Object) EvalError!?Object {
+fn applyFunction(gpa: Allocator, func: *FuncionObject, args: []const Object) EvalError!Object {
     log.debug("executing func {*}\n", .{func});
     defer log.debug("finnished executing func {*}\n", .{func});
 
@@ -360,18 +346,14 @@ fn applyFunction(gpa: Allocator, func: *FuncionObject, args: []const Object) Eva
 
     // Failes on new line because BlockStatement has indices to old program
     log.debug("Evaluating functions blck stmts\n", .{});
-    const maybe_evaluated = try evalBlockStatement(gpa, &func.body, func.env);
-
-    // unwrap
-    if (maybe_evaluated) |evaluated| {
-        if (evaluated == .return_val_obj) {
-            // TODO: do I need to deinit
-            defer evaluated.return_val_obj.deinit(gpa);
-            return evaluated.return_val_obj.value.*;
-        }
+    const evaluated = try evalBlockStatement(gpa, &func.body, func.env);
+    switch (evaluated) {
+        .return_val_obj => |*rvo| {
+            defer rvo.deinit(gpa);
+            return rvo.value.*;
+        },
+        else => return evaluated,
     }
-
-    return maybe_evaluated;
 }
 
 fn evalPrefixExpr(
@@ -381,8 +363,7 @@ fn evalPrefixExpr(
 ) EvalError!Object {
     const operator = pe.token.kind;
 
-    const right = try evalExpression(gpa, pe.right, env) orelse
-        return EvalError.NullPrefix;
+    const right = try evalExpression(gpa, pe.right, env);
     defer right.deinit(gpa);
 
     switch (operator) {
@@ -429,12 +410,10 @@ fn evalInfixExpr(
 ) EvalError!object.Object {
     const operator = ie.token.kind;
 
-    const maybe_left = try evalExpression(allocator, ie.left, env);
-    const left = maybe_left orelse return EvalError.NullLeftInfix;
+    const left = try evalExpression(allocator, ie.left, env);
     defer left.deinit(allocator);
 
-    const right = try evalExpression(allocator, ie.right, env) orelse
-        return EvalError.NullRightInfix;
+    const right = try evalExpression(allocator, ie.right, env);
     defer right.deinit(allocator);
 
     if (left == .integer and right == .integer) {
@@ -557,28 +536,25 @@ fn evalBlockStatement(
     gpa: Allocator,
     block: *const ast.BlockStatement,
     env: *Environment,
-) EvalError!?object.Object {
+) EvalError!object.Object {
     log.debug("evaluating block stmts", .{});
     defer log.debug("finished evaluating block", .{});
 
-    var maybe_result: ?Object = null;
+    var result: Object = .nullable;
 
     for (block.statements) |stmt| {
-        maybe_result = try evalStatement(gpa, &stmt, env);
-
-        if (maybe_result) |result| {
-            if (result == .return_val_obj) return maybe_result;
-        }
+        result = try evalStatement(gpa, &stmt, env);
+        if (result == .return_val_obj) break;
     }
 
-    return maybe_result;
+    return result;
 }
 
 fn evalIfExpression(
     gpa: Allocator,
     if_epxr: *const ast.IfExpression,
     env: *Environment,
-) EvalError!?object.Object {
+) EvalError!object.Object {
     log.debug("evaluating if expression", .{});
 
     if (std.options.log_level == .debug) {
@@ -588,22 +564,21 @@ fn evalIfExpression(
         log.debug("if_str = '{s}'", .{if_str});
     }
 
-    const condition = try evalExpression(gpa, if_epxr.condition, env) orelse
-        return EvalError.NullIfCondition;
+    const condition = try evalExpression(gpa, if_epxr.condition, env);
 
     if (isTruthy(&condition)) {
         log.debug("is true", .{});
         return try evalBlockStatement(gpa, &if_epxr.consequence, env);
-    } else {
-        log.debug("is true", .{});
-        if (if_epxr.alternative) |alt| {
-            log.debug("evaluating alternative", .{});
-            return try evalBlockStatement(gpa, &alt, env);
-        } else {
-            log.debug("returning null object", .{});
-            return object.Object{ .nullable = {} };
-        }
     }
+
+    log.debug("is false", .{});
+    if (if_epxr.alternative) |alt| {
+        log.debug("evaluating alternative", .{});
+        return try evalBlockStatement(gpa, &alt, env);
+    }
+
+    log.debug("returning null object", .{});
+    return .nullable;
 }
 
 fn evalArrayExpression(
@@ -619,11 +594,9 @@ fn evalArrayExpression(
 
     try elements.ensureUnusedCapacity(gpa, array_expr.elements.len);
     for (array_expr.elements) |*elem| {
-        const maybe_expr = try evalExpression(gpa, elem, env);
-        if (maybe_expr) |expr| {
-            errdefer expr.deinit(gpa);
-            elements.appendAssumeCapacity(expr); // cant be null because why put let inside an array, right?!?!
-        }
+        const expr = try evalExpression(gpa, elem, env);
+        errdefer expr.deinit(gpa);
+        elements.appendAssumeCapacity(expr); // cant be null because why put let inside an array, right?!?!
     }
 
     return ArrayObject{
@@ -636,12 +609,10 @@ fn evalIndexExpression(
     ie: *const IndexExpression,
     env: *Environment,
 ) EvalError!Object {
-    const left_obj = try evalExpression(allocator, ie.left, env) orelse
-        return EvalError.NullObject;
+    const left_obj = try evalExpression(allocator, ie.left, env);
     defer left_obj.deinit(allocator);
 
-    const index_obj = try evalExpression(allocator, ie.index, env) orelse
-        return EvalError.NullObject;
+    const index_obj = try evalExpression(allocator, ie.index, env);
     defer index_obj.deinit(allocator);
 
     if (index_obj == .integer and left_obj == .array) {
@@ -711,8 +682,7 @@ fn evalDictionaryExpression(
         const key_str = try gpa.dupe(u8, entry.key_ptr.*);
         errdefer gpa.free(key_str);
 
-        const value_obj = try evalExpression(gpa, entry.value_ptr, env) orelse
-            return EvalError.NullObject;
+        const value_obj = try evalExpression(gpa, entry.value_ptr, env);
         errdefer value_obj.destroy(gpa);
 
         switch (value_obj) {

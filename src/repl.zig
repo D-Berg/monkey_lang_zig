@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const assert = std.debug.assert;
 const Lexer = @import("Lexer.zig");
 const Token = @import("Token.zig");
@@ -20,21 +21,21 @@ const buffer_size = 256;
 // TODO: save lines in a list
 pub fn start(
     gpa: Allocator,
-    reader: *std.Io.Reader,
-    writer: *std.Io.Writer,
-    err_writer: *std.Io.Writer,
+    in: *std.Io.Reader,
+    out: *std.Io.Writer,
+    err_out: *std.Io.Writer,
 ) !void {
     var env: Environment = .empty;
     defer env.deinit(gpa);
 
     while (true) {
-        try writer.print("{s}", .{prompt});
-        try writer.flush();
+        try out.print("{s}", .{prompt});
+        try out.flush();
 
         var buffer: [258]u8 = undefined;
         var buf_writer = std.Io.Writer.fixed(&buffer);
-        const line_len = try reader.streamDelimiter(&buf_writer, '\n');
-        reader.toss(1); // remove '\n'
+        const line_len = try in.streamDelimiter(&buf_writer, '\n');
+        in.toss(1); // remove '\n'
 
         const line = buffer[0..line_len];
 
@@ -49,9 +50,9 @@ pub fn start(
             },
             else => {
                 for (parser.errors.items) |monkey_err| {
-                    try err_writer.print("Parse Error: {s}\n", .{monkey_err.msg});
+                    try err_out.print("Parse Error: {s}\n", .{monkey_err.msg});
                 }
-                try err_writer.flush();
+                try err_out.flush();
                 continue;
             },
         };
@@ -62,13 +63,14 @@ pub fn start(
 
         // std.debug.print("Program: {s}\n", .{prog_str});
 
-        const maybe_evaluated = try evaluator.eval(gpa, &program, &env);
-
-        if (maybe_evaluated) |evaluated| {
-            defer evaluated.deinit(gpa);
-            const eval_str = try evaluated.inspect(gpa);
-            defer gpa.free(eval_str);
-            try writer.print("{s}\n", .{eval_str});
+        switch (try evaluator.eval(gpa, &program, &env)) {
+            .nullable => if (builtin.mode == .Debug) std.debug.print("null\n", .{}),
+            else => |evaluated| {
+                defer evaluated.deinit(gpa);
+                try evaluated.inspect(out);
+                try out.print("\n", .{});
+                try out.flush();
+            },
         }
 
         if (std.options.log_level == .debug) env.print();
@@ -78,7 +80,7 @@ pub fn start(
         //     std.debug.print("Token: {any}, {s}\n", .{tok.kind, tok.tokenLiteral()});
         // }
 
-        try writer.flush();
+        try out.flush();
     }
 }
 

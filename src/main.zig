@@ -102,10 +102,10 @@ fn monkeyRepl(
 fn monkeyRun(
     gpa: Allocator,
     run_args: cli_args.RunArgs,
-    stdout: *std.Io.Writer,
-    stderr: *std.Io.Writer,
+    out: *std.Io.Writer,
+    out_err: *std.Io.Writer,
 ) !void {
-    _ = stderr;
+    _ = out_err;
     const input = input: {
         const file = try std.fs.cwd().openFile(run_args.path, .{});
         defer file.close();
@@ -122,13 +122,14 @@ fn monkeyRun(
     var env: Environment = .empty;
     defer env.deinit(gpa);
 
-    const maybe_evaluated = try evaluator.eval(gpa, &program, &env);
-
-    if (maybe_evaluated) |evaluated| {
-        defer evaluated.deinit(gpa);
-        const eval_str = try evaluated.inspect(gpa);
-        defer gpa.free(eval_str);
-        try stdout.print("{s}\n", .{eval_str});
+    switch (try evaluator.eval(gpa, &program, &env)) {
+        .nullable => if (builtin.mode == .Debug) std.debug.print("null\n", .{}),
+        else => |evaluated| {
+            defer evaluated.deinit(gpa);
+            try evaluated.inspect(out);
+            try out.print("\n", .{});
+            try out.flush();
+        },
     }
 }
 
