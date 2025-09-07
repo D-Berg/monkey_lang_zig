@@ -617,11 +617,12 @@ fn evalArrayExpression(
         elements.deinit(gpa);
     }
 
+    try elements.ensureUnusedCapacity(gpa, array_expr.elements.len);
     for (array_expr.elements) |*elem| {
         const maybe_expr = try evalExpression(gpa, elem, env);
         if (maybe_expr) |expr| {
             errdefer expr.deinit(gpa);
-            try elements.append(gpa, expr); // cant be null because why put let inside an array, right?!?!
+            elements.appendAssumeCapacity(expr); // cant be null because why put let inside an array, right?!?!
         }
     }
 
