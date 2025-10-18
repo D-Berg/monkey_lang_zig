@@ -92,12 +92,12 @@ fn push(gpa: Allocator, args: []const Object) BuiltInError!Object {
         new_elements.deinit(gpa);
     }
 
+    try new_elements.ensureUnusedCapacity(gpa, args[0].array.elements.len + 1);
     for (args[0].array.elements) |elem| {
-        try new_elements.append(gpa, try elem.clone(gpa));
+        new_elements.appendAssumeCapacity(try elem.clone(gpa));
     }
 
-    // TODO: errdefer
-    try new_elements.append(gpa, try args[1].clone(gpa));
+    new_elements.appendAssumeCapacity(try args[1].clone(gpa));
 
     const array_ptr = try gpa.create(object.ArrayObject);
     errdefer gpa.destroy(array_ptr);
