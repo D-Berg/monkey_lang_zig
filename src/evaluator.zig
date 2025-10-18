@@ -735,8 +735,7 @@ test "Eval Int expr" {
         var env: Environment = .empty;
         defer env.deinit(allocator);
 
-        const evaluated = try testEval(allocator, &env, inp) orelse
-            return error.NullObject;
+        const evaluated = try testEval(allocator, &env, inp);
         defer evaluated.deinit(allocator);
 
         expect(evaluated.integer == ans) catch |err| {
@@ -748,86 +747,39 @@ test "Eval Int expr" {
 }
 
 test "Eval bool expr" {
-    const allocator = std.testing.allocator;
-
     const inputs = [_][]const u8{
-        "true",
-        "false",
-        "1 < 2",
-        "1 > 2",
-        "1 < 1",
-        "1 > 1",
-        "1 == 1",
-        "1 != 1",
-        "1 == 2",
-        "1 != 2",
-        "true == true",
-        "false == false",
-        "true == false",
-        "true != false",
-        "false != true",
-        "(1 < 2) == true",
-        "(1 < 2) == false",
-        "(1 > 2) == true",
-        "(1 > 2) == false",
+        "true",             "false",           "1 < 2",            "1 > 2",
+        "1 < 1",            "1 > 1",           "1 == 1",           "1 != 1",
+        "1 == 2",           "1 != 2",          "true == true",     "false == false",
+        "true == false",    "true != false",   "false != true",    "(1 < 2) == true",
+        "(1 < 2) == false", "(1 > 2) == true", "(1 > 2) == false",
     };
 
-    const answers = [_]bool{
-        true,
-        false,
-        true,
-        false,
-        false,
-        false,
-        true,
-        false,
-        false,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        true,
-        false,
-        false,
-        true,
+    const answers = [_][]const u8{
+        "true",  "false", "true", "false",
+        "false", "false", "true", "false",
+        "false", "true",  "true", "true",
+        "false", "true",  "true", "true",
+        "false", "false", "true",
     };
 
     for (inputs, answers) |inp, ans| {
-        var env: Environment = .empty;
-        defer env.deinit(allocator);
-
-        const evaluated = try testEval(allocator, &env, inp) orelse
-            return EvalError.NullObject;
-        defer evaluated.deinit(allocator);
-
-        expect(evaluated.boolean == ans) catch |err| {
-            print("{s}\n", .{inp});
-            print("Expected {}, got {}\n", .{ ans, evaluated.boolean });
-            return err;
-        };
+        try testEvaluation(inp, ans);
     }
 }
 
 test "Bang(!) operator" {
-    const allocator = std.testing.allocator;
-
     const inputs = [_][]const u8{
         "!true",  "!false",  "!5",
         "!!true", "!!false", "!!5",
     };
-    const answers = [_]bool{ false, true, false, true, false, true };
+    const answers = [_][]const u8{
+        "false", "true",  "false",
+        "true",  "false", "true",
+    };
 
     for (inputs, answers) |inp, ans| {
-        var env: Environment = .empty;
-        defer env.deinit(allocator);
-
-        const evaluated = try testEval(allocator, &env, inp) orelse
-            return EvalError.NullObject;
-        defer evaluated.deinit(allocator);
-
-        try expect(evaluated.boolean == ans);
+        try testEvaluation(inp, ans);
     }
 }
 
@@ -857,8 +809,7 @@ test "eval if expr" {
         var env: Environment = .empty;
         defer env.deinit(allocator);
 
-        const evaluated = try testEval(allocator, &env, inp) orelse
-            return EvalError.NullObject;
+        const evaluated = try testEval(allocator, &env, inp);
         defer evaluated.deinit(allocator);
 
         switch (evaluated) {
@@ -892,8 +843,7 @@ test "Eval return stmt" {
         var env: Environment = .empty;
         defer env.deinit(allocator);
 
-        const evaluated = try testEval(allocator, &env, inp) orelse
-            return EvalError.NullObject;
+        const evaluated = try testEval(allocator, &env, inp);
         defer evaluated.deinit(allocator);
 
         expect(answer == evaluated.integer) catch |err| {
@@ -918,8 +868,7 @@ test "Eval Let stmt" {
         var env: Environment = .empty;
         defer env.deinit(allocator);
 
-        const evaluated = try testEval(allocator, &env, inp) orelse
-            return EvalError.NullObject;
+        const evaluated = try testEval(allocator, &env, inp);
         defer evaluated.deinit(allocator);
 
         expect(ans == evaluated.integer) catch |err| {
@@ -937,8 +886,7 @@ test "func object" {
     var env: Environment = .empty;
     defer env.deinit(allocator);
 
-    const evaluated = try testEval(allocator, &env, input) orelse
-        return EvalError.NullObject;
+    const evaluated = try testEval(allocator, &env, input);
     defer evaluated.deinit(allocator);
 
     try expect(evaluated == .function);
@@ -970,8 +918,7 @@ test "func application" {
         var env: Environment = .empty;
         defer env.deinit(allocator);
 
-        const evaluated = try testEval(allocator, &env, inp) orelse
-            return EvalError.NullObject;
+        const evaluated = try testEval(allocator, &env, inp);
         defer evaluated.deinit(allocator);
 
         expect(ans == evaluated.integer) catch |err| {
@@ -1005,7 +952,7 @@ test "multi input fn appl" {
 
         if (idx == 0) {
             expect(evaluated == .nullable) catch |err| {
-                print("expected null, got {?}\n", .{evaluated});
+                print("expected null, got {f}\n", .{evaluated});
 
                 return err;
             };
@@ -1013,7 +960,7 @@ test "multi input fn appl" {
 
         if (idx == 1) {
             expect(evaluated == .integer) catch |err| {
-                print("expected integer, got {?}\n", .{evaluated});
+                print("expected integer, got {f}\n", .{evaluated});
 
                 return err;
             };
@@ -1037,16 +984,11 @@ test "Closures" {
     var env: Environment = .empty;
     defer env.deinit(allocator);
 
-    const maybe_eval = try testEval(allocator, &env, input);
+    const evaluated = try testEval(allocator, &env, input);
+    defer evaluated.deinit(allocator);
 
-    if (maybe_eval) |evaluated| {
-        defer evaluated.deinit(allocator);
-        try expect(evaluated == .integer);
-        try expectEqual(4, evaluated.integer);
-    } else {
-        print("got null back\n", .{});
-        return error.FailedEvalLet;
-    }
+    try expect(evaluated == .integer);
+    try expectEqual(4, evaluated.integer);
 }
 
 test "eval counter p.150" {
