@@ -3,7 +3,7 @@ const std = @import("std");
 const ast = @import("../ast.zig");
 const Environment = @import("../Environment.zig");
 
-const log = std.log.scoped(.@"FunctionObject");
+const log = std.log.scoped(.FunctionObject);
 const Allocator = std.mem.Allocator;
 
 const Identifier = ast.Identifier;
@@ -14,7 +14,7 @@ const FunctionObject = @This();
 params: []const Identifier,
 body: BlockStatement,
 env: *Environment,
-rc: usize = 0, 
+rc: usize = 0,
 
 pub fn deinit(func_obj: *const FunctionObject, allocator: Allocator) void {
 
@@ -30,28 +30,25 @@ pub fn deinit(func_obj: *const FunctionObject, allocator: Allocator) void {
         log.debug("deiniting fn body", .{});
         func_obj.body.deinit(allocator);
 
-
-
         log.debug("allocator: freeing fn params", .{});
         for (func_obj.params) |p| allocator.free(p.token.literal);
         allocator.free(func_obj.params);
 
         log.debug("trying to deinit env, {*}", .{func_obj.env});
-        
+
         var current_env = func_obj.env;
         var n_destroyed: usize = 0;
         while (current_env.outer) |outer| : (n_destroyed += 1) {
             log.debug("had outer", .{});
-            log.debug("deinits func objects enclosed env: {*}({})\n", .{current_env, current_env.kind});
+            log.debug("deinits func objects enclosed env: {*}({})\n", .{ current_env, current_env.kind });
             if (current_env.rc > 0) current_env.rc -= 1;
             current_env.deinit(allocator);
-            log.debug("allocator: destroying {*}({})", .{current_env, current_env.kind});
+            log.debug("allocator: destroying {*}({})", .{ current_env, current_env.kind });
             if (current_env.rc == 0) allocator.destroy(current_env);
             current_env = outer;
-            log.debug("updated current_env to {*}({})", .{current_env, current_env.kind});
-        } 
+            log.debug("updated current_env to {*}({})", .{ current_env, current_env.kind });
+        }
         log.debug("destroyed {} environments", .{n_destroyed});
-
     } else {
         log.debug("didnt deinits fnc_obj {*} since its referenced by {} other objects\n", .{ func_obj, func_obj.rc });
     }
@@ -111,4 +108,17 @@ pub fn String(fo: *const FunctionObject) Allocator.Error![]const u8 {
         return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {*}", .{ n_params, fo.env, outer });
     }
     return try std.fmt.allocPrint(fo.allocator, "fn object: p: {}, env: {*}, outer_env: {?}", .{ n_params, fo.env, fo.env.outer });
+}
+
+pub fn format(
+    self: FunctionObject,
+    writer: *std.Io.Writer,
+) std.Io.Writer.Error!void {
+    try writer.print("fn (", .{});
+    for (self.params, 0..) |param, i| {
+        try writer.print("{s}", .{param.tokenLiteral()});
+        if (i + 1 < self.params.len) try writer.print(", ", .{});
+    }
+    try writer.print(")", .{});
+    try writer.print("{{ {f} }}", .{self.body});
 }

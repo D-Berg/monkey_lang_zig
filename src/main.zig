@@ -122,15 +122,11 @@ fn monkeyRun(
     var env: Environment = .empty;
     defer env.deinit(gpa);
 
-    switch (try evaluator.eval(gpa, &program, &env)) {
-        .nullable => if (builtin.mode == .Debug) std.debug.print("null\n", .{}),
-        else => |evaluated| {
-            defer evaluated.deinit(gpa);
-            try evaluated.inspect(out);
-            try out.print("\n", .{});
-            try out.flush();
-        },
-    }
+    const evaluated = try evaluator.eval(gpa, &program, &env);
+    defer evaluated.deinit(gpa);
+
+    try out.print("{f}\n", .{evaluated});
+    try out.flush();
 }
 
 fn monkeyBuild(

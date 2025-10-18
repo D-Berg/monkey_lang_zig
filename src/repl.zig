@@ -67,8 +67,7 @@ pub fn start(
             .nullable => if (builtin.mode == .Debug) std.debug.print("null\n", .{}),
             else => |evaluated| {
                 defer evaluated.deinit(gpa);
-                try evaluated.inspect(out);
-                try out.print("\n", .{});
+                try out.print("{f}\n", .{evaluated});
                 try out.flush();
             },
         }

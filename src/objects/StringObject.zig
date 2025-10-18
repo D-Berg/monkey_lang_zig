@@ -14,7 +14,6 @@ pub fn deinit(so: *const StringObject, allocator: Allocator) void {
 }
 
 pub fn clone(so: *const StringObject, allocator: Allocator) Allocator.Error!Object {
-
     const new_val = try allocator.alloc(u8, so.value.len);
     errdefer allocator.free(new_val);
 
@@ -27,8 +26,9 @@ pub fn clone(so: *const StringObject, allocator: Allocator) Allocator.Error!Obje
         .value = new_val,
     };
 
-    return Object{
-        .string = str_ptr
-    };
+    return Object{ .string = str_ptr };
+}
 
+pub fn format(self: StringObject, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    try writer.print("{s}", .{self.value});
 }

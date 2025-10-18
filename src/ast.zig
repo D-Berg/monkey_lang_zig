@@ -47,6 +47,12 @@ pub const Statement = union(enum) {
             inline else => |case| return try case.String(allocator),
         }
     }
+
+    pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        switch (self) {
+            inline else => |case| try writer.print("{f}", .{case}),
+        }
+    }
 };
 
 // Statements
@@ -83,6 +89,13 @@ pub const LetStatement = struct {
 
         return str;
     }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("let = {s} = {f}", .{ self.name.tokenLiteral(), self.value.* });
+    }
 };
 
 pub const ReturnStatement = struct {
@@ -113,6 +126,12 @@ pub const ReturnStatement = struct {
         const str = try std.fmt.allocPrint(allocator, "return {s};", .{val_str});
         return str;
     }
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("return {f};", .{self.value});
+    }
 };
 
 pub const ExpressionStatement = struct {
@@ -133,6 +152,16 @@ pub const ExpressionStatement = struct {
 
     pub fn String(es: *const ExpressionStatement, allocator: Allocator) Allocator.Error![]const u8 {
         return try es.expression.String(allocator);
+    }
+
+    pub fn print(es: *const ExpressionStatement, out: *std.Io.Writer) !void {
+        try es.expression.print(out);
+    }
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("{f}", .{self.expression});
     }
 };
 
@@ -177,6 +206,15 @@ pub const BlockStatement = struct {
         }
 
         return try bs_str.toOwnedSlice(allocator);
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        for (self.statements) |stmt| {
+            try writer.print("{f}", .{stmt});
+        }
     }
 };
 
@@ -226,6 +264,12 @@ pub const Expression = union(enum) {
             },
         }
     }
+
+    pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        switch (self) {
+            inline else => |case| try writer.print("{f}", .{case}),
+        }
+    }
 };
 
 // TODO: check if need to be public
@@ -237,6 +281,10 @@ pub const IntegerLiteralExpression = struct {
         const str = try std.fmt.allocPrint(allocator, "{}", .{ile.value});
         return str;
     }
+
+    pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        try writer.print("{d}", .{self.value});
+    }
 };
 
 pub const BooleanLiteralExpression = struct {
@@ -246,6 +294,10 @@ pub const BooleanLiteralExpression = struct {
     pub fn String(ble: *const BooleanLiteralExpression, allocator: Allocator) Allocator.Error![]const u8 {
         const str = try std.fmt.allocPrint(allocator, "{}", .{ble.value});
         return str;
+    }
+
+    pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        try writer.print("{}", .{self.value});
     }
 };
 
@@ -274,6 +326,13 @@ pub const PrefixExpression = struct {
         defer allocator.free(right_str);
 
         return try std.fmt.allocPrint(allocator, "({s}{s})", .{ pe.token.literal, right_str });
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("({s}{f})", .{ self.token.literal, self.right });
     }
 };
 
@@ -312,8 +371,10 @@ pub const InfixExpression = struct {
 
         return try std.fmt.allocPrint(allocator, "({s} {s} {s})", .{ left_str, ie.token.literal, right_str });
     }
-    // TODO add string method
 
+    pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        try writer.print("({f} {s} {f}", .{ self.left, self.token.literal, self.right });
+    }
 };
 
 // Need dealloc
@@ -353,6 +414,18 @@ pub const IfExpression = struct {
         } };
     }
 
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        const l_b = "{";
+        const r_b = "}";
+        try writer.print("if ({f}) {s} {f} {s}", .{ self.condition, l_b, self.consequence, r_b });
+        if (self.alternative) |alt| {
+            try writer.print(" else {s} {f} {s}", .{ l_b, alt, r_b });
+        }
+    }
+
     pub fn String(if_expr: *const IfExpression, allocator: Allocator) Allocator.Error![]const u8 {
         const condition_str = try if_expr.condition.String(allocator);
         defer allocator.free(condition_str);
@@ -367,13 +440,13 @@ pub const IfExpression = struct {
             const alt_str = try alt.String(allocator);
             defer allocator.free(alt_str);
 
-            const format = "if ({s}) {s} {s} {s} else {s} {s} {s}";
+            const fmt = "if ({s}) {s} {s} {s} else {s} {s} {s}";
 
-            return try std.fmt.allocPrint(allocator, format, .{ condition_str, l_b, consequence_str, r_b, l_b, alt_str, r_b });
+            return try std.fmt.allocPrint(allocator, fmt, .{ condition_str, l_b, consequence_str, r_b, l_b, alt_str, r_b });
         } else {
-            const format = "if ({s}) {s} {s} {s}";
+            const fmt = "if ({s}) {s} {s} {s}";
 
-            return try std.fmt.allocPrint(allocator, format, .{ condition_str, l_b, consequence_str, r_b });
+            return try std.fmt.allocPrint(allocator, fmt, .{ condition_str, l_b, consequence_str, r_b });
         }
     }
 };
@@ -405,6 +478,20 @@ pub const FnLiteralExpression = struct {
             .body = cloned_body,
             .parameters = try parameters.toOwnedSlice(allocator),
         } };
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("fn (", .{});
+        for (self.parameters, 0..) |param, i| {
+            try writer.print("{s}", .{param.token.literal});
+            if (i + 1 < self.parameters.len) try writer.print(" ,", .{});
+        }
+        try writer.print(") {{", .{});
+        try writer.print("{f}", .{self.body});
+        try writer.print("}}", .{});
     }
 
     // TODO: use ArrayList(u8)
@@ -503,6 +590,18 @@ pub const CallExpression = struct {
 
         return result_str.toOwnedSlice(allocator);
     }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("{s}(", .{self.token.literal});
+        for (self.args, 0..) |arg, i| {
+            try writer.print("{f}", .{arg});
+            if (i + 1 < self.args.len) try writer.print(", ", .{});
+        }
+        try writer.print(")", .{});
+    }
 };
 
 /// Does not manage allocation of value
@@ -521,6 +620,13 @@ pub const StringExpression = struct {
         const str = try allocator.alloc(u8, se.token.literal.len);
         @memcpy(str, se.value);
         return str;
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("{s}", .{self.value});
     }
 };
 
@@ -560,6 +666,18 @@ pub const ArrayLiteralExpression = struct {
         try elem_str.append(allocator, ']');
 
         return try elem_str.toOwnedSlice(allocator);
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("[", .{});
+        for (self.elements, 0..) |e, i| {
+            try writer.print("{f}", .{e});
+            if (i + 1 < self.elements.len) try writer.print(", ", .{});
+        }
+        try writer.print("]", .{});
     }
 };
 
@@ -611,6 +729,21 @@ pub const DictionaryExpression = struct {
         return try str.toOwnedSlice(allocator);
     }
 
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("{{ ", .{});
+        var it = self.hash_map.iterator();
+        var i: usize = 0;
+        const len = self.hash_map.size;
+        while (it.next()) |entry| : (i += 1) {
+            try writer.print("{s}: {f}", .{ entry.key_ptr.*, entry.value_ptr.* });
+            if (i + 1 < len) try writer.print(", ", .{});
+        }
+        try writer.print("}}", .{});
+    }
+
     fn clone(dictionary: *const DictionaryExpression, allocator: Allocator) Allocator.Error!Expression {
         _ = allocator;
 
@@ -650,6 +783,13 @@ pub const IndexExpression = struct {
 
         return try std.fmt.allocPrint(allocator, "({s}[{s}])", .{ left_str, index_str });
     }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("{f}[{f}]", .{ self.left, self.index });
+    }
 };
 
 // Identifier --------------------------------------------------------------
@@ -662,6 +802,13 @@ pub const Identifier = struct {
 
     pub fn String(ident: *const Identifier, allocator: Allocator) Allocator.Error![]const u8 {
         return try std.fmt.allocPrint(allocator, "{s}", .{ident.token.literal});
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("{s}", .{self.token.literal});
     }
 };
 

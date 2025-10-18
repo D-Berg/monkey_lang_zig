@@ -28,3 +28,10 @@ pub fn clone(ro: *const ReturnObject, allocator: Allocator) Allocator.Error!Obje
         .owner = ro.owner,
     } };
 }
+
+pub fn format(
+    self: ReturnObject,
+    writer: *std.Io.Writer,
+) std.Io.Writer.Error!void {
+    try writer.print("{f}", .{self.value});
+}

@@ -103,74 +103,16 @@ pub const Object = union(enum) {
         }
     }
 
-    /// return string of value, str need to be deallocated by caller
-    pub fn inspect(obj: *const Object, out: *std.Io.Writer) !void {
-        switch (obj.*) {
-            .nullable => {
-                try out.print("null", .{});
-            },
-            .string => |so| {
-                try out.print("{s}", .{so.value});
-            },
-            .array => |array| {
-                try out.print("{s}", .{"["});
-
-                const n_elems = array.elements.len;
-
-                for (array.elements, 0..) |elem, i| {
-                    try elem.inspect(out);
-
-                    if (i != n_elems - 1) try out.print(", ", .{});
-                }
-
-                try out.print("]", .{});
-            },
-            .function => |func| {
-                try out.print("fn ( ", .{});
-
-                const n_params = func.params.len;
-                for (func.params, 0..) |param, i| {
-                    try out.print("{s}", .{param.token.literal});
-
-                    if (i + 1 < n_params) {
-                        try out.print(", ", .{});
-                    } else {
-                        try out.print(" ", .{});
-                    }
-                }
-
-                try out.print("{s}", .{") {"});
-
-                // TODO: fix no allocation
-                // const body_str = try func.body.String(allocator);
-                // defer allocator.free(body_str);
-                //
-                // try string.appendSlice(allocator, body_str);
-                //
-                // try string.appendSlice(allocator, " }");
-                //
-                // return try string.toOwnedSlice(allocator);
-            },
-            .dictionary => |dict| {
-                const n_entries = dict.inner.size;
-                var iterator = dict.inner.iterator();
-
-                try out.print("{s}", .{"{ "});
-
-                var i: usize = 0;
-                while (iterator.next()) |entry| : (i += 1) {
-                    try out.print("{s}: ", .{entry.key_ptr.*});
-                    try entry.value_ptr.inspect(out);
-
-                    if (i + 1 == n_entries) {
-                        try out.print("{s}", .{" }"});
-                    } else {
-                        try out.print(", ", .{});
-                    }
-                }
-            },
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        switch (self) {
+            .nullable => if (@import("builtin").mode == .Debug) try writer.print("null", .{}),
+            inline .integer, .boolean => |val| try writer.print("{}", .{val}),
+            inline .built_in => |built_in| try writer.print("{t}", .{built_in}),
             inline else => |case| {
-                try out.print("{}", .{case});
+                try writer.print("{f}", .{case});
             },
         }
     }
@@ -193,5 +135,17 @@ pub const ArrayObject = struct {
         _ = allocator;
         _ = ao;
         @panic("clone for ArrayObject not implemented");
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try writer.print("[", .{});
+        for (self.elements, 0..) |e, i| {
+            try writer.print("{f}", .{e});
+            if (i + 1 != self.elements.len) try writer.print(", ", .{});
+        }
+        try writer.print("]", .{});
     }
 };

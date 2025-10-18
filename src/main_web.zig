@@ -153,14 +153,9 @@ fn eval(input: []const u8, writer: *std.Io.Writer) !void {
     var program = try parser.Program(allocator);
     defer program.deinit(allocator);
 
-    const maybe_evaluated = try evaluator.eval(allocator, &program, &env);
+    const evaluated = try evaluator.eval(allocator, &program, &env);
+    defer evaluated.deinit(allocator);
 
-    if (maybe_evaluated) |evaluated| {
-        defer evaluated.deinit(allocator);
-        const eval_str = try evaluated.inspect(allocator);
-        defer allocator.free(eval_str);
-        try writer.print("{s}\n", .{eval_str});
-    }
-
+    try writer.print("{f}\n", .{evaluated});
     try writer.flush();
 }

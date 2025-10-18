@@ -699,7 +699,7 @@ fn evalDictionaryExpression(
     return DictionaryObject{ .inner = object_hm, .rc = 0 };
 }
 
-fn testEval(allocator: Allocator, env: *Environment, input: []const u8) !?object.Object {
+fn testEval(allocator: Allocator, env: *Environment, input: []const u8) !object.Object {
     var parser = Parser.init(input);
     defer parser.deinit(allocator);
 
@@ -1001,10 +1001,10 @@ test "multi input fn appl" {
         defer program.deinit(allocator);
 
         const evaluated = try eval(allocator, &program, &env);
-        defer if (evaluated) |e| e.deinit(allocator);
+        defer evaluated.deinit(allocator);
 
         if (idx == 0) {
-            expect(evaluated == null) catch |err| {
+            expect(evaluated == .nullable) catch |err| {
                 print("expected null, got {?}\n", .{evaluated});
 
                 return err;
@@ -1012,7 +1012,7 @@ test "multi input fn appl" {
         }
 
         if (idx == 1) {
-            expect(evaluated.? == .integer) catch |err| {
+            expect(evaluated == .integer) catch |err| {
                 print("expected integer, got {?}\n", .{evaluated});
 
                 return err;
@@ -1051,7 +1051,6 @@ test "Closures" {
 
 test "eval counter p.150" {
     std.testing.log_level = .debug;
-    const allocator = std.testing.allocator;
 
     const input =
         \\let counter = fn(x) { 
@@ -1065,42 +1064,15 @@ test "eval counter p.150" {
         \\counter(0);
     ;
 
-    var env: Environment = .empty;
-    defer env.deinit(allocator);
-    const maybe_eval = try testEval(allocator, &env, input);
-
-    if (maybe_eval) |evaluated| {
-        defer evaluated.deinit(allocator);
-        try expect(evaluated.boolean);
-    } else {
-        return error.FailedEvalLet;
-    }
+    try testEvaluation(input, "true");
 }
 
 test "String" {
-    const allocator = std.testing.allocator;
-
     const input =
         \\let greeting = "Hello world!";
         \\greeting
     ;
-
-    var env: Environment = .empty;
-    defer env.deinit(allocator);
-
-    const maybe_eval = try testEval(allocator, &env, input);
-
-    if (maybe_eval) |evaluated| {
-        defer evaluated.deinit(allocator);
-        try expect(evaluated == .string);
-
-        const eval_str = try evaluated.inspect(allocator);
-        defer allocator.free(eval_str);
-
-        try expectEqualStrings("Hello world!", eval_str);
-    } else {
-        return error.FailedEvalString;
-    }
+    try testEvaluation(input, "Hello world!");
 }
 
 test "String concat" {
@@ -1113,47 +1085,43 @@ test "String concat" {
     var env: Environment = .empty;
     defer env.deinit(allocator);
 
-    const maybe_eval = try testEval(allocator, &env, input);
+    const evaluated = try testEval(allocator, &env, input);
+    defer evaluated.deinit(allocator);
 
-    if (maybe_eval) |evaluated| {
-        defer evaluated.deinit(allocator);
-        try expect(evaluated == .string);
+    try expect(evaluated == .string);
 
-        const eval_str = try evaluated.inspect(allocator);
-        defer allocator.free(eval_str);
+    var wa = std.Io.Writer.Allocating.init(allocator);
+    defer wa.deinit();
 
-        try expectEqualStrings("Hello World!", eval_str);
-    } else {
-        return error.FailedEvalString;
-    }
+    try wa.writer.print("{f}", .{evaluated});
+    try wa.writer.flush();
+
+    try expectEqualStrings("Hello World!", wa.written());
+}
+
+fn testEvaluation(input: []const u8, expected_str: []const u8) !void {
+    const gpa = std.testing.allocator;
+
+    var env: Environment = .empty;
+    defer env.deinit(gpa);
+
+    const evaluated = try testEval(gpa, &env, input);
+    defer evaluated.deinit(gpa);
+
+    var wa = std.Io.Writer.Allocating.init(gpa);
+    defer wa.deinit();
+
+    try wa.writer.print("{f}", .{evaluated});
+    try wa.writer.flush();
+
+    try expectEqualStrings(expected_str, wa.written());
 }
 
 test "Array Lit" {
-    const allocator = std.testing.allocator;
-
-    const input = "[1, 2 * 2, 3 + 3]";
-
-    var env: Environment = .empty;
-    defer env.deinit(allocator);
-
-    const maybe_eval = try testEval(allocator, &env, input);
-
-    if (maybe_eval) |evaluated| {
-        defer evaluated.deinit(allocator);
-        try expect(evaluated == .array);
-
-        const eval_str = try evaluated.inspect(allocator);
-        defer allocator.free(eval_str);
-
-        try expectEqualStrings("[1, 4, 6]", eval_str);
-    } else {
-        return error.FailedEvalString;
-    }
+    try testEvaluation("[1, 2 * 2, 3 + 3]", "[1, 4, 6]");
 }
 
 test "Array Index" {
-    const allocator = std.testing.allocator;
-
     const inputs = [_][]const u8{
         "[1, 2, 3][0]",
         "[1, 2 * 2, 3 + 3][1]",
@@ -1161,23 +1129,10 @@ test "Array Index" {
         "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
     };
 
-    const answers = [_]i32{ 1, 4, 1, 2 };
+    const answers = [_][]const u8{ "1", "4", "1", "2" };
 
     for (inputs, answers) |inp, ans| {
-        var env: Environment = .empty;
-        defer env.deinit(allocator);
-
-        const maybe_eval = try testEval(allocator, &env, inp);
-
-        if (maybe_eval) |evaluated| {
-            defer evaluated.deinit(allocator);
-
-            try expect(evaluated == .integer);
-
-            try expect(evaluated.integer == ans);
-        } else {
-            return error.FailedEvalString;
-        }
+        try testEvaluation(inp, ans);
     }
 }
 
