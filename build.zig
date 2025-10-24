@@ -161,6 +161,8 @@ fn buildRelease(
 }
 
 fn buildWeb(b: *std.Build) void {
+    const build_options = b.addOptions();
+    build_options.addOption(bool, "enable_tracy", false);
     const web = b.step("web", "build monkey for the web");
 
     // for running monkey interpreter in web
@@ -173,6 +175,7 @@ fn buildWeb(b: *std.Build) void {
         .optimize = .ReleaseSmall,
         .strip = true,
     });
+    monkey_web_mod.addOptions("build_options", build_options);
     monkey_web_mod.export_symbol_names = &.{ "alloc", "free", "wasm_evaluate" };
 
     const wasm_exe = b.addExecutable(.{
