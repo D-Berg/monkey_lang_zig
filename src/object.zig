@@ -2,6 +2,7 @@ const std = @import("std");
 const HashMap = @import("hash_map.zig").HashMap;
 const ast = @import("ast.zig");
 const Environment = @import("Environment.zig");
+const trace = @import("tracy.zig").trace;
 
 pub const FunctionObject = @import("objects/FunctionObject.zig");
 pub const ReturnObject = @import("objects/ReturnObject.zig");
@@ -32,6 +33,8 @@ pub const Object = union(enum) {
 
     // maybe frees memory depending on rc
     pub fn deinit(obj: *const Object, allocator: Allocator) void {
+        const tracy = trace(@src());
+        defer tracy.end();
 
         // print("Deinitalizing object\n", .{});
         switch (obj.*) {

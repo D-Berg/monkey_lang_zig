@@ -9,6 +9,8 @@ const StringHashMap = std.StringHashMapUnmanaged;
 
 const Environment = @This();
 
+const trace = @import("tracy.zig").trace;
+
 store: StringHashMap(Object),
 outer: ?*Environment,
 rc: usize,
@@ -37,6 +39,9 @@ pub fn enclosed(outer: *Environment) Environment {
 
 /// Decreases rc of outer and frees store
 pub fn deinit(self: *Environment, allocator: Allocator) void {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     log.debug("trying to deinit env {*} of kind {s}\n", .{ self, @tagName(self.kind) });
 
     if (self.rc == 0 or self.isMainEnv()) {

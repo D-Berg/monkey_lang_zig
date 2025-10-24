@@ -1,7 +1,12 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const trace = @import("tracy.zig").trace;
+
 pub fn parse(gpa: Allocator, args: []const []const u8) CliArgs {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     if (args.len == 0) return .repl;
     if (std.mem.eql(u8, args[0], "build")) return parseBuildArgs(gpa, args[1..]);
     if (std.mem.eql(u8, args[0], "run")) return parseRunArgs(gpa, args[1..]);
@@ -11,6 +16,8 @@ pub fn parse(gpa: Allocator, args: []const []const u8) CliArgs {
 
 fn parseBuildArgs(gpa: Allocator, args: []const []const u8) CliArgs {
     _ = gpa;
+    const tracy = trace(@src());
+    defer tracy.end();
 
     if (args.len == 0) return .{ .problem = "Missing input file" };
 
@@ -41,6 +48,8 @@ fn parseBuildArgs(gpa: Allocator, args: []const []const u8) CliArgs {
 
 fn parseRunArgs(gpa: Allocator, args: []const []const u8) CliArgs {
     _ = gpa;
+    const tracy = trace(@src());
+    defer tracy.end();
 
     if (args.len == 0) return .{ .problem = "Missing input file" };
 

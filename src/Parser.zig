@@ -9,6 +9,7 @@ const Identifier = ast.Identifier;
 const BlockStatement = ast.BlockStatement;
 const Node = ast.Node;
 const ArrayList = std.ArrayList;
+const trace = @import("tracy.zig").trace;
 
 const Allocator = std.mem.Allocator;
 const StringHashMap = std.StringHashMapUnmanaged;
@@ -76,6 +77,9 @@ const Precedence = enum {
 };
 
 pub fn init(input: []const u8) Parser {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     var lexer = Lexer.init(input);
     const current_token = lexer.nextToken();
     const peek_token = lexer.nextToken();
@@ -88,6 +92,8 @@ pub fn init(input: []const u8) Parser {
 }
 
 pub fn deinit(parser: *Parser, gpa: Allocator) void {
+    const tracy = trace(@src());
+    defer tracy.end();
     for (parser.errors.items) |item| gpa.free(item.msg);
 
     parser.errors.deinit(gpa);
@@ -117,6 +123,9 @@ fn nextToken(parser: *Parser) void {
 }
 
 fn parseStatement(parser: *Parser, allocator: Allocator) ParseError!Statement {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     const stmt: Statement = switch (parser.current_token.kind) {
         .Let => .{ .let_stmt = try parser.parseLetStatement(allocator) },
         .Return => try parser.parseReturnStatement(allocator),
@@ -128,6 +137,9 @@ fn parseStatement(parser: *Parser, allocator: Allocator) ParseError!Statement {
 }
 
 fn parseLetStatement(parser: *Parser, allocator: Allocator) ParseError!LetStatement {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     const token = parser.current_token;
 
     if (!try parser.expectPeek(allocator, Token.Kind.Ident)) return ParseError.ExpectedNextTokenIdentifier;
@@ -156,6 +168,9 @@ fn parseLetStatement(parser: *Parser, allocator: Allocator) ParseError!LetStatem
 }
 
 fn parseReturnStatement(parser: *Parser, allocator: Allocator) ParseError!Statement {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     const curr_tok = parser.current_token;
 
     parser.nextToken();
@@ -174,6 +189,9 @@ fn parseReturnStatement(parser: *Parser, allocator: Allocator) ParseError!Statem
 }
 
 fn parseExpressionStatement(parser: *Parser, allocator: Allocator) ParseError!Statement {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     const token = parser.current_token;
 
     const expr = try parser.parseExpression(allocator, .Lowest);
@@ -640,6 +658,9 @@ fn peekPrecedence(parser: *Parser) Precedence {
 }
 
 pub fn Program(parser: *Parser, gpa: Allocator) ParseError!ast.Program {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     var statements: ArrayList(Statement) = .empty;
     errdefer {
         for (statements.items) |stmt| stmt.deinit(gpa);

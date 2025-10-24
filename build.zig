@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 pub fn build(b: *std.Build) !void {
     const log_level = b.option(std.log.Level, "log", "Set log level") orelse std.log.Level.info;
     const strip = b.option(bool, "strip", "strip debug info from binary");
+    const enable_tracy = b.option(bool, "trace", "Enables tracy") orelse false;
 
     var build_options = b.addOptions();
     build_options.addOption(@TypeOf(log_level), "log_level", log_level);
@@ -56,6 +57,27 @@ pub fn build(b: *std.Build) !void {
         .root_module = monkey_mod,
     });
 
+    const tracy_dep = b.dependency("tracy", .{});
+    const tracy_lib = b.addLibrary(.{
+        .name = "tracy",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libcpp = true,
+        }),
+        .linkage = .static,
+    });
+    tracy_lib.root_module.addIncludePath(tracy_dep.path("public"));
+    tracy_lib.root_module.addCSourceFile(.{
+        .file = tracy_dep.path("public/TracyClient.cpp"),
+    });
+
+    if (enable_tracy) {
+        exe.root_module.linkLibrary(tracy_lib);
+        tracy_lib.root_module.addCMacro("TRACY_ENABLE", "1");
+    }
+
+    build_options.addOption(bool, "enable_tracy", enable_tracy);
     b.installArtifact(exe);
 
     // makes it possible to do `zig build run -Dtarget="wasm32-wasi`

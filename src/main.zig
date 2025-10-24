@@ -15,6 +15,8 @@ const object = @import("object.zig");
 const Parser = @import("Parser.zig");
 const repl = @import("repl.zig");
 
+const trace = @import("tracy.zig").trace;
+
 pub const std_options: std.Options = .{
     .log_level = @enumFromInt(@intFromEnum(build_options.log_level)),
 };
@@ -35,6 +37,11 @@ const monkey =
 ;
 
 pub fn main() !void {
+    if (build_options.enable_tracy) std.Thread.sleep(1 * std.time.ns_per_s);
+    defer if (build_options.enable_tracy) std.Thread.sleep(1 * std.time.ns_per_s);
+    const tracy = trace(@src());
+    defer tracy.end();
+
     const gpa, const is_debug = gpa: {
         break :gpa switch (builtin.mode) {
             // debug_allocator uses wasm_allocator under the hood
@@ -106,6 +113,8 @@ fn monkeyRun(
     out_err: *std.Io.Writer,
 ) !void {
     _ = out_err;
+    const tracy = trace(@src());
+    defer tracy.end();
     const input = input: {
         const file = try std.fs.cwd().openFile(run_args.path, .{});
         defer file.close();

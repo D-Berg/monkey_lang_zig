@@ -3,6 +3,8 @@ const std = @import("std");
 const print = std.debug.print;
 const log = std.log.scoped(.evaluator);
 
+const trace = @import("tracy.zig").trace;
+
 const Allocator = std.mem.Allocator;
 const Token = @import("Token.zig");
 
@@ -61,6 +63,9 @@ pub const EvalError = error{
 
 /// Returns an Object that needs to be deinitiated or null
 pub fn eval(allocator: Allocator, program: *Program, env: *Environment) EvalError!Object {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     if (std.options.log_level == .debug) {
         const prg_str = try program.String(allocator);
         defer allocator.free(prg_str);
@@ -97,6 +102,9 @@ pub fn eval(allocator: Allocator, program: *Program, env: *Environment) EvalErro
 }
 
 fn evalStatement(gpa: Allocator, stmt: *const Statement, env: *Environment) EvalError!object.Object {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     switch (stmt.*) {
         .let_stmt => |*ls| {
             try evalLetStatement(gpa, ls, env);
@@ -118,6 +126,8 @@ fn evalStatement(gpa: Allocator, stmt: *const Statement, env: *Environment) Eval
 }
 
 fn evalLetStatement(gpa: Allocator, ls: *const LetStatement, env: *Environment) EvalError!void {
+    const tracy = trace(@src());
+    defer tracy.end();
     var ident = ls.name;
     const name = ident.tokenLiteral();
 
@@ -137,6 +147,8 @@ fn evalLetStatement(gpa: Allocator, ls: *const LetStatement, env: *Environment) 
 }
 
 fn evalReturnStatement(gpa: Allocator, rs: *const ReturnStatement, env: *Environment) EvalError!Object {
+    const tracy = trace(@src());
+    defer tracy.end();
 
     // print("evaluating  return stmt\n", .{});
     const val = try evalExpression(gpa, rs.value, env);
@@ -154,6 +166,8 @@ fn evalReturnStatement(gpa: Allocator, rs: *const ReturnStatement, env: *Environ
 }
 
 fn evalExpression(gpa: Allocator, expr: *const Expression, env: *Environment) EvalError!object.Object {
+    const tracy = trace(@src());
+    defer tracy.end();
     switch (expr.*) {
         .identifier => |*ident| {
             return EvalIdentExpr(ident, env);
@@ -257,6 +271,9 @@ fn EvalIdentExpr(ident: *const Identifier, env: *Environment) Object {
 }
 
 fn EvalFnExpr(gpa: Allocator, env: *Environment, fl: *const FnLiteralExpression) EvalError!FuncionObject {
+    const tracy = trace(@src());
+    defer tracy.end();
+
     const params = try gpa.alloc(Identifier, fl.parameters.len);
     errdefer {
         for (params) |p| gpa.free(p.token.literal);

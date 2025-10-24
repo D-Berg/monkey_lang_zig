@@ -7,6 +7,8 @@ const Parser = @import("Parser.zig");
 const evaluator = @import("evaluator.zig");
 const Environment = @import("Environment.zig");
 
+const trace = @import("tracy.zig").trace;
+
 const ParseError = Parser.ParseError;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -29,6 +31,8 @@ pub fn start(
     defer env.deinit(gpa);
 
     while (true) {
+        const tracy = trace(@src());
+        defer tracy.end();
         try out.print("{s}", .{prompt});
         try out.flush();
 
