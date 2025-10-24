@@ -109,7 +109,11 @@ fn monkeyRun(
     const input = input: {
         const file = try std.fs.cwd().openFile(run_args.path, .{});
         defer file.close();
-        break :input try file.readToEndAlloc(gpa, 1024);
+
+        var in_buf: [1024]u8 = undefined;
+        var in = file.reader(&in_buf);
+
+        break :input try in.interface.allocRemaining(gpa, .limited(1024));
     };
     defer gpa.free(input);
 
